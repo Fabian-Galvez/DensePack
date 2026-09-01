@@ -1,0 +1,31 @@
+[Desktop Entry]
+# The Open With entry, and the size submenu, for file managers that read
+# desktop entries rather than a scripts folder. Thunar, Dolphin and PCManFM
+# all read this one. install-densepack.sh rewrites @SCRIPT@ and @ICON@ with
+# full paths and copies the result to ~/.local/share/applications.
+#
+# NoDisplay keeps DensePack out of the applications menu, where a packer that
+# opens with no file makes no sense, and leaves it in Open With, where it does.
+Type=Application
+Version=1.0
+Name=DensePack it
+Comment=Pack a text file into an image a Claude model reads for fewer tokens
+Exec=@SCRIPT@ %F
+Icon=@ICON@
+Terminal=false
+NoDisplay=true
+Categories=Utility;
+MimeType=text/plain;text/markdown;text/csv;text/x-log;application/json;application/xml;
+Actions=px08;px10;px12;
+
+[Desktop Action px08]
+Name=Fable 5, 8 px, smallest image
+Exec=@SCRIPT@ --size 8 %F
+
+[Desktop Action px10]
+Name=Opus 5, 10 px, read by Opus 5 and Fable 5
+Exec=@SCRIPT@ --size 10 %F
+
+[Desktop Action px12]
+Name=Sonnet 5, 12 px, read by all three
+Exec=@SCRIPT@ --size 12 %F

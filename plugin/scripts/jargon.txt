@@ -1,0 +1,41 @@
+# Banned jargon, one pair per line: jargon=plain word.
+# Read by literal_check.find_jargon(). "Circle back" and "touch base" are
+# not here; they are already banned as idioms in literal_check.py, and a
+# word listed twice would be flagged twice for the same phrase.
+leverage=use
+utilize=use
+utilization=use
+synergy=fit
+synergize=combine
+holistic=whole
+robust=solid
+seamless=smooth
+streamline=simplify
+ecosystem=system
+actionable=usable
+bandwidth=time
+paradigm=model
+deliverable=result
+facilitate=help
+prioritize=rank
+strategize=plan
+ideate=plan
+operationalize=build
+incentivize=pay
+monetize=sell
+functionality=feature
+methodology=method
+commence=start
+terminate=end
+endeavor=try
+tranche=batch
+scalable=able to grow
+disruptive=new
+best-in-class=best
+cutting-edge=new
+value-add=benefit
+touchpoint=contact
+onboard=start
+offboard=end
+drill down=look closer
+double-click=look closer

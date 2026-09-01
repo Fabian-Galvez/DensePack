@@ -1,0 +1,6 @@
+{
+  "name": "densepack",
+  "version": "0.1.0",
+  "description": "Cut input tokens when orchestrating subagents. Long reports render to dense images the lead reads at roughly half the tokens, automatically, with a refuse-when-worse guard, a measured receipt per report, and a cheap-first delegation method built in. Free, local, private: no proxy, no server, nothing leaves your machine.",
+  "author": { "name": "Fabian-Galvez" }
+}

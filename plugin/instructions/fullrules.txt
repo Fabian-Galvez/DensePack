@@ -1,0 +1,100 @@
+Rules for a file the user's GitHub will show.
+
+Sentences.
+Write short literal complete sentences. The subject is the real thing.
+The verb is an act the subject can do. Code does not want, refuse, insist,
+decide, or die.
+No idiom, no metaphor, no personification, no story voice.
+One instruction per sentence. One fact per sentence. Never join two
+statements with ", so" or ", which".
+Active voice. Name the actor. Write "the packer draws the image", never
+"the image is drawn" and never "the drawing of the image".
+Keep an instruction under twenty words and a statement under twenty five.
+Present tense for a fact. No conditional hedging where a fact exists: no
+could, should, likely or probably in front of a measured thing.
+Plain words. The plainest word wins: batch, not tranche; use, not
+leverage.
+State each fact once. Never restate a number in a second sentence.
+No dash of any kind. ASCII only.
+A doc is a record, not a narrative. No "X stopped doing A and became B".
+No intent given to hardware or code.
+
+Two tests for every sentence.
+The delete test: take the sentence out and read the two around it. No
+fact lost means the sentence goes.
+The cover test: cover the sentence before and read this one alone. The
+sentence names its own subject or it fails. "That fragility broke the
+build" fails. "The null id crashed the reader" passes.
+A sentence that fails delete is cut. A sentence that fails cover gets its
+real subject written into it.
+
+Numbers.
+Every number names its field, its file, and its run. A bare per cent is
+not a fact.
+Count before you write. A number from a report is unverified until
+counted again.
+No invented floor or threshold. The real measurement decides.
+
+Headings and names.
+Every heading is a plain noun: Install, Results, Tables. Never a
+question. Never What, How or Why. Never a gerund.
+The design doc is architecture.md. File names are plain nouns too.
+
+Tables.
+Any list of three or more items is a table.
+Every column has a name, including the first. The top left cell names
+what the rows are.
+Numbered steps only where order matters. Everywhere else, a table.
+Every comparison table ends with a Saved column: the difference and the
+per cent.
+Rows run in the order a person does the work.
+In a reply, a table row says what to do with the thing it names. A row
+the reader cannot act on is cut.
+
+Paragraphs.
+Three lines is the limit. No walls of bullets.
+Tables belong in files. A doc uses a table wherever the content allows
+one.
+
+README shape.
+A README is the shop window, not the workshop. The app is the feature.
+Above the fold, in order: the title, one sentence on what the app does,
+the screenshot, download and run, how to use it as a table per screen or
+control set, the demo gif. Nothing else above the fold.
+Images tell the story. Text points at the images and repeats nothing they
+already show.
+One More table at the bottom links tests, build and docs: one row each, a
+link, a one line description.
+Exe sizes, test counts, timings and verified by lines go in a linked doc,
+never in the README, unless the number is the point of the app.
+Cut reference data the user never used: version lists and feature
+rundowns copied from a docs page are padding. Keep a concept the user
+applied, and say where.
+No trivial claims. How the app works shows the skill.
+
+Images.
+Embed with the plain Markdown image form: alt text in square brackets,
+path in parentheses.
+Set a width only when the raw size breaks the page, as a percentage or at
+most about 600 px. Never a fixed width wider than a phone screen.
+GitHub scales every image. Obsidian scales only an image without a width
+attribute, so a big fixed width overflows there.
+An SVG carries width, height, and a viewBox that covers the whole
+drawing. Everything outside the box is cropped in every viewer.
+Check every image at 400 px wide before it lands. A phone is about 400
+px. The whole picture shows or the image is redone.
+
+Mermaid.
+The first line of every diagram sets useMaxWidth true for the diagram and
+for sequence blocks.
+Left to right for a short chain. Top to bottom for a long or branching
+pipeline.
+GitHub adds pan and zoom on its own. Obsidian needs the init line.
+
+Replies about the file.
+Answer the question, then stop. The reply is the answer and nothing else.
+Report the fix, not the findings. One sentence per problem: what was
+claimed, the real figure, where it is fixed.
+Measurements, run times and method go in the doc. The reply names the
+doc.
+Never summarise the reply at its own end.

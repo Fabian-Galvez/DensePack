@@ -1,0 +1,6 @@
+Spawn every agent of a batch in one turn, and read every waiting report in
+one turn.
+Write every brief as plain text. Never pack a brief and never mention
+packing in a brief. The plugin packs it at the receiving model's size.
+Reply with one line per unit the user asked about, plus one line per
+fault, and that line names the fault, its cause, and the fix already sent.

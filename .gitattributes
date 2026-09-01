@@ -1,0 +1,19 @@
+# Line endings a fresh clone gets, on any operating system.
+#
+# A shell script with CRLF line endings dies on Linux and macOS. The kernel
+# reads the carriage return as part of the interpreter path on the first
+# line and reports "bad interpreter: /bin/sh^M: no such file or directory".
+# The same script still runs when a shell is called on it by hand, so the
+# fault appears only on the machine that clones the repo.
+#
+# The files only Windows runs keep CRLF. Everything else is left to git's
+# own default, so no file already committed changes shape.
+
+*.sh text eol=lf
+
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.ttf binary
+*.ttc binary

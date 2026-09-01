@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quick test kit, bar view</title>
+<style>
+/* The classes and the palette come from tools/live_dashboard.py's PAGE
+   template, so this page and the live dashboard read as one thing. */
+:root{
+  --surface:#fcfcfb; --page:#f9f9f7; --ink:#0b0b0b; --ink-2:#52514e;
+  --muted:#898781; --hairline:#e1e0d9; --billed:#2a78d6; --saved:#eb6834;
+  --gain:#1a7f37;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --surface:#1a1a19; --page:#0d0d0d; --ink:#ffffff; --ink-2:#c3c2b7;
+    --muted:#898781; --hairline:#2c2c2a; --billed:#3987e5; --saved:#d95926;
+    --gain:#3fb950;
+  }
+}
+body{margin:0;background:var(--page);color:var(--ink);
+  font:14px/1.5 ui-sans-serif,system-ui,"Segoe UI",Arial,sans-serif;
+  padding:24px}
+main{max-width:760px;margin:0 auto}
+h1{font-size:18px;margin:0 0 4px}
+.meta{color:var(--ink-2);font-size:13px;margin:0 0 18px}
+.card{background:var(--surface);border:1px solid var(--hairline);
+  border-radius:8px;padding:14px 16px;margin-bottom:16px}
+.card h2{font-size:13px;font-weight:600;margin:0 0 10px;color:var(--ink)}
+.bar-label{display:flex;align-items:center;gap:8px;font-size:13px;
+  color:var(--ink-2)}
+.bar-label .val{margin-left:auto;color:var(--ink)}
+.bar-label.top{margin-bottom:6px}
+.bar-label.bottom{margin-top:6px}
+.swatch{width:10px;height:10px;border-radius:2px;flex:none}
+.sw-saved{background:var(--saved)}
+.sw-billed{background:var(--billed)}
+.track{height:28px;background:var(--page);border-radius:0 4px 4px 0}
+.bar{height:28px;width:0%;border-radius:0 4px 4px 0}
+.bar.b-saved{background:var(--saved)}
+.bar.b-billed{background:var(--billed)}
+.gap{height:2px;background:var(--surface)}
+.card .saved{font-size:13px;font-weight:700;color:var(--gain);
+  text-align:center;margin:0 0 8px}
+.note{font-size:12px;color:var(--ink-2);margin:0 0 8px}
+#err{color:var(--saved);font-size:13px}
+</style>
+</head>
+<body>
+<main>
+<h1>Quick test kit, bar view</h1>
+<p class="meta">Every figure on this page comes from the results table in
+<code>quick_test.md</code>, read at load. Orange is the plugin on, blue is the
+plugin off. Test 3 is the baseline and fills its track; the other two bars are
+their share of it.</p>
+<p id="err"></p>
+<div id="cards"></div>
+<p class="note">Open this page over a local server, for example
+<code>python -m http.server</code> in <code>bench/</code>, so the browser may
+read <code>quick_test.md</code>.</p>
+</main>
+<script>
+// One row of the results table: the test label, its tokens, its dollars.
+function parseRows(text){
+  var rows = [];
+  var lines = text.split("\n");
+  for (var i = 0; i < lines.length; i++){
+    var line = lines[i].trim();
+    if (line.indexOf("|") !== 0) continue;
+    var cell = line.split("|").map(function(s){ return s.trim(); });
+    // cell[0] is empty, cell[1] is the test label.
+    if (!/^[0-9]+, plugin /.test(cell[1] || "")) continue;
+    var tok = Number((cell[2] || "").replace(/,/g, ""));
+    var usd = Number(cell[3] || "");
+    if (!isFinite(tok) || !isFinite(usd) || !tok) continue;
+    rows.push({name: cell[1], tokens: tok, dollars: usd});
+  }
+  return rows;
+}
+
+function commas(n){
+  return String(n).replace(/\B(?=([0-9]{3})+(?![0-9]))/g, ",");
+}
+
+// One card per metric. The baseline row fills its track and every other row
+// is drawn as its share of the baseline, so all three bars read against the
+// same 100 per cent.
+function card(title, rows, base, pick, fmt){
+  var box = document.createElement("div");
+  box.className = "card";
+  var html = "<h2>" + title + "</h2>";
+  var baseVal = pick(base);
+  for (var i = 0; i < rows.length; i++){
+    var row = rows[i];
+    var val = pick(row);
+    var wide = baseVal ? val / baseVal * 100 : 0;
+    var tail = row === base
+      ? "the baseline"
+      : (100 - wide).toFixed(1) + " per cent less";
+    html +=
+      "<div class='bar-label top'><span class='swatch " + row.swatch +
+        "'></span>" + row.name + "<span class='val'>" + fmt(val) +
+        "</span></div>" +
+      "<div class='track'><div class='bar " + row.bar +
+        "' style='width:" + wide.toFixed(2) + "%'></div></div>" +
+      "<p class='aside'>" + tail + "</p>";
+  }
+  box.innerHTML = html;
+  return box;
+}
+
+function draw(rows){
+  var host = document.getElementById("cards");
+  // The table names its baseline row, so the row order may change freely.
+  var base = rows[0];
+  for (var b = 0; b < rows.length; b++){
+    if (rows[b].name.indexOf("baseline") !== -1) base = rows[b];
+  }
+  for (var i = 0; i < rows.length; i++){
+    // The plugin-on row is orange, every plugin-off row is blue.
+    var on = rows[i].name.indexOf("plugin on") !== -1;
+    rows[i].swatch = on ? "sw-saved" : "sw-billed";
+    rows[i].bar = on ? "b-saved" : "b-billed";
+  }
+  host.appendChild(card("Input tokens", rows, base,
+    function(r){ return r.tokens; },
+    function(v){ return commas(Math.round(v)) + " tokens"; }));
+  host.appendChild(card("Dollars", rows, base,
+    function(r){ return r.dollars; },
+    function(v){ return "$" + v.toFixed(4); }));
+}
+
+fetch("quick_test.md")
+  .then(function(r){ return r.text(); })
+  .then(function(t){
+    var rows = parseRows(t);
+    if (rows.length < 2) throw new Error("no results table rows");
+    draw(rows);
+  })
+  .catch(function(e){
+    document.getElementById("err").textContent =
+      "This page could not read quick_test.md: " + e.message;
+  });
+</script>
+</body>
+</html>

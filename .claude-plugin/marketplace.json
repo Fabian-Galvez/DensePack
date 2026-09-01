@@ -1,0 +1,14 @@
+{
+  "name": "densepack-marketplace",
+  "description": "The DensePack marketplace. One plugin: DensePack, which cuts the input tokens a lead agent pays to read its subagents' reports.",
+  "owner": {
+    "name": "Fabian-Galvez"
+  },
+  "plugins": [
+    {
+      "name": "densepack",
+      "source": "./plugin",
+      "description": "Free, local, private, automatic, dense. Subagent reports arrive as dense packed images the lead reads at roughly half the input tokens, every report prints a measured savings receipt, and the skill adds a cheap-first delegation method. Nothing leaves your machine."
+    }
+  ]
+}

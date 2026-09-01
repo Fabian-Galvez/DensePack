@@ -1,0 +1,86 @@
+Code discipline. Every agent carries this on every coding turn.
+Adapted from the ponytail skill, MIT licence, Dietrich Gebert, v4.9.0.
+
+ACTIVE EVERY RESPONSE. Do not drift back to over-building. Still
+active when you are unsure.
+
+Read the task and the code it touches first. Trace the real flow end to
+end. Only then climb the ladder. A small diff in the wrong place is a
+second bug, not a saving.
+
+The ladder. Stop at the first rung that holds.
+1 Does this need to exist at all. Skip a speculative need. YAGNI. Say so
+  in one line.
+2 Does this codebase already hold it. A helper, a util, a type or a
+  pattern that already lives here. Reuse it. Look before you write. A
+  re-implementation of what sits a few files over is the commonest slop.
+3 Does the standard library do it. Use it.
+4 Does a native platform feature cover it. An input type date beats a
+  picker library. CSS beats JS. A database constraint beats app code.
+5 Does an installed dependency solve it. Use it. Never add a new
+  dependency for what a few lines do.
+6 Can it be one line. Then one line.
+7 Only then write the minimum code that works.
+
+Two rungs hold. Take the higher one and move on.
+
+A bug report names a symptom. Before you edit, grep every caller of the
+function you are about to touch. One guard in the shared function is a
+smaller diff than a guard in every caller. A patch on only the path the
+ticket names leaves every sibling caller broken.
+
+Rules.
+YAGNI. Add no abstraction nobody asked for. No interface with one
+implementation. No factory for one product. No config for a value that
+never changes.
+YAGNI applies to tests too. Write no boilerplate and no scaffolding
+for later. Later scaffolds for
+itself.
+Prefer deletion to addition. Prefer boring to clever. Someone decodes
+clever at 3am.
+Use the fewest files. The shortest working diff wins.
+On a complex request, ship the lazy version and question it in the same
+response. Say what you did, say what it covers, and ask whether the full
+version. Never stall on an answer you can default.
+Two standard library options of the same size. Take the one that is
+correct on edge cases. Less code never means the flimsier algorithm.
+Mark a deliberate simplification that cuts a real corner. Name the
+ceiling and the upgrade path in one comment, the way a global lock, an
+O(n squared) scan or a naive heuristic each has a known ceiling.
+
+Output. Code first. Then at most three short lines: what you skipped,
+and when to add it. No essays. No feature tours. No design notes. When
+the explanation runs longer than the code, delete the explanation. Every
+paragraph that defends a simplification smuggles complexity back in as
+prose. An explanation the user asked for is not debt.
+Use this shape: the code, then one line reading skipped X, add when Y.
+
+Worked example. The task says add a cache for these API responses.
+The answer is one decorator on the fetch function, lru_cache with a max
+size, then one line: skipped a custom cache class, add one when lru_cache
+measurably falls short. A hand-rolled cache class is a bug farm with a hit
+rate. One line replaces the class.
+
+ Give that in
+full. The rule bans only unrequested prose.
+
+Never simplify away input validation at a trust boundary. Never simplify
+away error handling that prevents data loss. Never simplify away a
+security measure, an accessibility basic, or anything asked for by name.
+The user insists on the full version. Then build it and do not argue
+again.
+
+Never be lazy about understanding the problem. The ladder shortens the
+solution. It never shortens the reading. A small diff shipped without
+comprehension is a confident wrong fix wearing the costume of efficiency.
+
+Hardware is never the ideal on paper. A real clock drifts and a real
+sensor reads off. Leave the calibration knob.
+
+Lazy code without its check counts as unfinished. Non-trivial logic, meaning a
+branch, a loop, a parser, a money path or a security path, leaves one
+runnable check behind. Make it the smallest thing that fails when the
+logic breaks. No frameworks. No fixtures. A trivial one liner needs no
+test.
+
+The shortest path to done is the right path.
