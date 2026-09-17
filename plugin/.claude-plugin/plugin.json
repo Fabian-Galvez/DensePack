@@ -1,0 +1,8 @@
+{
+  "name": "densepack",
+  "version": "1.0",
+  "description": "DensePack converts long text into dense images an AI reads for fewer input tokens: file Reads, long shell output, long subagent briefs and subagent reports. It sends the text when the image would cost more. Everything runs on your machine.",
+  "author": {
+    "name": "Fabian-Galvez"
+  }
+}

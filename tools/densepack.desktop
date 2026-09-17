@@ -1,0 +1,20 @@
+[Desktop Entry]
+# The Open With entry, for file managers that read desktop entries rather
+# than a scripts folder. Thunar, Dolphin and PCManFM all read this one.
+# install-densepack.sh rewrites @SCRIPT@ and @ICON@ with full paths and
+# copies the result to ~/.local/share/applications. One entry, no size: the
+# packer draws the plugin's one page, 17 px unless DENSEPACK_CODE_PX names
+# another number.
+#
+# NoDisplay keeps DensePack out of the applications menu, where a packer that
+# opens with no file makes no sense, and leaves it in Open With, where it does.
+Type=Application
+Version=1.0
+Name=DensePack it
+Comment=Pack a text file into an image a Claude model reads for fewer tokens
+Exec="@SCRIPT@" %F
+Icon=@ICON@
+Terminal=false
+NoDisplay=true
+Categories=Utility;
+MimeType=text/plain;text/markdown;text/csv;text/x-log;application/json;application/xml;

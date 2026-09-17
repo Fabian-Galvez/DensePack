@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.claude/
+bench/rows/
+bench/session-*/
+/out-*.png
