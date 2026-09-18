@@ -107,6 +107,37 @@ On Fedora, use `dnf` where a step says `apt`.
     `/helppack`
     Claude prints the DensePack commands.
 
+## The size ceiling
+
+DensePack turns a file into pictures the first time you read it. A big file
+takes a while. You wait once per file. After that the pictures are saved and
+every read of that file is fast.
+
+DensePack skips any file over 500,000 bytes, so you are never left waiting a
+long time without choosing to.
+
+| File size               | Wait, the first time only    |
+| ----------------------- | ---------------------------- |
+| 1,000 characters        | 0.15 seconds                 |
+| 250,000 bytes, 0.25 MB  | about 42 seconds             |
+| 500,000 bytes, 0.5 MB   | about 75 seconds. The limit  |
+| 1,000,000 bytes, 1 MB   | about 2.5 minutes            |
+| 2,000,000 bytes, 2 MB   | about 5 minutes              |
+
+A file over the limit is still read. You read it as text and save nothing on
+it. Word files are the one exception. Claude Code cannot open a Word file on
+its own, so a Word file over the limit cannot be read at all.
+
+Big files are the ones that save the most. If you would rather wait than lose
+the saving, raise the limit. Paste this into Claude Code:
+
+```
+Raise DensePack's READ_MAX_BYTES to 1000000
+```
+
+The old `.doc` format is not supported. Open it in Word and save it as
+`.docx`.
+
 ## Run the benches
 
 Follow [bench/RUN-THE-BENCHES.md](bench/RUN-THE-BENCHES.md).

@@ -78,7 +78,15 @@ from common import (BURST_BYTES, actor_key, actor_reader, line_pull,
 # 3 MB single line each held the hook for minutes, so a bigger file, or one
 # holding a null byte, stays text. The largest bench sample file is 95 KB and
 # 1,934 lines, and codepack.py at 196 KB and 4,070 lines converts in seconds.
-READ_MAX_BYTES = 250000
+#
+# One ceiling, every file, whatever the suffix. Drawing runs at about 0.15 s
+# per 1,000 characters, measured 17 September 2026 and the same rate for a
+# .docx as for plain text, so 500,000 is roughly 75 seconds in the worst case.
+# A file longer than one page is split across as many pages as it needs, so
+# the ceiling buys a bounded wait and nothing else. The wait is paid once per
+# file, not once per Read, because the pages are kept. Raise it and a reader
+# waits proportionally longer the first time.
+READ_MAX_BYTES = 500000
 READ_MAX_LINES = 6000
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".pdf",
@@ -747,17 +755,31 @@ def main():
             size = Path(path).stat().st_size
         except OSError:
             return 0
+        # A .docx is a zip of XML, so neither its size nor its bytes say what
+        # a Read delivers: the container is mostly styles and parts, and it
+        # carries the nulls the check below refuses. Pull the paragraphs out
+        # first and weigh those, the same text pointer.py draws.
+        drawn_text = None
+        if Path(path).suffix.lower() == ".docx":
+            import pointer
+            drawn_text = pointer.docx_text(path)
+            if not drawn_text:
+                return 0
+            size = len(drawn_text.encode("utf-8"))
         # A file under 1 KB passes as text: converting a 483 byte file took
         # 2.5 s and 469 MB to save 10 tokens.
         if size < 1000:
             return 0
         if size > READ_MAX_BYTES:
             return 0
-        try:
-            raw = Path(path).read_bytes()
-        except OSError:
-            return 0
-        if b"\x00" in raw or raw.count(b"\n") > READ_MAX_LINES:
+        if drawn_text is None:
+            try:
+                raw = Path(path).read_bytes()
+            except OSError:
+                return 0
+            if b"\x00" in raw or raw.count(b"\n") > READ_MAX_LINES:
+                return 0
+        elif drawn_text.count("\n") > READ_MAX_LINES:
             return 0
         # A file the font cannot draw, such as Chinese, Japanese or Korean
         # text, converts to empty boxes nobody can read, so it stays text.
@@ -766,7 +788,8 @@ def main():
         import freetype_glyph
         import style
         font = (style.load().get("font.regular") or [""])[0]
-        text = raw.decode("utf-8", "replace")
+        text = (drawn_text if drawn_text is not None
+                else raw.decode("utf-8", "replace"))
         if not freetype_glyph.font_covers(text, font):
             return 0
         # The renderer's own line marks are U+E000 to U+E003 and it refuses a

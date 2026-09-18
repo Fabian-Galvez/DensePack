@@ -396,6 +396,48 @@ def later_images_note(src_name, folder, names, at=1):
     return " ".join(rows)
 
 
+# A .docx is a zip of XML, not text. read_text() hands back the container,
+# the null check in draw_drop_file drops it, and Claude Code's Read refuses
+# the suffix before a hook can offer anything, so a Word file never reaches a
+# model at all. Its paragraphs are the whole of what a reader wants from one,
+# so they are what the plugin draws. Stdlib only, because a format most
+# projects hold a few of is not worth an install.
+DOCX_BODY = "word/document.xml"
+DOCX_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+
+def docx_text(src):
+    """The visible text of a .docx, or None when the file will not open.
+
+    One line per paragraph, with tabs and line breaks kept where they sit.
+    Styles, images and revision marks are dropped, because a reader wants the
+    words. Returns None rather than raising, so a caller treats an unopenable
+    file the same as any other source it could not draw."""
+    import xml.etree.ElementTree as ET
+    import zipfile
+    try:
+        with zipfile.ZipFile(src) as bundle:
+            body = bundle.read(DOCX_BODY)
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return None
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError:
+        return None
+    lines = []
+    for para in root.iter(DOCX_NS + "p"):
+        out = []
+        for node in para.iter():
+            if node.tag == DOCX_NS + "t":
+                out.append(node.text or "")
+            elif node.tag == DOCX_NS + "tab":
+                out.append("\t")
+            elif node.tag == DOCX_NS + "br":
+                out.append("\n")
+        lines.append("".join(out))
+    return "\n".join(lines)
+
+
 def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
     """Draw the file found in the to-draw folder, at the reader's pixel size,
     into images/, then delete the copy. Returns (line, image_path): one
@@ -455,14 +497,22 @@ def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
     except OSError:
         return None, None
     try:
-        text = src.read_text(encoding="utf-8", errors="replace")
+        if src.suffix.lower() == ".docx":
+            text = docx_text(src)
+            if text is None:
+                return None, None
+        else:
+            text = src.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None, None
     # The renderer refuses a source holding its own marks, U+E000 to U+E003.
-    # A null byte, more than 250,000 characters or more than 6,000 lines is
-    # binary or too big, the same limits a Read keeps as text.
+    # A null byte is binary. The length ceiling is the gate's one number, read
+    # from there rather than repeated here, so raising it in one place raises
+    # it everywhere.
+    from drop_read_gate import READ_MAX_BYTES, READ_MAX_LINES
     if (any(mark in text for mark in "\ue000\ue001\ue002\ue003")
-            or "\x00" in text or len(text) > 250000 or text.count("\n") > 6000):
+            or "\x00" in text or len(text) > READ_MAX_BYTES
+            or text.count("\n") > READ_MAX_LINES):
         return None, None
     digest = hashlib.sha256(
         ("%s|%f" % (src, mtime)).encode("utf-8")).hexdigest()[:12]

@@ -185,18 +185,18 @@ The install also keeps a copy of this repository. `/plugin marketplace remove de
 <br>
 <br>
 
-| Command                      | Function                                                                                                                                                                                                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/densepack`                 | Turns DensePack on/puts every setting back to DensePack's default                                                                                                                                                                                            |
-| `/dense-off`             | Stops every DensePack hook for this session only. A new session starts with DensePack on                                                                                                                                                                     |
-| `/maxpack`                   | Sends Sonnet images. This is the default                                                                                                                                                                                                                     |
-| `/max-off`                    | Sends Sonnet text                                                                                                                                                                                                                                            |
-| `/helppack`                  | Prints every command                                                                                                                                                                                                                                         |
-| `/dense-remove`              | Puts every converted `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` back to its original text, removes `CLAUDE_CODE_THRIFTY_SONIC`, and deletes every DensePack file that `/plugin uninstall` leaves behind. Run it before the uninstall                                                                                                                                                             |
+| Command                      | Function                                                                                                                                                                                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/densepack`                 | Turns DensePack on/puts every setting back to DensePack's default                                                                                                                                                                                               |
+| `/dense-off`                 | Stops every DensePack hook for this session only. A new session starts with DensePack on                                                                                                                                                                        |
+| `/maxpack`                   | Sends Sonnet images. This is the default                                                                                                                                                                                                                        |
+| `/max-off`                   | Sends Sonnet text                                                                                                                                                                                                                                               |
+| `/helppack`                  | Prints every command                                                                                                                                                                                                                                            |
+| `/dense-remove`              | Puts every converted `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` back to its original text, removes `CLAUDE_CODE_THRIFTY_SONIC`, and deletes every DensePack file that `/plugin uninstall` leaves behind. Run it before the uninstall                        |
 | `/mdpack <folder>`           | Converts that folder's `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` into images behind a pointer, without reading them. Run it from a folder next to that folder, then open a new session inside it. That session reads the images and never the text |
-| <strong>Coming Soon</strong> |                                                                                                                                                                                                                                                              |
-| /agentpack                   | Agent spawning and delegation that complements DensePack. Keeps context out of main agents context Window. Main agent receives subagent reports as an images. Initial tests are promising and show additional 15% savings added to floor on delegated tasks. |
-| /dashpack                    | Dashboard showing live per conversation savings. Calculates what the images the agents have received would have cost them to read as text with compounding effect.                                                                                           |
+| <strong>Coming Soon</strong> |                                                                                                                                                                                                                                                                 |
+| /agentpack                   | Agent spawning and delegation that complements DensePack. Keeps context out of the main agent's context window. The main agent receives subagent reports as images. Initial tests are promising and show an additional 15% savings added to floor on delegated tasks. |
+| /dashpack                    | Dashboard showing live per conversation savings. Calculates what the images the agents have received would have cost them to read as text with compounding effect.                                                                                              |
 
 <br>
 
@@ -219,28 +219,34 @@ A short session that mostly runs commands saves little, because only file reads 
 
 **In every session:**
 
-- Read files with the Read tool. A Bash read (`cat`, `head`, `sed`, `type`) stays text and saves nothing.
+- Read files with the Read tool. A Bash read (`cat`, `head`, `sed`, `type`) is packed too, but it takes an extra turn, so the file has to be bigger before it saves.
 - Keep working in the same session. Each later turn reads the images again at the cheaper size, so the saving grows with the conversation.
 - Your `~/.claude/CLAUDE.md` and each project's `MEMORY.md` convert on their own at session start. The session that converts them still sends their text once.
 
 ### What DensePack changes
 
-DensePack changes three things outside its own folders.
-`/dense-remove` undoes all three.
+DensePack changes three things that are yours, and adds folders and packages of its own.
 
-| What it changes | What DensePack does | Why |
-| --- | --- | --- |
-| `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in a project, your `~/.claude/CLAUDE.md`, and the project's auto memory index `MEMORY.md` | At session start, it copies the file to `<name>.densepack.bak`, converts the text into images, and replaces the file with a short pointer that names every image. It converts a file only when the images and pointer cost less than the text | Claude Code sends these files as text on every call. As images they cost about half |
-| `~/.claude/settings.json` | Adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` to the `env` block, once, when the key is not there | Auto mode tells the agent to read files with Bash, and a Bash read cannot become an image |
-| A `.gitignore` in `.claude/tmp/` and `.claude/densepack-vault/` | Writes one line, `*` | Those folders hold copies of your files and command output, so they stay out of your commits |
+The slash command `/dense-remove` undoes all of them.
 
-#### How the converted files work
+| What it changes                                                                                                                                  | What DensePack does                                                                                                                                                                                                                           | Why                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in a project, your `~/.claude/CLAUDE.md`, and the project's auto memory index `MEMORY.md` | At session start, it copies the file to `<name>.densepack.bak`, converts the text into images, and replaces the file with a short pointer that names every image. It converts a file only when the images and pointer cost less than the text | Claude Code sends these files as text on every call. As images they cost about half                                                                                                                    |
+| `~/.claude/settings.json`                                                                                                                        | Adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` to the `env` block, once, when the key is not there                                                                                                                                                   | Auto mode tells the agent to read files with Bash, and a Bash read takes an extra turn, so it saves less than a Read                                                                                                              |
+| A `.gitignore` in `.claude/tmp/` and `.claude/densepack-vault/`                                                                                  | Writes one line, `*`                                                                                                                                                                                                                          | Those folders hold copies of your files and command output, so they stay out of your commits                                                                                                           |
+| `~/.claude/densepack-state`                                                                                                                      | Creates the folder. Contains the location of the Python it found, and one folder per project                                                                                                                                                  | DensePack trusts its own notes about what it already converted. A repository you clone can contain a fake copy of those notes, so they are kept in your home folder, where a clone cannot put anything |
+| `~/.claude/densepack-cards`                                                                                                                      | Creates the folder. Contains the rendered legend cards, one folder per card                                                                                                                                                                   | Without it, every new project draws the whole card set from nothing, which takes minutes at session start                                                                                              |
+| Pillow, freetype-py and NumPy                                                                                                                    | Installs them with pip into the plugin's own data folder, once                                                                                                                                                                                | DensePack needs all three to render an image. Your own Python is untouched and no password is asked for                                                                                                |
 
+#### How the conversion works
+
+- Claude Code loads `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in a project, your `~/.claude/CLAUDE.md`, and the project's auto memory index `MEMORY.md` before DensePack runs.
+  If you start in a folder that holds one of these, the conversion happens after Claude Code has already read that file as text and cached it.
+  To get around this, run `/mdpack <folder>` from an empty folder next to the folder with the files. That converts them without reading them as text first. You can then start Claude Code in that folder, and it reads the short text pointer and the images instead of the raw text.
 - Each converted file becomes three files: the pointer, the `.densepack.bak` and the images.
 - The `.bak` holds your original text, byte for byte. Claude Code does not load it, because of its name.
 - A file converts only when its images and pointer cost less than its text. A short file stays text.
 - Reading the images can take one extra call at the start of a session. A large `CLAUDE.md` repays it within a few calls. A small file that converts alone, such as a short `MEMORY.md`, may not repay it in a short session.
-- Claude Code loads these files before DensePack runs, so a conversion applies from your next session.
 - To change your instructions, edit the `.bak`. DensePack converts it again at the next session start.
 - Text added below the pointer moves into the `.bak` at the next session start. New lines from auto memory move the same way.
 - If you replace a pointer with a new file, the new file is converted and the old `.bak` stays as `.densepack.bak.old-1`.
@@ -266,17 +272,26 @@ DensePack changes three things outside its own folders.
 
 ### Install the right-click tool
 
-The right-click tool needs this repository on your machine.
-The plugin install already put a copy at `%USERPROFILE%\.claude\plugins\marketplaces\densepack-marketplace` on Windows, or `~/.claude/plugins/marketplaces/densepack-marketplace` on Linux and macOS.
-Without the plugin, download the repository from [github.com/Fabian-Galvez/DensePack](https://github.com/Fabian-Galvez/DensePack) and open a terminal in that folder.
+The right-click tool is made of files from this repository, so you need a copy of them on your computer.
 
-| System  | Install                             |
-| ------- | ----------------------------------- |
-| Windows | Run `tools/install-densepack.bat`   |
-| Linux   | Run `sh tools/install-densepack.sh` |
-| macOS   | Open `tools/DensePack it.workflow`  |
+<strong>If you installed the plugin</strong>, you already have them, in this folder:
 
-[tools/Tool-README.md](tools/Tool-README.md) holds what each installer does, how to skip the hotkeys and the reading card, how to uninstall, and the colour code of the images it makes.
+- Windows: `%USERPROFILE%\.claude\plugins\marketplaces\densepack-marketplace`
+- macOS and Linux: `~/.claude/plugins/marketplaces/densepack-marketplace`
+
+<strong>If you did not install the plugin</strong>, click the green **Code** button at the top of this page, choose **Download ZIP**, and unzip it.
+
+<strong>Open the `tools` folder inside it and start the installer.</strong>
+
+| Your computer | What to do                                                       |
+| ------------- | ---------------------------------------------------------------- |
+| Windows       | Double-click `install-densepack.bat`                             |
+| macOS         | Double-click `DensePack it.workflow`                             |
+| Linux         | Open a terminal in that folder and run `sh install-densepack.sh` |
+
+The installer does the rest. [tools/Tool-README.md](tools/Tool-README.md) says what it changes, how to skip the hotkeys and the reading card, and how to uninstall.
+<br>
+<sub>The right-click tool needs this repository on your machine, but you do not need Claude Code or the plugin.</sub>
 
 <br>
 
@@ -445,13 +460,13 @@ A subagent gets its brief as an image, and it sends its report back as an image.
 
 ## Packing is not a rare event
 
-DensePack packs a file, a command's output, a brief and a report.
+DensePack packs files, command outputs, and the briefs and reports that travel to and from subagents.
 Before every Read the plugin compares what the image costs with what the text costs.
-It sends the text when the image costs more.
+It sends the text when the image would cost more.
 A Read costs nothing extra, because the agent already called Read and the hook swaps the path before it runs.
-A command costs one more turn, because a command cannot hand back an image and the agent has to Read the image after.
+A command costs one turn more than a Read: one turn to hand the agent the image, and another for the agent to read it.
 A command's output also arrives wrapped in extra text from Claude Code.
-The plugin counts that turn and that extra text in the comparison, which is why a file packs at 1,000 bytes and a command needs thousands.
+The plugin counts that turn and that extra text in the comparison, which is why Read packs at 1,000 bytes and a command needs thousands.
 
 | What gets packed                 | When                         |
 | -------------------------------- | ---------------------------- |
@@ -469,6 +484,8 @@ The plugin counts that turn and that extra text in the comparison, which is why 
 | Markdown `.md`                                   | Yes. Rebuilt with every word on Opus and Fable                                  |
 | Go `.go`, indented with tabs                     | Yes. <br><br>Fable scored 99.97%. Opus scored 99.93%. Sonnet scored 99.72%. All three rebuilt every tab as a tab |
 | Markdown with a wide table row                   | Not yet. The image costs more, so the plugin sends text.                        |
+| Word `.docx`                                     | Yes. Claude Code cannot open a Word file on its own. Up to 0.5 MB, [raise that here](INSTALL.md#the-size-ceiling) |
+| Word `.doc`, the old format                      | No. Open it in Word and save it as `.docx`                                      |
 | JSON, CSV, YAML                                  | Not measured                                                                    |
 | Haiku, any file                                  | No. Haiku gets text                                                             |
 | Sonnet, any file                                 | Yes. Type `/max-off` to send Sonnet text                                         |
