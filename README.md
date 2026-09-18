@@ -87,14 +87,14 @@ The token columns come from DensePack's own record, `.claude/tmp/densepack-manif
 
 ### Each pair
 
-| Reader    | Bench   | Pair 1 | Pair 2 | Pair 3 | Pair 4 |
-| --------- | ------- | ------ | ------ | ------ | ------ |
-| Fable 5.1 | 32-file | 71.1%  | 71.1%  | 71.1%  |        |
-| Fable 5.1 | 16-file | 64.6%  | 65.2%  | 68.9%  |        |
-| Opus 5    | 32-file | 75.3%  | 73.3%  | 70.2%  | 75.3%  |
-| Opus 5    | 16-file | 64.7%  | 65.4%  | 65.2%  | 63.4%  |
-| Sonnet 5  | 32-file | 72.7%  | 70.4%  | 29.9%  | 72.9%  |
-| Sonnet 5  | 16-file | 59.3%  | 31.5%  | 25.8%  | 27.2%  |
+| Reader    | Bench   | Pair 1 | Pair 2 | Pair 3 |
+| --------- | ------- | ------ | ------ | ------ |
+| Fable 5.1 | 32-file | 71.1%  | 71.1%  | 71.1%  |
+| Fable 5.1 | 16-file | 64.6%  | 65.2%  | 68.9%  |
+| Opus 5    | 32-file | 75.3%  | 73.3%  | 70.2%  |
+| Opus 5    | 16-file | 64.7%  | 65.4%  | 65.2%  |
+| Sonnet 5  | 32-file | 72.7%  | 70.4%  | 29.9%  |
+| Sonnet 5  | 16-file | 59.3%  | 31.5%  | 25.8%  |
 <br>
 
 > [!NOTE]
