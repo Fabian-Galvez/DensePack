@@ -25,9 +25,13 @@ PRUNE_PREFIXES already lists "densepack-card-sent", so a marker outlives
 its session by at most KEEP_HOURS the same as every other working file.
 """
 
+import hashlib
 import json
 import os
+import re
+import shutil
 import sys
+from pathlib import Path
 
 from common import (delegation_path, disabled, emit, lead_model_name,
                     read_event, read_totals, resolved_reader, tmp_dir)
@@ -105,6 +109,139 @@ def track(event):
         pass
 
 
+# WORD FILES A READ CANNOT REACH. Claude Code's Read refuses a binary file
+# during its own input check, before any PreToolUse hook runs, so
+# drop_read_gate.py is never called for a .doc or .docx and can never swap
+# one for its pages. Measured 17 September 2026: a .md read logs an event in
+# that gate, a .doc read logs nothing at all. The name the user typed is the
+# one place left to catch these, so they are drawn here instead.
+# A path ending .doc or .docx, quoted or bare, as a user types one.
+WORD_PATH = re.compile(
+    r"""["']?((?:[A-Za-z]:[\\/]|[\\/])[^"'<>|\r\n]*?\.docx?"""
+    r"""|[^\s"'<>|]+\.docx?)["']?""",
+    re.IGNORECASE)
+
+
+def word_pages(event):
+    """The pointer sentence for every .doc and .docx this message names,
+    drawn now, or "" when it names none. Never raises: a file that will not
+    open, or a draw that costs more than the words, is left out and the
+    reader still gets Claude Code's own refusal."""
+    prompt = str(event.get("prompt") or "")
+    if ".doc" not in prompt.lower():
+        return ""
+    try:
+        import densepack as dp
+        import drop_read_gate as gate
+        import pointer
+        from common import ensure_pillow, pack_images
+    except Exception:  # noqa: BLE001
+        return ""
+    # Without freetype-py or NumPy the renderer falls back to Pillow and
+    # draws a different, harder image, so the file stays text instead. The
+    # same stop drop_read_gate.py makes.
+    if not ensure_pillow():
+        return ""
+    rows, seen = [], set()
+    for match in WORD_PATH.finditer(prompt):
+        raw = (match.group(1) or "").strip()
+        try:
+            path = Path(raw)
+            if not path.is_file():
+                continue
+            key = str(path.resolve()).lower()
+        except OSError:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        sentence = _word_file_sentence(path, event, dp, gate, pointer,
+                                       pack_images)
+        if sentence:
+            rows.append(sentence)
+    return "\n\n".join(rows)
+
+
+def _word_file_sentence(path, event, dp, gate, pointer, pack_images):
+    """One file's pointer sentence, or None when it stays text."""
+    # The words a Read would have delivered, which is what the pages are
+    # weighed against. The container's own size says nothing: a .docx is a
+    # zip and a .doc an OLE2 filesystem, both mostly machinery.
+    suffix = path.suffix.lower()
+    try:
+        words = (pointer.docx_text(str(path)) if suffix == ".docx"
+                 else pointer.doc_text(str(path)))
+    except Exception:  # noqa: BLE001
+        return None
+    if not words:
+        return None
+    size = len(words.encode("utf-8"))
+    # The same floor drop_read_gate.py keeps: a small file costs more to
+    # draw than it saves.
+    if size < 1000:
+        return None
+    # NEVER HAND THE USER'S OWN FILE TO drop_and_draw(). That function moves
+    # the source it is given, and a file named in a prompt is the user's
+    # only copy: handing it over deletes it. A copy under the plugin's own
+    # working folder is drawn instead. The copy's name is derived from the
+    # source path, so a second mention of the same file finds the pages
+    # already drawn rather than drawing them again.
+    stem = hashlib.sha256(str(path.resolve()).lower().encode("utf-8"))
+    copy = tmp_dir() / ("densepack-word-%s%s" % (stem.hexdigest()[:12],
+                                                 suffix))
+    try:
+        done = [Path(name) for name in pack_images(str(copy))]
+    except Exception:  # noqa: BLE001
+        done = []
+    if done:
+        return _sentence(path, done[0].parent, [p.name for p in done])
+    try:
+        shutil.copy2(str(path), str(copy))
+    except OSError:
+        return None
+    try:
+        image, patch_tokens, tags, drawn = gate.drop_and_draw(str(copy),
+                                                              event)
+    except Exception:  # noqa: BLE001
+        return None
+    if image is None:
+        return None
+    # REFUSE WHEN WORSE, on this file's own measurement, the same
+    # comparison drop_read_gate.py makes: the sentence ships in the same
+    # message as the pages, so it counts against them.
+    text_tokens = round(size / dp.CHARS_PER_TOKEN)
+    note_tokens = round(len(tags or "") / dp.CHARS_PER_TOKEN)
+    if patch_tokens is not None and patch_tokens + note_tokens >= text_tokens:
+        try:
+            gate.discard(drawn)
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+    try:
+        names = [Path(name).name for name in pack_images(str(copy))]
+    except Exception:  # noqa: BLE001
+        names = []
+    return _sentence(path, Path(image).parent, names or [Path(image).name])
+
+
+def _sentence(path, folder, names):
+    """What the reader is told: the file, its pages, and to open them. The
+    file name goes through no_metacharacters for the same reason
+    pointer.later_images_note() does, because it reaches the reader as the
+    plugin's own words."""
+    try:
+        from common import no_metacharacters
+        shown = no_metacharacters(path.name)
+    except Exception:  # noqa: BLE001
+        shown = path.name
+    return ("DensePack drew %s as %d condensed image%s in %s: %s. Claude "
+            "Code's Read refuses the file itself, so read %s and never the "
+            "file." % (shown, len(names), "" if len(names) == 1 else "s",
+                       str(folder), ", ".join(names),
+                       "that image" if len(names) == 1
+                       else "those images in order"))
+
+
 def main():
     # NEVER CRASH A CALLER. This runs before every message in the session.
     event = {}
@@ -122,32 +259,36 @@ def main():
         # makes Opus think before a read-and-answer task; a code page
         # carries its own key row and a packed output its own pointer.
         pasted = "[Image" in str(event.get("prompt") or "")
+        drawn = word_pages(event)
         if has_delegated(session) or not pasted:
-            if not warning:
-                return 0
-            text = warning
+            text = warning or ""
         else:
             text = OPENING + ("\n\n" + warning if warning else "")
         # A card that matches the one last sent this session carries no new
         # fact, so nothing is emitted. This is what makes OPENING a once per
-        # session send.
+        # session send. A Word file drawn this turn is a new fact every time,
+        # so it rides beside the card and never through this test.
         marker = card_marker_path(session)
         try:
             previous = marker.read_text(encoding="utf-8")
         except OSError:
             previous = None
         if text == previous:
+            text = ""
+        if not text and not drawn:
             return 0
         emit({
             "hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",
-                "additionalContext": text,
+                "additionalContext": "\n\n".join(
+                    part for part in (text, drawn) if part),
             }
         })
-        try:
-            marker.write_text(text, encoding="utf-8")
-        except OSError:
-            pass
+        if text:
+            try:
+                marker.write_text(text, encoding="utf-8")
+            except OSError:
+                pass
     except Exception:  # noqa: BLE001
         return 0
     finally:
