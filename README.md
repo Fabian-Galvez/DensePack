@@ -503,6 +503,8 @@ The plugin counts that turn and that extra text in the comparison, which is why 
 
 - Haiku hallucinates image text. It is never sent images, only text.
 <br>
+- DensePack only converts a .doc or .docx when your prompt names the file itself like:"Read C:\work\report.docx". Name each file you want converted, naming the folder does not work. Word files that are reached by glob, directory listing, or that Claude finds on its own mid-task are read as plain text.
+<br>
 - Short conversations save less than long ones.
 <br>
 - Use the Edit tool to change a file that arrived as an image. The Write tool refuses that file.
