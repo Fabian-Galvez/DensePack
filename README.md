@@ -18,8 +18,8 @@ DensePack is built for conversations that read many files, such as auditing a re
 
 
 ---
-> [!IMPORTANT] 
-> <strong>Table of Contents</strong>
+> <details>
+> <summary><strong>Table of Contents</strong></summary>
 > 
 > - [Benchmarks - Total conversation savings](#benchmarks---total-conversation-savings)
 > 	- [Each pair](#each-pair)
@@ -44,6 +44,7 @@ DensePack is built for conversations that read many files, such as auditing a re
 > - [Exact values](#exact-values)
 > - [Thank you](#thank-you)
 > - [Files](#files)
+</details>
 
 <br>
 <br>
