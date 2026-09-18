@@ -759,13 +759,16 @@ def main():
         # a Read delivers: the container is mostly styles and parts, and it
         # carries the nulls the check below refuses. Pull the paragraphs out
         # first and weigh those, the same text pointer.py draws.
+        # A .docx that will not open as a zip is not a Word file at all, most
+        # often a text file somebody renamed. It falls through to the plain
+        # text route below, because Read refuses the suffix either way and
+        # leaving it would make a readable file unreadable.
         drawn_text = None
         if Path(path).suffix.lower() == ".docx":
             import pointer
-            drawn_text = pointer.docx_text(path)
-            if not drawn_text:
-                return 0
-            size = len(drawn_text.encode("utf-8"))
+            drawn_text = pointer.docx_text(path) or None
+            if drawn_text:
+                size = len(drawn_text.encode("utf-8"))
         # A file under 1 KB passes as text: converting a 483 byte file took
         # 2.5 s and 469 MB to save 10 tokens.
         if size < 1000:

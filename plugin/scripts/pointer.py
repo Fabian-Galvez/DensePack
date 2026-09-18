@@ -497,11 +497,12 @@ def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
     except OSError:
         return None, None
     try:
-        if src.suffix.lower() == ".docx":
-            text = docx_text(src)
-            if text is None:
-                return None, None
-        else:
+        text = docx_text(src) if src.suffix.lower() == ".docx" else None
+        # A .docx that will not open as a zip is not a Word file at all, most
+        # often a text file somebody renamed. Read it as text like anything
+        # else, because Read refuses the suffix and would leave it unreadable.
+        # The null check below still turns it away if it really is binary.
+        if text is None:
             text = src.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None, None
