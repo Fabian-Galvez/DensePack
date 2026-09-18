@@ -196,8 +196,12 @@ The install also keeps a copy of this repository. `/plugin marketplace remove de
 | `/dense-remove`              | Puts every converted `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` back to its original text, removes `CLAUDE_CODE_THRIFTY_SONIC`, and deletes every DensePack file that `/plugin uninstall` leaves behind. Run it before the uninstall                        |
 | `/mdpack <folder>`           | Converts that folder's `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` into images behind a pointer, without reading them. Run it from a folder next to that folder, then open a new session inside it. That session reads the images and never the text |
 | <strong>Coming Soon</strong> |                                                                                                                                                                                                                                                                 |
-| /agentpack                   | Agent spawning and delegation that complements DensePack. Keeps context out of the main agent's context window. The main agent receives subagent reports as images. Initial tests are promising and show an additional 15% savings added to floor on delegated tasks. |
+| /agentpack                   | Agent spawning and delegation that complements DensePack. Online research is delegated to subagents and summary reports with sited sources are handed back to main agent as packed images. Keeps context out of the main agent's context window. Initial benches are promising and showing an additional 15% savings on delegated tasks compared to DensePack's default floor. |
 | /dashpack                    | Dashboard showing live per conversation savings. Calculates what the images the agents have received would have cost them to read as text with compounding effect.                                                                                              |
+
+<br> 
+
+---
 
 <br>
 
@@ -224,6 +228,12 @@ A short session that mostly runs commands saves little, because only file reads 
 - Keep working in the same session. Each later turn reads the images again at the cheaper size, so the saving grows with the conversation.
 - Your `~/.claude/CLAUDE.md` and each project's `MEMORY.md` convert on their own at session start. The session that converts them still sends their text once.
 
+<br> 
+
+---
+
+<br>
+
 ### What DensePack changes
 
 DensePack changes three things that are yours, and adds folders and packages of its own.
@@ -238,6 +248,11 @@ The slash command `/dense-remove` undoes all of them.
 | `~/.claude/densepack-state`                                                                                                                      | Creates the folder. Contains the location of the Python it found, and one folder per project                                                                                                                                                  | DensePack trusts its own notes about what it already converted. A repository you clone can contain a fake copy of those notes, so they are kept in your home folder, where a clone cannot put anything |
 | `~/.claude/densepack-cards`                                                                                                                      | Creates the folder. Contains the rendered legend cards, one folder per card                                                                                                                                                                   | Without it, every new project draws the whole card set from nothing, which takes minutes at session start                                                                                              |
 | Pillow, freetype-py and NumPy                                                                                                                    | Installs them with pip into the plugin's own data folder, once                                                                                                                                                                                | DensePack needs all three to render an image. Your own Python is untouched and no password is asked for                                                                                                |
+<br> 
+
+---
+
+<br>
 
 #### How the conversion works
 
@@ -254,6 +269,12 @@ The slash command `/dense-remove` undoes all of them.
 - A Haiku session reads the `.bak` as text, because DensePack sends Haiku text.
 - Auto memory keeps working. DensePack sets no flag that turns memory off.
 - In a shared repository, commit the `.bak` with the pointer. A teammate without DensePack reads the `.bak`.
+
+<br> 
+
+---
+
+<br>
 
 #### Files and folders DensePack writes
 
@@ -502,19 +523,29 @@ The plugin counts that turn and that extra text in the comparison, which is why 
 ## Limits
 
 - Haiku hallucinates image text. It is never sent images, only text.
-<br>
-- DensePack only converts a .doc or .docx when your prompt names the file itself like:"Read C:\work\report.docx". Name each file you want converted, naming the folder does not work. Word files that are reached by glob, directory listing, or that Claude finds on its own mid-task are read as plain text.
-<br>
+  <br>
+
+- DensePack only converts a .doc or .docx when your prompt names the file or files: "Read C:\work\report.docx" or "Read C:\work\report1.docx, C:\work\report2.docx, and C:\work\report3.docx"
+  <br>
+  
+- <strong>Naming the folder does not work!</strong>
+  <br>
+
+- Word files that are reached by glob, directory listing, or that Claude finds on its own mid-task are read as plain text.
+  <br>
+  
 - Short conversations save less than long ones.
-<br>
+  <br>
+
 - Use the Edit tool to change a file that arrived as an image. The Write tool refuses that file.
-  <sub>Your AI is told this at the start of every session.</sub>
-<br>
+  <br>
+  <sub>Your agent is told this at the start of every session.</sub>
+  <br>
   
 - DensePack adds about 205 prompt tokens once a session.
   That is the list of its 5 commands and 1 skill. The hooks add nothing to the prompt.
   <sub>Measured with Opus 5, as the same two messages with DensePack off and on.</sub>
-<br>
+  <br>
 
 - A file over 250,000 bytes or 6,000 lines stays text. So does a file that holds a null byte.
   <br>
