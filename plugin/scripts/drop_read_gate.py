@@ -764,9 +764,11 @@ def main():
         # text route below, because Read refuses the suffix either way and
         # leaving it would make a readable file unreadable.
         drawn_text = None
-        if Path(path).suffix.lower() == ".docx":
+        suffix = Path(path).suffix.lower()
+        if suffix in (".docx", ".doc"):
             import pointer
-            drawn_text = pointer.docx_text(path) or None
+            drawn_text = (pointer.docx_text(path) if suffix == ".docx"
+                          else pointer.doc_text(path)) or None
             if drawn_text:
                 size = len(drawn_text.encode("utf-8"))
         # A file under 1 KB passes as text: converting a 483 byte file took

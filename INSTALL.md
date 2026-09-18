@@ -135,8 +135,9 @@ the saving, raise the limit. Paste this into Claude Code:
 Raise DensePack's READ_MAX_BYTES to 1000000
 ```
 
-The old `.doc` format is not supported. Open it in Word and save it as
-`.docx`.
+Word files count the same way. Both `.docx` and the older `.doc` are read and
+drawn like any other file, with no extra step and no extra install. Claude
+Code cannot open either one on its own.
 
 ## Run the benches
 

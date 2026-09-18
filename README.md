@@ -485,8 +485,7 @@ The plugin counts that turn and that extra text in the comparison, which is why 
 | Markdown `.md`                                   | Yes. Rebuilt with every word on Opus and Fable                                  |
 | Go `.go`, indented with tabs                     | Yes. <br><br>Fable scored 99.97%. Opus scored 99.93%. Sonnet scored 99.72%. All three rebuilt every tab as a tab |
 | Markdown with a wide table row                   | Not yet. The image costs more, so the plugin sends text.                        |
-| Word `.docx`                                     | Yes. Claude Code cannot open a Word file on its own. Up to 0.5 MB, [raise that here](INSTALL.md#the-size-ceiling) |
-| Word `.doc`, the old format                      | No. Open it in Word and save it as `.docx`                                      |
+| Word `.docx` and `.doc`                          | Yes. Claude Code cannot open a Word file on its own. DensePack reads the words out and draws them, in the same turn as any other file. Up to 0.5 MB, [raise that here](INSTALL.md#the-size-ceiling) |
 | JSON, CSV, YAML                                  | Not measured                                                                    |
 | Haiku, any file                                  | No. Haiku gets text                                                             |
 | Sonnet, any file                                 | Yes. Type `/max-off` to send Sonnet text                                         |
