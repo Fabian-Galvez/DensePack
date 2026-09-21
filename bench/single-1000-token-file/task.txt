@@ -1,0 +1,6 @@
+Read the file subject-ab_run.py in this folder with the Read tool. Reply with exactly five lines, numbered 1 to 5, the value or name only:
+1 the number assigned to TOKENS_PER_PLAN_POINT
+2 the file name assigned to RECORD
+3 the full date in the comment above TOKENS_PER_PLAN_POINT
+4 the module imported as pw
+5 the text in the first sys.exit call
