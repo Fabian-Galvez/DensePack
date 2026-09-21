@@ -1,0 +1,9 @@
+# DensePack 1.1
+__pycache__/
+*.pyc
+.claude/
+bench/rows/
+bench/session-*/
+/out-*.png
+/tools/ctrl-shift-vault/
+/tools/ctrl-right_click-vault/
