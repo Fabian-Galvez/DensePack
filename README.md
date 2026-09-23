@@ -1,4 +1,4 @@
-<!-- DensePack 1.1 -->
+<!-- DensePack 1.2 -->
 <p align="left">
   <img src="images/densepack-readme-banner.svg" alt="DensePack" />
 </p>
@@ -9,7 +9,7 @@ DensePack packs raw text into the smallest possible image that an AI model can r
 <br>
 Each later turn re-reads the files as cheaper images. A longer session saves more.<br>
 DensePack works best for conversations that read many files, such as auditing a repository by reading its files as images.<br>
-<strong>DensePack's floor is 22.0% to 27.5% total conversation savings on a single file. That counts the entire conversation, not only input tokens.</strong>
+<strong>DensePack's floor is 29.7% to 40.5% total conversation savings on a single file. That counts the entire conversation, not only input tokens.</strong>
 </p>
 
 
@@ -42,21 +42,20 @@ DensePack works best for conversations that read many files, such as auditing a 
 ## Benchmarks - Total conversation savings
 
 > These are the total conversation savings for the single-file, 16-file and 32-file bench On/Off pairs.
-> <strong>On the 32-file bench, DensePack cuts the cost of the entire conversation by 70.4% to 73.3%.</strong>
-> <sub>That bench is a small task. 32 files read in 4 turns is about $2.82 on Opus 5 with DensePack off.</sub><br><br>
-> Fable 5.1, Opus 5 and Sonnet 5 were each benched with the DensePack plugin On against a baseline text arm with the DensePack plugin Off. 
+> <strong>On the 32-file bench, DensePack cuts the cost of the entire conversation by 71.2% to 73.4%.</strong>
+> <sub>That bench is a small task. 32 files read in 4 turns is about $2.20 on Opus 5.5 with DensePack off.</sub><br><br>
+> Fable 5.1, Opus 5.5 and Sonnet 5 were each benched with the DensePack plugin On against a baseline text arm with the DensePack plugin Off. 
 > 
 > All arms run isolated. Each arm gets the same task, to read files and answer questions about them. The only difference is that the On arm reads DensePack images instead of the raw text.
 
-![Savings for three readers on three benches, against the text arm](images/savings-by-reader.svg)
 <br>
 
 
 | Model | 32-file bench | 16-file bench | Score | Runs |  | Single-file bench | Score | Runs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| <strong>Fable 5.1</strong> | 71.1% | 65.2% | 5 of 5 | 3 pairs |  | 22.0% | 5 of 5 | 100 |
-| <strong>Opus 5</strong> | 73.3% | 65.2% | 5 of 5 | 3 pairs |  | 27.5% | 5 of 5 | 100 |
-| <strong>Sonnet 5</strong> | 70.4% | 31.5% | 5 of 5 | 3 pairs |  | 27.4% | 5 of 5 | 100 |
+| <strong>Fable 5.1</strong> | 71.2% | 65.3% | 15 of 15 | 3 image arms |  | 40.5% | 15 of 15 | 3 |
+| <strong>Opus 5.5</strong> | 73.1% | 65.5% | 15 of 15 | 3 image arms |  | 29.7% | 15 of 15 | 3 |
+| <strong>Sonnet 5</strong> | 73.4% | 30.1% | 15 of 15 | 3 image arms |  | 39.1% | 15 of 15 | 3 |
 
 <sub>[BENCHMARKS.md](BENCHMARKS.md) contains each pair, the price of each one, how
 Anthropic bills and six numbered steps to recreate these benches on your own
@@ -244,6 +243,21 @@ tool changes, how to skip the hotkeys and how to uninstall.
 
 <br>
 
+## Speed and memory
+
+| Data | Before | Now |
+|---|---|---|
+| 11 KB | 3.2 s, 528 MB, 16 processes | 0.5 s, 55 MB, 1 process |
+| 21 KB | 5.4 s, 630 MB, 15 processes | 1.4 s, 75 MB, 1 process |
+| 228 KB | 29.6 s, 3.3 GB, 16 processes | 7.0 s, 1.4 GB, 13 processes |
+| 404 KB | 70.0 s, 5.5 GB, 12 processes | 17.5 s, 1.7 GB, 10 processes |
+
+<br>
+
+---
+
+<br>
+
 ## Limits
 
 - Haiku hallucinates image text. It is never sent images, only text.
@@ -269,7 +283,7 @@ tool changes, how to skip the hotkeys and how to uninstall.
   <sub>Measured with Opus 5, as the same two messages with DensePack off and on.</sub>
   <br>
 
-- A file over 500,000 bytes or 6,000 lines stays text. A file that contains a null byte stays text.
+- A file over 500,000 bytes stays text. A file that contains a null byte stays text.
   <br>
 - A file in Chinese, Japanese or Korean stays text. A file full of box-drawing characters stays text. The font has no glyphs for those characters.
   <br>

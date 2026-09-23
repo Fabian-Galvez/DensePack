@@ -1,4 +1,4 @@
-<!-- DensePack 1.1 -->
+<!-- DensePack 1.2 -->
 # Benches
 
 Four benches. Three of them run two arms, one with DensePack off and one with DensePack on. The rebuild bench runs the on arm only. 

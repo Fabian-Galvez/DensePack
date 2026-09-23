@@ -1,4 +1,4 @@
-<!-- DensePack 1.1 -->
+<!-- DensePack 1.2 -->
 # DensePack benchmarks
 
 Each bench gives one reader the same task two times.
@@ -8,7 +8,7 @@ The two arms together make one pair.
 
 `bench/RUN-THE-BENCHES.md` tells you how to run these.
 
-## Current benches, 16 September 2026
+## Current benches, 23 September 2026
 
 ### Where the numbers come from
 
@@ -19,68 +19,72 @@ The billed price is `total_cost_usd`, the dollar figure Claude Code reports for 
 The token columns come from DensePack's own record, `.claude/tmp/densepack-manifest.jsonl`, in the bench folder.
 
 Each reader gets the same images and prompt.
-The 16-file and 32-file prices are the cold price of the middle of three pairs.
-The 1-file prices are as billed. The two arms started with the same cache.
-
-
-![Cost of the image arm against the text arm, three readers, three benches](images/savings-by-reader.svg)
-
+Each bench ran one text arm and three image arms on each reader.
+The 16-file and 32-file prices are cold prices. The 1-file prices are as billed.
+The saving and the image arm price are the middle of the three image arms.
+Opus 5.5 bills a cache read at 0.05x of input and Fable 5.1 at 0.025x. The prices use those rates.
 
 ### Fable 5.1
 
 | Bench   | Tokens as text | Tokens as images | Text arm | Image arm | Saving | Score  |
 | ------- | -------------- | ---------------- | -------- | --------- | ------ | ------ |
-| 1-file  | 1,859          | 898              | $0.0875  | $0.0682   | 22.0%  | 5 of 5 |
-| 16-file | 93,101         | 44,257           | $2.01    | $0.70     | 65.2%  | 5 of 5 |
-| 32-file | 273,149        | 129,170          | $5.45    | $1.57     | 71.1%  | 5 of 5 |
+| 1-file | 1,859 | 898 | $0.0877 | $0.0522 | 40.5% | 15 of 15 |
+| 16-file | 93,101 | 44,257 | $2.00 | $0.70 | 65.3% | 15 of 15 |
+| 32-file | 273,149 | 129,170 | $5.44 | $1.57 | 71.2% | 15 of 15 |
 
-### Opus 5
+### Opus 5.5
 
 | Bench   | Tokens as text | Tokens as images | Text arm | Image arm | Saving | Score  |
 | ------- | -------------- | ---------------- | -------- | --------- | ------ | ------ |
-| 1-file  | 1,859          | 898              | $0.0446  | $0.0323   | 27.5%  | 5 of 5 |
-| 16-file | 93,101         | 44,257           | $1.05    | $0.37     | 65.2%  | 5 of 5 |
-| 32-file | 273,149        | 129,170          | $2.82    | $0.75     | 73.3%  | 5 of 5 |
+| 1-file | 1,859 | 898 | $0.0358 | $0.0252 | 29.7% | 15 of 15 |
+| 16-file | 93,101 | 44,257 | $0.81 | $0.28 | 65.5% | 15 of 15 |
+| 32-file | 273,149 | 129,170 | $2.20 | $0.59 | 73.1% | 15 of 15 |
 
 ### Sonnet 5
 
 | Bench   | Tokens as text | Tokens as images | Text arm | Image arm | Saving | Score  |
 | ------- | -------------- | ---------------- | -------- | --------- | ------ | ------ |
-| 1-file  | 1,859          | 898              | $0.0193  | $0.0140   | 27.4%  | 5 of 5 |
-| 16-file | 93,101         | 44,257           | $0.42    | $0.29     | 31.5%  | 5 of 5 |
-| 32-file | 273,149        | 129,170          | $1.13    | $0.33     | 70.4%  | 5 of 5 |
+| 1-file | 1,859 | 898 | $0.0201 | $0.0123 | 39.1% | 15 of 15 |
+| 16-file | 93,101 | 44,257 | $0.42 | $0.29 | 30.1% | 15 of 15 |
+| 32-file | 273,149 | 129,170 | $1.13 | $0.30 | 73.4% | 15 of 15 |
 
-The 1-file saving is the middle of 100 runs.
-Its image arm price is its text arm price less that saving.
-The 1-file bench is one image at each setting. This change cannot move it.
+Each image arm answered all 5 questions correctly.
 
-An image of a file costs about 50% of the text of that file.
-The full conversation cuts more than 50% because each turn after the first
-reads the image again and does not read the text.
+### Each image arm
 
-Each on arm answered all 5 questions correctly.
+| Reader | Bench | Arm 1 | Arm 2 | Arm 3 |
+| --- | --- | --- | --- | --- |
+| Fable 5.1 | 1-file | 40.6% | 40.5% | 31.3% |
+| Fable 5.1 | 16-file | 65.3% | 65.4% | 65.2% |
+| Fable 5.1 | 32-file | 71.2% | 71.4% | 71.2% |
+| Opus 5.5 | 1-file | 33.1% | 29.7% | 29.5% |
+| Opus 5.5 | 16-file | 65.8% | 65.5% | 65.5% |
+| Opus 5.5 | 32-file | 73.1% | 75.3% | 73.0% |
+| Sonnet 5 | 1-file | 39.2% | 39.0% | 39.1% |
+| Sonnet 5 | 16-file | 30.1% | 30.2% | 20.7% |
+| Sonnet 5 | 32-file | 73.6% | 73.4% | 69.2% |
 
-### Each pair
+Sonnet reads each image on some runs and only the images it must have on others.
 
-| Reader    | Bench   | Pair 1 | Pair 2 | Pair 3 |
-| --------- | ------- | ------ | ------ | ------ |
-| Fable 5.1 | 32-file | 71.1%  | 71.1%  | 71.1%  |
-| Fable 5.1 | 16-file | 64.6%  | 65.2%  | 68.9%  |
-| Opus 5    | 32-file | 75.3%  | 73.3%  | 70.2%  |
-| Opus 5    | 16-file | 64.7%  | 65.4%  | 65.2%  |
-| Sonnet 5  | 32-file | 72.7%  | 70.4%  | 29.9%  |
-| Sonnet 5  | 16-file | 59.3%  | 31.5%  | 25.8%  |
+### Turns and time
 
-Fable and Opus give the same result each time.
-Sonnet reads each image on some runs and only the images it must have on
-others.
-A run that opens only the images it must have cuts about 70%.
-A run that opens each image cuts about 30%.
+A prompt about the files of a folder gets the names of those files before the first turn.
+The image arm then reads the files in its first turn and does not spend a turn on Glob.
 
-### Turns
+| Reader | Bench | Turns, text arm | Turns, image arm | Time, text arm | Time, image arm |
+| --- | --- | --- | --- | --- | --- |
+| Fable 5.1 | 1-file | 2 | 2 | 4.6 s | 14 to 15 s |
+| Fable 5.1 | 16-file | 4 | 4 | 19.6 s | 29 to 44 s |
+| Fable 5.1 | 32-file | 4 | 4 | 36.0 s | 63 to 83 s |
+| Opus 5.5 | 1-file | 2 | 2 | 5.8 s | 9 to 11 s |
+| Opus 5.5 | 16-file | 4 | 4 | 20.5 s | 24 to 27 s |
+| Opus 5.5 | 32-file | 4 | 4 to 5 | 29.8 s | 57 to 69 s |
+| Sonnet 5 | 1-file | 2 | 2 | 4.6 s | 6 to 8 s |
+| Sonnet 5 | 16-file | 4 | 4 to 6 | 19.6 s | 47 to 60 s |
+| Sonnet 5 | 32-file | 4 | 5 to 7 | 26.1 s | 46 to 66 s |
 
-The image arm uses one or two turns more than the text arm and costs less.
-The price counts each turn. A pair with more turns can count.
+The image arm takes more time because DensePack draws each file before the agent reads it.
+An image arm with more turns fetched later images of a file.
 
 ## Ubuntu benches, 16 September 2026
 
@@ -150,6 +154,77 @@ Those reads saved nothing.
 These are token counts, not prices.
 A cache read bills at a tenth of input. The saving in dollars is lower.
 
+## Previous benches, 16 September 2026
+
+These ran with Fable 5.1, Opus 5 and Sonnet 5. Opus 5 is retired.
+
+![Cost of the image arm against the text arm, three readers, three benches](images/savings-by-reader.svg)
+
+
+### Fable 5.1
+
+| Bench   | Tokens as text | Tokens as images | Text arm | Image arm | Saving | Score  |
+| ------- | -------------- | ---------------- | -------- | --------- | ------ | ------ |
+| 1-file  | 1,859          | 898              | $0.0875  | $0.0682   | 22.0%  | 5 of 5 |
+| 16-file | 93,101         | 44,257           | $2.01    | $0.70     | 65.2%  | 5 of 5 |
+| 32-file | 273,149        | 129,170          | $5.45    | $1.57     | 71.1%  | 5 of 5 |
+
+### Opus 5
+
+| Bench   | Tokens as text | Tokens as images | Text arm | Image arm | Saving | Score  |
+| ------- | -------------- | ---------------- | -------- | --------- | ------ | ------ |
+| 1-file  | 1,859          | 898              | $0.0446  | $0.0323   | 27.5%  | 5 of 5 |
+| 16-file | 93,101         | 44,257           | $1.05    | $0.37     | 65.2%  | 5 of 5 |
+| 32-file | 273,149        | 129,170          | $2.82    | $0.75     | 73.3%  | 5 of 5 |
+
+### Sonnet 5
+
+| Bench   | Tokens as text | Tokens as images | Text arm | Image arm | Saving | Score  |
+| ------- | -------------- | ---------------- | -------- | --------- | ------ | ------ |
+| 1-file  | 1,859          | 898              | $0.0193  | $0.0140   | 27.4%  | 5 of 5 |
+| 16-file | 93,101         | 44,257           | $0.42    | $0.29     | 31.5%  | 5 of 5 |
+| 32-file | 273,149        | 129,170          | $1.13    | $0.33     | 70.4%  | 5 of 5 |
+
+The 1-file saving is the middle of 100 runs.
+Its image arm price is its text arm price less that saving.
+The 1-file bench is one image at each setting. This change cannot move it.
+
+An image of a file costs about 50% of the text of that file.
+The full conversation cuts more than 50% because each turn after the first
+reads the image again and does not read the text.
+
+Each on arm answered all 5 questions correctly.
+
+### Each pair
+
+| Reader    | Bench   | Pair 1 | Pair 2 | Pair 3 |
+| --------- | ------- | ------ | ------ | ------ |
+| Fable 5.1 | 32-file | 71.1%  | 71.1%  | 71.1%  |
+| Fable 5.1 | 16-file | 64.6%  | 65.2%  | 68.9%  |
+| Opus 5    | 32-file | 75.3%  | 73.3%  | 70.2%  |
+| Opus 5    | 16-file | 64.7%  | 65.4%  | 65.2%  |
+| Sonnet 5  | 32-file | 72.7%  | 70.4%  | 29.9%  |
+| Sonnet 5  | 16-file | 59.3%  | 31.5%  | 25.8%  |
+
+Fable and Opus give the same result each time.
+Sonnet reads each image on some runs and only the images it must have on
+others.
+A run that opens only the images it must have cuts about 70%.
+A run that opens each image cuts about 30%.
+
+### Turns
+
+The image arm uses one or two turns more than the text arm and costs less.
+The price counts each turn. A pair with more turns can count.
+
+### Speed and memory, 22 September 2026
+
+| Data | Before | Now |
+|---|---|---|
+| 11 KB | 3.2 s, 528 MB, 16 processes | 0.9 s, 55 MB, 1 process |
+| 21 KB | 5.4 s, 630 MB, 15 processes | 1.8 s, 76 MB, 1 process |
+| 228 KB | 29.6 s, 3.3 GB, 16 processes | 8.2 s, 243 MB, 1 process |
+
 ## Previous benches, 14 September 2026
 
 These are from the wide images.
@@ -180,8 +255,8 @@ AI agents tokenize your input (messages, files and reports from subagents). Anth
 
 - DensePack images cost **31 to 55%** compared to raw text input.
 - You pay cache write **once**, on the 31 to 55%.
-- Each later turn pays cache read on that same 31 to 55%, at 0.1x, or 0.025x
-  for Fable 5.1.
+- Each later turn pays cache read on that same 31 to 55%, at 0.1x, 0.05x
+  on Opus 5.5 or 0.025x on Fable 5.1.
 <br>
 When your agent needs to read a text file, the DensePack plugin replaces it with an image. 
 Your agent reads and caches the image instead. 
@@ -211,7 +286,7 @@ The tables above contain the most recent benches.
 
 Each turn re-reads the entire conversation from the cache. 
 An image costs fewer tokens than its text. Each later turn re-reads less. 
-An extra turn re-reads that smaller cache at 0.1x the input price, or 0.025x on Fable 5.1. 
+An extra turn re-reads that smaller cache at 0.1x the input price, 0.05x on Opus 5.5 or 0.025x on Fable 5.1. 
 The image arm can take more turns and still cost less. 
 
 In Sonnet 5 pair `sonnet-thirtytwo-1`, the image arm took 6 turns and the text arm took 4. 
@@ -282,11 +357,12 @@ Anthropic's count_tokens endpoint counted each image and the exact text it repla
 Anthropic bills per million tokens (MTok), priced per model:
 
 <strong>Cache read is 0.1x of the 1x base input price</strong>, not 0.1x the 2x cache creation price. 
+Opus 5.5 reads at 0.05x and Fable 5.1 at 0.025x.
 
 | Model                      | `input_tokens` (1x) | `cache_creation` (2x) | `cache_read` (0.1x) | `output_tokens` (5x) |
 | -------------------------- | ------------------- | --------------------- | ------------------- | -------------------- |
 | <strong>Fable 5.1</strong> | $10                 | $20                   | $0.25 (0.025x)      | $50                  |
-| <strong>Opus 5</strong>    | $5                  | $10                   | $0.50               | $25                  |
+| <strong>Opus 5.5</strong>  | $4                  | $8                    | $0.20 (0.05x)       | $20                  |
 | <strong>Sonnet 5</strong>  | $2                  | $4                    | $0.20               | $10                  |
 
 <sub>The rates come from the <strong>Model pricing</strong> table on <a href="https://platform.claude.com/docs/en/about-claude/pricing">Anthropic's pricing site</a>.</sub>

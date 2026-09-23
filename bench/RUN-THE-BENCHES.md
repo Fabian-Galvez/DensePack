@@ -1,4 +1,4 @@
-<!-- DensePack 1.1 -->
+<!-- DensePack 1.2 -->
 # Run the DensePack benches
 
 This file is for you and for your AI.
@@ -114,7 +114,7 @@ Give each run a new name, such as `sonnet-single-1`.
 | Model | Model id |
 | --- | --- |
 | Sonnet 5 | `claude-sonnet-5` |
-| Opus 5 | `claude-opus-5` |
+| Opus 5.5 | `claude-opus-5-5` |
 | Fable 5.1 | `claude-fable-5-1` |
 
 | Bench | Command for one pair |
@@ -218,7 +218,7 @@ Anthropic publishes the prices at https://platform.claude.com/docs/en/about-clau
 | Input | The model's input price |
 | 5 minute cache write | 1.25 times input |
 | 1 hour cache write | 2 times input |
-| Cache read | 0.1 times input, or 0.025 times input on Fable 5.1 |
+| Cache read | 0.1 times input, 0.05 times input on Opus 5.5 or 0.025 times input on Fable 5.1 |
 | Output | The model's output price |
 
 Claude Code writes a 1 hour cache for the main conversation on a Pro or Max plan.

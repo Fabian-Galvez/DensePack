@@ -1,4 +1,4 @@
-<!-- DensePack 1.1 -->
+<!-- DensePack 1.2 -->
 # Install DensePack, step by step
 
 Follow the steps for your system, in order.

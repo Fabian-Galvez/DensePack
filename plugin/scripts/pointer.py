@@ -772,10 +772,9 @@ def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
     # A null byte is binary. The length ceiling is the gate's one number, read
     # from there rather than repeated here, so raising it in one place raises
     # it everywhere.
-    from drop_read_gate import READ_MAX_BYTES, READ_MAX_LINES
+    from drop_read_gate import READ_MAX_BYTES
     if (any(mark in text for mark in "\ue000\ue001\ue002\ue003")
-            or "\x00" in text or len(text) > READ_MAX_BYTES
-            or text.count("\n") > READ_MAX_LINES):
+            or "\x00" in text or len(text) > READ_MAX_BYTES):
         return None, None
     digest = hashlib.sha256(
         ("%s|%f" % (src, mtime)).encode("utf-8")).hexdigest()[:12]
@@ -818,8 +817,16 @@ def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
         # inks cost, so ident_legend stays empty here and no sidecar or
         # marker row is written. Every file takes the code image for every
         # reader, at code_size().
-        written, _target, _lh = codepack.pack_code(
-            text, code_size(px, model), str(stem), python=(suffix == ".py"),
+        # Plan the pages with no glyph drawn, then draw once from the plan.
+        # The pages are byte for byte the ones pack_code() draws, in one
+        # process, with no width-search helpers and a fraction of their
+        # memory. A one page file takes pack_code() whole inside
+        # pack_planned(), because its fill pass reads pixels.
+        size = code_size(px, model)
+        plan = codepack.plan_pages(text, size, suffix == ".py", None, None,
+                                   model, shown.name)
+        written, _target, _lh = codepack.pack_planned(
+            text, size, str(stem), plan, python=(suffix == ".py"),
             legend=None, reader=model, title=shown.name)
         code_image = True
     except Exception:

@@ -33,6 +33,9 @@ import re
 import sys
 
 RATES = {
+    # Opus 5.5 bills 4.00 and 20.00, per the pricing page read 23
+    # September 2026. Before "opus", so family() matches it first.
+    "opus-5-5": (4.00, 20.00),
     "opus": (5.00, 25.00),
     "fable": (10.00, 50.00),
     "mythos": (10.00, 50.00),
@@ -98,8 +101,14 @@ def price(field, model):
 
 
 def read_share(model):
-    """Cache reads bill 0.025 of input on Fable 5.1 and Mythos 5.1, and 0.1 on every other model."""
-    return 0.025 if re.search(r"(fable|mythos)[-_ ]?5[-_.]1", str(model or "").lower()) else 0.1
+    """Cache reads bill 0.025 of input on Fable 5.1 and Mythos 5.1, 0.05 on
+    Opus 5.5, and 0.1 on every other model."""
+    name = str(model or "").lower()
+    if re.search(r"(fable|mythos)[-_ ]?5[-_.]1", name):
+        return 0.025
+    if re.search(r"opus[-_ ]?5[-_.]5", name):
+        return 0.05
+    return 0.1
 
 
 def usage_dollars(usage, model):

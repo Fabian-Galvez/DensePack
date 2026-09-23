@@ -1011,6 +1011,30 @@ def legend_row(d, font, x, y, line_h, max_w=None, face_for=None, renderer="pillo
     return y - top
 
 
+def _legend_count(font, max_w, face_for=None, renderer="pillow"):
+    """len(legend_rows(...)). A plan asks once for every trial of the width
+    search, with the same font, parts and spacing, so its answer is kept per
+    everything legend_rows() and char_widths() read. A draw measures it."""
+    if not _PLAN_ONLY:
+        return len(legend_rows(font, max_w, face_for, renderer))
+    g = globals()
+    key = (_LEGEND_TITLE, _TAB_KEY, getattr(font, "path", None), getattr(font, "size", None),
+           getattr(font, "scale_x", None), getattr(font, "sim_bold", None), float(max_w),
+           renderer, face_for is None, bool(_S.get("page.key_row", True)),
+           tuple(g.get(n) for n in ("WRAP_W", "SWATCH_GAP", "SWATCH_PAD", "LETTER_SPACE",
+                                     "CLEAR", "CLEAR_NARROW", "MARK_CLEAR", "COUNT_CLEAR",
+                                     "BOX_CLEAR", "BOX_GAP", "SEAM_GAP", "QUOTE_RUN_CLEAR",
+                                     "SAME_CLEAR", "STEM_QUOTE_CLEAR", "STEP_RIGHT",
+                                     "BIGGER_PX", "LIFT_PX", "FONT_MAX_PX", "PAGE_W")),
+           repr(sorted(CHAR_OVER.items())))
+    hit = _LEGEND_COUNT.get(key)
+    if hit is None:
+        if len(_LEGEND_COUNT) > 64:
+            _LEGEND_COUNT.clear()
+        hit = _LEGEND_COUNT[key] = len(legend_rows(font, max_w, face_for, renderer))
+    return hit
+
+
 def _part_width(font, text, face_for=None, renderer="pillow"):
     """The pixels one key row part takes: the body face's length, or the
     body's own pen steps for its characters when the picks are in play."""
@@ -1276,6 +1300,30 @@ BAND_AFTER_BOX_PX = 4.5
 DIRECT_CANVAS = True
 
 
+class _PlanPage(object):
+    """A page with a size and no pixels, for a plan's glyphless trials. It
+    answers the size questions the layout asks and nothing else."""
+
+    def __init__(self, width, height, small):
+        self.width = int(width)
+        self.height = int(height)
+        self.size = (self.width, self.height)
+        self.info = {"densepack_small": True} if small else {}
+        self.mode = "RGB"
+        self.im = self
+
+
+class _NullDraw(object):
+    """A drawer that draws nothing, for a _PlanPage. wrap_edge() reads the
+    canvas through .c, so it is kept; every drawing call is a no-op."""
+
+    def __init__(self, canvas):
+        self.c = canvas
+
+    def __getattr__(self, name):
+        return lambda *a, **k: None
+
+
 def save_page(im, path):
     """Save one page with its width and height on the 28 pixel patch grid.
 
@@ -1286,6 +1334,20 @@ def save_page(im, path):
     cross the API cap, because the cap is 1568 pixels, itself 56 whole
     patches.
     """
+    # A plan's page has a size and no pixels: the size the padding below
+    # would give it, and the same trial bookkeeping. A plan never reads a
+    # trial's pixels, so none are made. Only a page already at its final size
+    # (a Shrunk page, or a sheet of them) is ever a _PlanPage.
+    if isinstance(im, _PlanPage):
+        w = -(-im.width // dp.PATCH) * dp.PATCH
+        h = -(-im.height // dp.PATCH) * dp.PATCH
+        if _TRIAL:
+            _TRIAL_PAGES[str(path)] = im
+            if _NO_GLYPHS:
+                _GLYPHLESS.add(str(path))
+            else:
+                _GLYPHLESS.discard(str(path))
+        return w, h
     # A Shrunk page arrives at its final size and skips the shrink. The flag
     # guards the shrink as well as the padding, so a plain page drawn at a
     # supersample is not shrunk a second time here.
@@ -1405,7 +1467,11 @@ def _prefetch_trials(text, px, python, reader, title, out_stem, jobs):
     _PREFETCH.clear()
     # Text of 10 KB or less converts in this process: 12 helpers cost it about
     # 430 MB and gain no time.
-    if os.environ.get("DENSEPACK_SERIAL_DRAW") or not jobs or len(text.encode("utf-8")) <= 10_000:
+    # A plan draws no pixels, so its trials cost less than a helper's start
+    # and its copy of the layout; measured, the plan ran twice as fast with no
+    # helpers, and uses none of their memory.
+    if (_PLAN_ONLY or os.environ.get("DENSEPACK_SERIAL_DRAW") or not jobs
+            or len(text.encode("utf-8")) <= 10_000):
         return
     here = os.path.dirname(os.path.abspath(__file__))
     # One helper holds about 60 MB plus 0.9 MB for every KB of text: a 1 MB
@@ -1441,6 +1507,9 @@ def _prefetch_trials(text, px, python, reader, title, out_stem, jobs):
                 page_w, lw = rec["page_w"], rec["lw"]
                 pages = [("%s.w%d.t%d-%d.png" % (out_stem, page_w, lw, i + 1), w, h)
                          for i, (w, h) in enumerate(rec["pages"])]
+                for (f, _w, _h), first in zip(pages, rec.get("firsts") or []):
+                    if isinstance(first, int):
+                        PAGE_FIRST_LINE[f] = first
                 found[(page_w, lw)] = ((pages, rec["target"], rec["line_h"]), rec["hits"])
         for f, _w, _h in (r[0][0][k] for r in found.values() for k in range(len(r[0][0]))):
             _GLYPHLESS.add(f)
@@ -1480,8 +1549,11 @@ def _trial_child(job_path):
         CLAMP_HITS[0] = 0
         res = pack_code(job["text"], job["px"], "%s.w%d.t%d" % (job["stem"], page_w, lw),
                         job["python"], None, None, job["reader"], job["title"])
+        # "firsts" carries each page's start line back, because PAGE_FIRST_LINE
+        # is filled in this child's memory and a plan reads it in the parent.
         out.append({"page_w": page_w, "lw": lw, "hits": CLAMP_HITS[0],
                     "pages": [(w, h) for _f, w, h in res[0]],
+                    "firsts": [PAGE_FIRST_LINE.get(str(f)) for f, _w, _h in res[0]],
                     "target": res[1], "line_h": res[2]})
         _TRIAL_PAGES.clear()
     sys.stdout.write(json.dumps(out))
@@ -1876,7 +1948,24 @@ def char_widths(font, pairs, big_font=None, face_for=None, renderer="pillow",
             return face_for(p[0], big, borrow)[0]
         return big_font if (big_font is not None and big) else font
 
+    # A character's width, shift and raw span depend on it and the character
+    # after it and on nothing else of the flow, so a pair seen before gives
+    # the same three answers. Source text repeats its pairs endlessly.
+    _memo = {}
     for k, item in enumerate(pairs):
+        _mk = (item, pairs[k + 1] if k + 1 < len(pairs) else None)
+        _hit = _memo.get(_mk)
+        if _hit is not None:
+            w, shift, _raw = _hit
+            if spans is not None:
+                spans.append(_raw)
+            widths.append(w)
+            ids.append(lid)
+            if shifts is not None:
+                shifts.append(shift)
+            if item[0] == NL_MARK:
+                lid += 1
+            continue
         ch = item[0]
         f = face(k)
         # The pen step comes from the face measured here. The clearance below
@@ -1938,6 +2027,7 @@ def char_widths(font, pairs, big_font=None, face_for=None, renderer="pillow",
             w += SEAM_GAP
             charged = True
         here = span(f, ch, seen.setdefault(f.size, {}))
+        _raw = here
         if spans is not None:
             # the raw span, its own draw point at 0, before the INK_STEP
             # rebase below moves the origin
@@ -2024,6 +2114,7 @@ def char_widths(font, pairs, big_font=None, face_for=None, renderer="pillow",
                 w = float(max(1.0, want))
             else:
                 w = max(w, want)
+        _memo[_mk] = (w, shift, _raw)
         widths.append(w)
         ids.append(lid)
         if shifts is not None:
@@ -2231,7 +2322,104 @@ def split_here(pairs, k):
     return not (word_char(pairs[k - 1][0]) and word_char(pairs[k][0]))
 
 
-def flow_rows(pairs, widths, max_w, seg_starts=None):
+# split_here() reads the characters and the mark constants, never a width, so
+# its answer at a position is the same in every trial of a file's width
+# search. The table holds it for every position once. The search lays the
+# same flow out at up to 32 widths, and asking again at every position of
+# every trial was most of a plan's time. One entry is kept: the file being
+# drawn now.
+_SPLIT_MEMO = [None, None]
+
+
+def _split_table(pairs, key=None):
+    """[split_here(pairs, k) for every k], built once per flow. A caller
+    that knows which flow it holds passes its key and saves the hashing."""
+    if key is None:
+        key = (len(pairs), hash(tuple((p[0], p[1]) for p in pairs)))
+    if _SPLIT_MEMO[0] != key:
+        _SPLIT_MEMO[1] = [split_here(pairs, k) for k in range(len(pairs))]
+        _SPLIT_MEMO[0] = key
+    return _SPLIT_MEMO[1]
+
+
+# THE ROW TABLES. flow_rows() walked every character of the file to find
+# every row end, and the width search lays one file out at up to 32 widths.
+# Three tables built once per flow answer the same questions with a lookup:
+#   steps[k]  the sum of the draw steps before character k
+#   sums[k]   the sum of the widths before character k
+#   last[k]   the last position at or before k where a row may end, or -1
+# Every width is a whole or half pixel, so a difference of two sums is exactly
+# the sum the walk adds up, and the rows are the walk's rows.
+_ROW_MEMO = [None, None]
+
+
+def _row_tables(pairs, widths, seg_starts, inset, key):
+    if _ROW_MEMO[0] == key:
+        return _ROW_MEMO[1]
+    n = len(pairs)
+    can = _split_table(pairs, key[0])
+    steps = [0.0] * (n + 1)
+    sums = [0.0] * (n + 1)
+    last = [-1] * n
+    s = w = 0.0
+    prev = -1
+    for k in range(n):
+        wk = widths[k]
+        s += wk + (inset if seg_starts and k in seg_starts else 0)
+        w += wk
+        steps[k + 1] = s
+        sums[k + 1] = w
+        if can[k]:
+            prev = k
+        last[k] = prev
+    tables = (can, steps, sums, last)
+    _ROW_MEMO[0] = key
+    _ROW_MEMO[1] = tables
+    return tables
+
+
+def flow_rows(pairs, widths, max_w, seg_starts=None, memo_key=None):
+    """The rows _flow_rows_walk() cuts, found by lookup. memo_key names the
+    flow and its widths; without one the walk runs."""
+    if memo_key is None:
+        return _flow_rows_walk(pairs, widths, max_w, seg_starts)
+    inset = BAND_INSET if seg_starts else 0
+    can, steps, sums, last = _row_tables(pairs, widths, seg_starts, inset,
+                                         (memo_key, inset))
+    rows = []
+    i = 0
+    n = len(pairs)
+    while i < n:
+        base = steps[i]
+        # The furthest j with steps[j] - steps[i] <= max_w: the walk's own
+        # stopping place, compared as the same exact difference it adds up.
+        # Binary search by hand: bisect's key argument needs Python 3.10.
+        lo, hi = i, n
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if steps[mid] - base <= max_w:
+                lo = mid
+            else:
+                hi = mid - 1
+        j = lo
+        if j == i:
+            # The walk cannot place even one character here. Hand the case
+            # back to it unchanged rather than answer for it.
+            return _flow_rows_walk(pairs, widths, max_w, seg_starts)
+        top = min(j, n - 1)
+        cut = last[top] if top > i and last[top] > i else -1
+        if j < n and cut > i:
+            used = sums[cut] - sums[i]
+            if FILL <= 0 or used >= (1.0 - FILL) * max_w:
+                j = cut
+        if j < n and last[j] >= i + 1:
+            j = last[j]
+        rows.append((i, j))
+        i = j
+    return rows
+
+
+def _flow_rows_walk(pairs, widths, max_w, seg_starts=None):
     """Cut the character stream into rows, and never through a word.
 
     A cut that fills a row to max_w and stops wherever the width runs out
@@ -2261,6 +2449,7 @@ def flow_rows(pairs, widths, max_w, seg_starts=None):
     rows = []
     i = 0
     n = len(pairs)
+    can = _split_table(pairs)
     while i < n:
         w = 0.0
         j = i
@@ -2268,7 +2457,7 @@ def flow_rows(pairs, widths, max_w, seg_starts=None):
         while j < n and w + step(j) <= max_w:
             w += step(j)
             j += 1
-            if j < n and split_here(pairs, j):
+            if j < n and can[j]:
                 cut = j
         if j < n and cut > i:
             # A word safe cut that leaves the row emptier than page.fill
@@ -2281,12 +2470,12 @@ def flow_rows(pairs, widths, max_w, seg_starts=None):
         # when the walk reaches the start of the row.
         if j < n:
             back = j
-            while back > i + 1 and not split_here(pairs, back):
+            while back > i + 1 and not can[back]:
                 back -= 1
             # A row with no place to end inside it keeps the width cut. Taking
             # the cut at i + 1 regardless would give a token wider than a row,
             # such as a long dash table rule, one row a character.
-            if back > i and split_here(pairs, back):
+            if back > i and can[back]:
                 j = back
         rows.append((i, j))
         i = j
@@ -2306,7 +2495,7 @@ class Shrunk(object):
     a fraction of the time the whole-page shrink takes.
     """
 
-    def __init__(self, width, height, shrink_to=None, shrink_by=None):
+    def __init__(self, width, height, shrink_to=None, shrink_by=None, pixels=True):
         big_w = -(-width // dp.PATCH) * dp.PATCH
         if shrink_to:
             self.ratio = float(shrink_to) / big_w
@@ -2314,8 +2503,12 @@ class Shrunk(object):
             self.ratio = 1.0 / float(shrink_by or 1)
         self.width = max(1, int(round(width * self.ratio)))
         self.height = max(1, int(round(height * self.ratio)))
-        self.im = Image.new("RGB", (self.width, self.height), BACKGROUND)
-        self.im.info["densepack_small"] = True
+        if pixels:
+            self.im = Image.new("RGB", (self.width, self.height), BACKGROUND)
+            self.im.info["densepack_small"] = True
+        else:
+            # A plan's trial: the same size, no pixels. See _PlanPage.
+            self.im = _PlanPage(self.width, self.height, True)
         self.mode = "RGB"
         self.size = self.im.size
 
@@ -2507,6 +2700,16 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
     # the legend, and the search's trials pass the same three every time, so
     # the flow is built once a file.
     _flow_key = (hash(raw), bool(python), id(legend) if legend is not None else None)
+    # The per-character draw loop below is skipped on a glyphless trial that
+    # records no layout: see the loop for what that loop makes and why none
+    # of it is kept.
+    _SKIP_CHARS = bool(_NO_GLYPHS and layout is None
+                       and not __import__("os").environ.get("DENSEPACK_DEBUG_RUNS"))
+    # A plan's trial makes no pixels at all: its pages are sizes. The plan
+    # reads page sizes, start lines and the clamp count, never a pixel, and
+    # the one pass that reads a trial's pixels, the one page fill, is not run
+    # for a plan.
+    _NO_PIXELS = bool(_SKIP_CHARS and _PLAN_ONLY)
     _flow_hit = _FLOW_CACHE.get(_flow_key)
     if _flow_hit is not None and _flow_hit[0] == raw:
         pairs = list(_flow_hit[1])
@@ -2514,7 +2717,11 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
         pairs = build_flow(raw, python, legend)
         _FLOW_CACHE.clear()
         _FLOW_CACHE[_flow_key] = (raw, list(pairs))
-    depths = flow_depths(raw)
+    # flow_depths() reads the text alone, so it is kept per flow like the flow.
+    if _DEPTHS[0] != _flow_key:
+        _DEPTHS[1] = flow_depths(raw)
+        _DEPTHS[0] = _flow_key
+    depths = list(_DEPTHS[1])
     font = dp.load(dp.REGULAR, px)
     written = []
     ascent, descent = font.getmetrics()
@@ -2849,7 +3056,7 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
     # change what it holds.
     _cw_key = (px, renderer, getattr(font, "path", None), getattr(font, "size", None),
                getattr(big_font, "size", None) if big_font is not None else None,
-               len(pairs), hash(tuple((p[0], p[2] if len(p) > 2 else None) for p in pairs)))
+               len(pairs), _pairs_hash(_flow_key, pairs))
     _cw_hit = _CW_CACHE.get(_cw_key)
     if _cw_hit is not None:
         widths, ids = list(_cw_hit[0]), list(_cw_hit[1])
@@ -2879,13 +3086,46 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
     # One segment per source line, the same runs the draw loop below cuts on
     # with "while seg < b and ids[seg] == ids[k]".
     seg_starts = {j for j in range(len(ids)) if j == 0 or ids[j] != ids[j - 1]}
-    rows = flow_rows(pairs, widths, max_w, seg_starts)
+    rows = flow_rows(pairs, widths, max_w, seg_starts, memo_key=(_flow_key, _cw_key))
+    # A run of widths summed through the row tables flow_rows() just used: a
+    # difference of two running sums, exact because every width is a whole or
+    # half pixel. widths is not changed below this line. Without the tables
+    # the plain sum runs.
+    _rt = _ROW_MEMO[1] if (_ROW_MEMO[0] is not None
+                           and _ROW_MEMO[0][0] == (_flow_key, _cw_key)) else None
+    if _rt is not None:
+        _sums = _rt[2]
+
+        def _wsum(a, b):
+            return _sums[b] - _sums[a] if b > a else 0
+    else:
+        def _wsum(a, b):
+            return sum(widths[j] for j in range(a, b))
+    # True when every character from a to b is a count mark or a line break:
+    # the lone mark test, once per segment. A running count of such
+    # characters per flow answers it without walking the segment.
+    _mk = _MARK_COUNT[1] if _MARK_COUNT[0] == _flow_key else None
+    if _mk is None:
+        _mk = [0] * (len(pairs) + 1)
+        _c = 0
+        for _j, _p in enumerate(pairs):
+            if _is_count(_p) or _p[0] == NL_MARK:
+                _c += 1
+            _mk[_j + 1] = _c
+        _MARK_COUNT[0] = _flow_key
+        _MARK_COUNT[1] = _mk
+
+    def _all_marks(a, b):
+        return _mk[b] - _mk[a] == b - a
 
     # Reading guidance only. A reader answers from the code and never writes
     # the stream out, because an order to output the marked stream makes every
     # reader transcribe the pictures before answering, at many times the output
     # tokens.
-    scheme = scheme_for(pairs)
+    if _SCHEME[0] != _flow_key:
+        _SCHEME[1] = scheme_for(pairs)
+        _SCHEME[0] = _flow_key
+    scheme = list(_SCHEME[1])
 
     # The scheme is the prompt card's line, sent once a session, and no page
     # draws it. The budget still holds those rows back, so a page break falls
@@ -2909,15 +3149,35 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
     # Page one carries the key row. The band tints, the marks and the wrap edge
     # are drawn as themselves, so a reader names them without the session card.
     legend_w = legend_width(font)
+    # The height of the last wrap mark drawn. One process always has it
+    # when a row needs it; only a helper's unsaved first page can lack it.
+    wy0 = wy1 = None
     for page_i, chunk in enumerate(pages):
+        # A draw helper of pack_planned() draws only its own sheets. The
+        # layout above is the whole file's, so each page it draws is the
+        # page one process draws. It also draws the page before its first,
+        # unsaved: a row that continues a wrapped line takes its left wrap
+        # mark's height from the row before it, which for a page's first row
+        # is the last row of the page before.
+        warm = False
+        if _DRAW_SHEETS is not None:
+            first_page = _DRAW_SHEETS[0] * COLUMNS
+            if (page_i < first_page - 1
+                    or page_i // COLUMNS >= _DRAW_SHEETS[1]):
+                page_imgs.append(None)
+                continue
+            warm = page_i < first_page
         # the same picks and renderer as the drawing, or the count differs and
         # the last row is cut off the page
-        head_h = ((line_h + ROW_GAP) * len(legend_rows(font, max_w, face_for, renderer))
+        head_h = ((line_h + ROW_GAP) * _legend_count(font, max_w, face_for, renderer)
                   if page_i == 0 else 0)
         # A row that carries a blank line run ends a paragraph, and
         # space.paragraph_gap is the white that follows it. Zero ships.
-        extras = [PARA_GAP if any(_is_count(pairs[j])
-                                  for j in range(a, b)) else 0
+        # PARA_GAP is checked first: at zero, which ships, the per-character
+        # count test cannot change a row's extra, and it ran for every row of
+        # every trial of the width search.
+        extras = [PARA_GAP if PARA_GAP and any(_is_count(pairs[j])
+                                               for j in range(a, b)) else 0
                   for (a, b) in chunk]
         height = (2 * PAD + head_h
                   + len(chunk) * (line_h + ROW_GAP) + sum(extras))
@@ -2953,15 +3213,15 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
         if PAGE_TRIM and chunk:
             # the widest row on this page, plus the room its last block's
             # right edge and wrap edge take; never wider than before
-            widest = max(sum(widths[j] for j in range(a, b)) for a, b in chunk)
+            widest = max(_wsum(a, b) for a, b in chunk)
             width = min(width, int(2 * PAD + widest + EDGE_INSET + 2 + BAND_PAD_X + BAND_INSET + MARK_CLEAR + WRAP_W))  # room for the wrap bar
             if head_h:
                 # a trimmed page one never cuts the key row off
                 width = max(width, int(2 * PAD + min(legend_w, max_w) + 2))
         if DIRECT_CANVAS and (SHRINK_TO or (SHRINK_BY and SHRINK_BY > 1)) and renderer == "freetype":
             # the page is drawn at its final size; see Shrunk above
-            img = Shrunk(width, height, SHRINK_TO, SHRINK_BY)
-            d = img.drawer()
+            img = Shrunk(width, height, SHRINK_TO, SHRINK_BY, pixels=not _NO_PIXELS)
+            d = _NullDraw(img) if _NO_PIXELS else img.drawer()
         else:
             img = Image.new("RGB", (width, height), BACKGROUND)
             d = ImageDraw.Draw(img)
@@ -2977,7 +3237,10 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
         pitch = (line_h + ROW_GAP) * (_FILL_STRETCH or 1.0) if _FILL_PASS else snap(line_h + ROW_GAP)
         y = snap(PAD)
         if head_h:
-            y += legend_row(d, font, PAD, y, line_h, max_w, face_for, renderer, img, up)
+            # A plan skips drawing the key row: y only places what is drawn,
+            # and the page height above already holds the row.
+            if not _NO_PIXELS:
+                y += legend_row(d, font, PAD, y, line_h, max_w, face_for, renderer, img, up)
             y = snap(y)
         page_rows = []
         page_chars = []
@@ -2986,7 +3249,8 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
         bw = int(round(1 / img.ratio)) if isinstance(img, Shrunk) else 1
         # a drawer on the page's own pixels, for the mark box, which is fitted
         # to the digits after they are drawn
-        small = ImageDraw.Draw(img.im if isinstance(img, Shrunk) else img)
+        small = (None if _NO_PIXELS
+                 else ImageDraw.Draw(img.im if isinstance(img, Shrunk) else img))
         for row_n, (a, b) in enumerate(chunk):
             page_rows.append((y, line_h, a, b))
             # one outlined block per line segment inside this row; the
@@ -3012,7 +3276,7 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
                 seg = k
                 while seg < b and ids[seg] == ids[k]:
                     seg += 1
-                seg_w = sum(widths[j] for j in range(k, seg))
+                seg_w = _wsum(k, seg)
                 gap_here = GAP if pairs[seg - 1][0] == NL_MARK else 0
                 # With the mark outside, the band stops one pixel before
                 # the pilcrow's own column; the pilcrow keeps its place.
@@ -3070,79 +3334,89 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
                                     BAND_PAD_X - spans[seg][0] + 4 * bw),
                                 BAND_PAD_X + tail + widths[m]
                                 - shifts[m] - spans[m][1])
-                # A blank-line count and its mark, "3" and the bullet, open
-                # the block after a blank run. They belong with the line
-                # break, between the bands, so the band starts after them.
-                lead_w = 0
-                lead_end = k
-                if PILCROW_OUTSIDE:
-                    j0 = k
-                    while j0 < seg and _is_count(pairs[j0]):
-                        j0 += 1
-                    if k < j0 < seg:
-                        lead_w = sum(widths[j] for j in range(k, j0))
-                        lead_end = j0
-                # The line's own placement moves its band and its glyphs
-                # together; the band's own placement moves and grows the band
-                # alone. Both are zero unless layout.placements sets them.
-                line_key = "line:%d" % ids[k]
-                band_key = "band:%d" % ids[k]
-                ldx = _placed(line_key, "dx")
-                ldy = _placed(line_key, "dy")
-                bdx = ldx + _placed(band_key, "dx")
-                bdy = ldy + _placed(band_key, "dy")
-                g_l = _placed(line_key, "grow_l") + _placed(band_key, "grow_l") + BAND_GROW[0]
-                g_r = _placed(line_key, "grow_r") + _placed(band_key, "grow_r") + BAND_GROW[1]
-                g_t = _placed(line_key, "grow_t") + _placed(band_key, "grow_t") + BAND_GROW[2]
-                g_b = _placed(line_key, "grow_b") + _placed(band_key, "grow_b") + BAND_GROW[3]
-                # With a count in front, its digits end at x + BAND_INSET
-                # - EDGE_INSET + lead_w, and the band starts MARK_CLEAR
-                # after that; with no count the band keeps its pad.
-                # the count digits end at x + lead_w - MARK_CLEAR, the clear
-                # space is inside lead_w, and the band starts at x + lead_w;
-                # with no count the band starts at x, one clear space after
-                # the pilcrow before it
-                bx0 = x + lead_w + (BOX_CLEAR if lead_w else 0) + BAND_OFF_X + bdx - g_l
-                if lead_w and spans[lead_end - 1] is not None:
-                    # The band starts one page pixel of white past the box the
-                    # lead digits draw in: their last ink, the white, the box's
-                    # own line, the white, the band.
-                    m2 = lead_end - 1
-                    # Band starts a fixed step past the number ink. Nothing
-                    # pulls it back. A clamp that stops the band cutting the
-                    # first character is the wrong fix: a character close to
-                    # its number lets the clamp win, the band starts on the box
-                    # line, and the white on the right of the box goes to 0. Do
-                    # not fix this by widening the cell either. That works and
-                    # costs a patch of page height. Band overlap only puts a
-                    # character left edge on white in place of tint.
-                    start = (x + lead_w - widths[m2] + shifts[m2]
-                             + spans[m2][1] + BAND_AFTER_BOX_PX * bw)
-                    bx0 = start + BAND_OFF_X + bdx - g_l
-                by0 = y - BAND_PAD_Y + BAND_OFF_Y_ROW + bdy - g_t
-                bx1 = (x + seg_w - gap_here + BAND_PAD_X + BAND_OFF_X
-                       + bdx + g_r + BAND_INSET)
-                by1 = (y + line_h - 1 - BAND_GAP_Y + BAND_PAD_Y
-                       + BAND_OFF_Y_ROW + bdy + g_b)
-                # A block of one narrow mark and its pilcrow, or a shrunk
-                # band, can land the right edge left of the left one; Pillow
-                # refuses that, so the band is at least one pixel wide.
-                bx1 = max(bx1, bx0)
-                by1 = max(by1, by0)
-                # A block of nothing but marks gets no band: a block of a line
-                # number and its break has no lead to start the band after, so
-                # the tint would fill the number's own box and the white round
-                # the digits would go.
-                lone_mark = PILCROW_OUTSIDE and all(
-                    _is_count(pairs[j]) or pairs[j][0] == NL_MARK
-                    for j in range(k, seg))
-                tint = band_index(depths[min(ids[k], len(depths) - 1)])
-                if not lone_mark and tint is not None:
-                    d.rectangle([bx0, by0, bx1, by1],
-                                fill=TINTS[tint],
-                                outline=OUTLINE if OUTLINE_W else None, width=OUTLINE_W)
-                    if band_y is None:
-                        band_y = (by0, by1)
+                if _NO_PIXELS:
+                    # A plan's trial: the band only draws, and nothing below
+                    # reads it but the lone mark test, which the left wrap mark uses.
+                    lone_mark = PILCROW_OUTSIDE and _all_marks(k, seg)
+                else:
+                    # A blank-line count and its mark, "3" and the bullet, open
+                    # the block after a blank run. They belong with the line
+                    # break, between the bands, so the band starts after them.
+                    lead_w = 0
+                    lead_end = k
+                    if PILCROW_OUTSIDE:
+                        j0 = k
+                        while j0 < seg and _is_count(pairs[j0]):
+                            j0 += 1
+                        if k < j0 < seg:
+                            lead_w = _wsum(k, j0)
+                            lead_end = j0
+                    # The line's own placement moves its band and its glyphs
+                    # together; the band's own placement moves and grows the band
+                    # alone. Both are zero unless layout.placements sets them.
+                    if PLACEMENTS:
+                        line_key = "line:%d" % ids[k]
+                        band_key = "band:%d" % ids[k]
+                        ldx = _placed(line_key, "dx")
+                        ldy = _placed(line_key, "dy")
+                        bdx = ldx + _placed(band_key, "dx")
+                        bdy = ldy + _placed(band_key, "dy")
+                        g_l = _placed(line_key, "grow_l") + _placed(band_key, "grow_l") + BAND_GROW[0]
+                        g_r = _placed(line_key, "grow_r") + _placed(band_key, "grow_r") + BAND_GROW[1]
+                        g_t = _placed(line_key, "grow_t") + _placed(band_key, "grow_t") + BAND_GROW[2]
+                        g_b = _placed(line_key, "grow_b") + _placed(band_key, "grow_b") + BAND_GROW[3]
+                    else:
+                        # No placements: every lookup above answers 0, which
+                        # ships. Building two keys and asking eight times a
+                        # segment was a real share of a plan.
+                        ldx = ldy = bdx = bdy = 0
+                        g_l, g_r, g_t, g_b = BAND_GROW[0], BAND_GROW[1], BAND_GROW[2], BAND_GROW[3]
+                    # With a count in front, its digits end at x + BAND_INSET
+                    # - EDGE_INSET + lead_w, and the band starts MARK_CLEAR
+                    # after that; with no count the band keeps its pad.
+                    # the count digits end at x + lead_w - MARK_CLEAR, the clear
+                    # space is inside lead_w, and the band starts at x + lead_w;
+                    # with no count the band starts at x, one clear space after
+                    # the pilcrow before it
+                    bx0 = x + lead_w + (BOX_CLEAR if lead_w else 0) + BAND_OFF_X + bdx - g_l
+                    if lead_w and spans[lead_end - 1] is not None:
+                        # The band starts one page pixel of white past the box the
+                        # lead digits draw in: their last ink, the white, the box's
+                        # own line, the white, the band.
+                        m2 = lead_end - 1
+                        # Band starts a fixed step past the number ink. Nothing
+                        # pulls it back. A clamp that stops the band cutting the
+                        # first character is the wrong fix: a character close to
+                        # its number lets the clamp win, the band starts on the box
+                        # line, and the white on the right of the box goes to 0. Do
+                        # not fix this by widening the cell either. That works and
+                        # costs a patch of page height. Band overlap only puts a
+                        # character left edge on white in place of tint.
+                        start = (x + lead_w - widths[m2] + shifts[m2]
+                                 + spans[m2][1] + BAND_AFTER_BOX_PX * bw)
+                        bx0 = start + BAND_OFF_X + bdx - g_l
+                    by0 = y - BAND_PAD_Y + BAND_OFF_Y_ROW + bdy - g_t
+                    bx1 = (x + seg_w - gap_here + BAND_PAD_X + BAND_OFF_X
+                           + bdx + g_r + BAND_INSET)
+                    by1 = (y + line_h - 1 - BAND_GAP_Y + BAND_PAD_Y
+                           + BAND_OFF_Y_ROW + bdy + g_b)
+                    # A block of one narrow mark and its pilcrow, or a shrunk
+                    # band, can land the right edge left of the left one; Pillow
+                    # refuses that, so the band is at least one pixel wide.
+                    bx1 = max(bx1, bx0)
+                    by1 = max(by1, by0)
+                    # A block of nothing but marks gets no band: a block of a line
+                    # number and its break has no lead to start the band after, so
+                    # the tint would fill the number's own box and the white round
+                    # the digits would go.
+                    lone_mark = PILCROW_OUTSIDE and _all_marks(k, seg)
+                    tint = band_index(depths[min(ids[k], len(depths) - 1)])
+                    if not lone_mark and tint is not None:
+                        d.rectangle([bx0, by0, bx1, by1],
+                                    fill=TINTS[tint],
+                                    outline=OUTLINE if OUTLINE_W else None, width=OUTLINE_W)
+                        if band_y is None:
+                            band_y = (by0, by1)
                 # A source line that runs past the row edge carries on at the
                 # left of the next row. The edge the line runs through is drawn
                 # in WRAP_INK, so a reader sees where a line wraps rather than
@@ -3192,10 +3466,16 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
                         ink_right = pen_last + spans[seg - 1][1]
                         wx = max(wx, ink_right + WRAP_W + WRAP_INK_CLEAR)
                     wrap_edge(d, wx, wy0, wy1)
-                if k == a and a > 0 and pairs[a - 1][0] != NL_MARK and not lone_mark:
+                if (k == a and a > 0 and pairs[a - 1][0] != NL_MARK
+                        and not lone_mark and wy0 is not None):
                     wrap_edge(d, x - EDGE_INSET, wy0, wy1)
                 cx = x + BAND_INSET
-                for j in range(k, seg):
+                # A glyphless trial with no layout record keeps nothing this
+                # loop makes: it draws no glyph, it boxes no mark (found is
+                # None below), and x moves by seg_w after it. Skipping it is
+                # most of what a search trial cost. The debug print of mark
+                # runs still needs the loop.
+                for j in (() if _SKIP_CHARS else range(k, seg)):
                     jf, jdy = face_for(pairs[j][0], pairs[j][2])
                     jy = y + jdy
                     if PLACEMENTS:
@@ -3361,7 +3641,8 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
                         small.rectangle([sxs, top, sxs, bot],
                                         fill=MARK_BOX_INK)
             y += pitch + snap(extras[row_n])
-        page_imgs.append(img.im if isinstance(img, Shrunk) else img)
+        page_imgs.append(None if warm
+                         else img.im if isinstance(img, Shrunk) else img)
         if layout is not None:
             layout.setdefault("pages", []).append(
                 {"rows": page_rows, "chars": page_chars, "sheet": 0,
@@ -3393,6 +3674,8 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
     # the seam.
     for s in range(0, len(page_imgs), COLUMNS):
         pair = page_imgs[s:s + COLUMNS]
+        if pair[0] is None:
+            continue
         sheet_w = sum(im.width for im in pair) + SHEET_GAP * (len(pair) - 1)
         sheet_h = max(im.height for im in pair)
         if len(pair) > 1 and sheet_w > dp.CAP_W:
@@ -3405,6 +3688,16 @@ def _pack_code(text, px, out_stem, python=True, legend=None, layout=None):
                 PAGE_FIRST_LINE[path] = opens_on(s + q)
                 if layout is not None:
                     layout["pages"][s + q]["sheet"] = n
+            continue
+        if _NO_PIXELS:
+            # The sheet a plan's trial saves: its size, and the same name and
+            # start line the drawn sheet below gets.
+            sheet = _PlanPage(sheet_w, sheet_h,
+                              any(im.info.get("densepack_small") for im in pair))
+            n += 1
+            path = "%s-%d.png" % (out_stem, n)
+            written.append((path,) + save_page(sheet, path))
+            PAGE_FIRST_LINE[path] = opens_on(s)
             continue
         sheet = Image.new("RGB", (sheet_w, sheet_h), BACKGROUND)
         # A Shrunk page is already at its final size, and the flag that tells
@@ -3473,9 +3766,42 @@ class FontCannotDraw(ValueError):
     """The font has no glyph for too much of this text."""
 
 
+_COVERS_MEMO = {}
+
+
 def font_covers(text):
-    """True when the font can draw all but MISSING_GLYPH_MAX of the text."""
-    return freetype_glyph.font_covers(text, (_S.get("font.regular") or [""])[0])
+    """True when the font can draw all but MISSING_GLYPH_MAX of the text.
+    Kept per text: pack_code() asks for every trial of the width search, and
+    the answer walks every character."""
+    font = (_S.get("font.regular") or [""])[0]
+    key = (hash(text), len(text), font)
+    hit = _COVERS_MEMO.get(key)
+    if hit is None:
+        if len(_COVERS_MEMO) > 8:
+            _COVERS_MEMO.clear()
+        hit = _COVERS_MEMO[key] = freetype_glyph.font_covers(text, font)
+    return hit
+
+
+# The width cache's key hashed every character of the flow on every trial.
+# The flow is fixed by _flow_key, so its hash is kept per flow.
+_PAIRS_HASH = [None, None]
+# Running count of count marks and line breaks, per flow: see _all_marks in
+# _pack_code.
+_MARK_COUNT = [None, None]
+# The key row's line count, per file and font and width: see _legend_count.
+_LEGEND_COUNT = {}
+# scheme_for() per flow.
+_SCHEME = [None, None]
+# flow_depths() per flow.
+_DEPTHS = [None, None]
+
+
+def _pairs_hash(flow_key, pairs):
+    if _PAIRS_HASH[0] != flow_key:
+        _PAIRS_HASH[1] = hash(tuple((p[0], p[2] if len(p) > 2 else None) for p in pairs))
+        _PAIRS_HASH[0] = flow_key
+    return _PAIRS_HASH[1]
 
 
 def pack_code(text, px, out_stem, python=True, legend=None, layout=None,
@@ -3518,6 +3844,11 @@ def pack_code(text, px, out_stem, python=True, legend=None, layout=None,
         try:
             res = _fit_page_width(text, px, work, python, legend, layout,
                                   reader, title)
+            # A plan wants the winner's layout and nothing on disk. The
+            # winner is a glyphless trial held in memory, and its page
+            # start lines are already in PAGE_FIRST_LINE under its paths.
+            if _PLAN_ONLY:
+                return res
             out = _write_trial(res, out_stem)
         finally:
             _TRIAL = False
@@ -3682,6 +4013,273 @@ def _drop_stale_pages(out_stem, pages):
                 pass
 
 
+# THE PLAN. A reader asks for every page of a file in one message, so it must
+# know the pages before it reads. Where each page starts is decided by the
+# layout alone: build_flow, char_widths, flow_rows and the even split of rows
+# over pages. No pixel of a glyph takes part. plan_pages() runs the width
+# search with no glyph drawn and stops before the final draw, and
+# pack_planned() makes that final draw later from the plan, so the search
+# runs once per file and the pages are the pages the search would have drawn.
+_PLAN_ONLY = False
+_PLAN_RESULT = {}
+
+
+def plan_pages(text, px, python=True, legend=None, layout=None, reader=None,
+               title=""):
+    """The page layout pack_code() would draw, with no glyph drawn and no file
+    written. Returns {"width", "layout_width", "first_lines", "pages"}, where
+    first_lines holds the drawn line each page opens on, counted from 0 the
+    way PAGE_FIRST_LINE counts. Returns None when the code page is not in use
+    or the search gave no plan. Raises FontCannotDraw like pack_code()."""
+    global _PLAN_ONLY
+    if not (_S.get("page.code_width") and _S.get("page.fill_bottom")):
+        return None
+    import tempfile
+    import shutil
+    if layout is None and legend is None:
+        _start_helpers(text, px, python, reader, title)
+    tmp = tempfile.mkdtemp(prefix="densepack-plan-")
+    _PLAN_ONLY = True
+    _PLAN_RESULT.clear()
+    try:
+        res = pack_code(text, px, str(Path(tmp) / "plan"), python, legend,
+                        layout, reader, title)
+    finally:
+        _PLAN_ONLY = False
+        shutil.rmtree(tmp, ignore_errors=True)
+    if not res or not _PLAN_RESULT:
+        _stop_helpers()
+        return None
+    firsts = [PAGE_FIRST_LINE.pop(str(p), None) for p, _w, _h in res[0]]
+    if not firsts or not all(isinstance(k, int) for k in firsts):
+        _stop_helpers()
+        return None
+    return {"width": int(_PLAN_RESULT["width"]),
+            "layout_width": int(_PLAN_RESULT["layout_width"]),
+            "first_lines": firsts, "pages": len(firsts)}
+
+
+def pack_planned(text, px, out_stem, plan, python=True, legend=None,
+                 layout=None, reader=None, title=""):
+    """pack_code() drawn once from a plan_pages() plan, with no search. The
+    same two widths and guards the search's own final draw sets, so the pages
+    match it byte for byte. A plan of one page, or no plan, runs pack_code()
+    whole, because a one page file's fill pass reads pixels."""
+    global _FILL_GUARD, _WIDTH_GUARD
+    if not plan or int(plan.get("pages") or 0) < 2:
+        _stop_helpers()
+        return pack_code(text, px, out_stem, python, legend, layout, reader,
+                         title)
+    keep_w = _S.get("page.code_width")
+    keep_lw = _S.get("page.code_layout_width")
+    _S["page.code_width"] = int(plan["width"])
+    _S["page.code_layout_width"] = int(plan["layout_width"])
+    CLAMP_HITS[0] = 0
+    _FILL_GUARD = True
+    _WIDTH_GUARD = True
+    try:
+        out = None
+        if layout is None and legend is None:
+            out = _draw_split(text, px, out_stem, plan, python, reader, title)
+        if out is None:
+            out = pack_code(text, px, out_stem, python, legend, layout,
+                            reader, title)
+    finally:
+        _FILL_GUARD = False
+        _WIDTH_GUARD = False
+        _S["page.code_width"] = keep_w
+        _S["page.code_layout_width"] = keep_lw
+    _drop_stale_pages(out_stem, out[0])
+    return out
+
+
+# THE DRAW SPLIT. The plan fixes every page before a pixel is drawn, so the
+# sheets can be drawn by several processes at once, each its own run of
+# sheets, and the files are the files one process writes. A helper has to
+# lay the whole file out again before its first page, a few seconds on a
+# big file, so plan_pages() starts the helpers as it starts: each lays out
+# the file while the plan runs, then waits for the plan and draws its run.
+# A file under DRAW_SPLIT_BYTES keeps one process, since a helper's start
+# costs more than it saves there.
+DRAW_SPLIT_BYTES = 60_000
+# About how many bytes of text fill a page, to size the helpers before the
+# plan has counted the pages.
+BYTES_PER_PAGE = 6_000
+_DRAW_SHEETS = None
+_HELPERS = []
+
+
+def _stop_helpers():
+    for rec in _HELPERS:
+        p = rec["proc"]
+        try:
+            p.stdin.close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            p.kill()
+        except Exception:  # noqa: BLE001
+            pass
+    _HELPERS.clear()
+
+
+def _start_helpers(text, px, python, reader, title):
+    """Start the draw helpers for text, which lay it out while the plan
+    runs. Starts none for a small file, under DENSEPACK_SERIAL_DRAW or
+    inside a helper."""
+    import os
+    import pickle
+    import subprocess
+    import tempfile
+    _stop_helpers()
+    size = len(text.encode("utf-8"))
+    if (size < DRAW_SPLIT_BYTES or _DRAW_SHEETS is not None
+            or os.environ.get("DENSEPACK_SERIAL_DRAW")):
+        return
+    sheets = -(-size // BYTES_PER_PAGE // COLUMNS)
+    per_helper_mb = 60 + 0.9 * size / 1000
+    workers = max(1, min(sheets // 2, os.cpu_count() or 1,
+                         int(HELPER_MEMORY_MB // per_helper_mb)))
+    here = os.path.dirname(os.path.abspath(__file__))
+    job = {"text": text, "px": px, "python": python, "reader": reader,
+           "title": title, "settings": dict(_S)}
+    for _k in range(1, workers):
+        fd, job_path = tempfile.mkstemp(prefix="densepack-draw-",
+                                        suffix=".pkl")
+        with os.fdopen(fd, "wb") as fh:
+            pickle.dump(job, fh)
+        code = ("import sys; sys.path.insert(0, %r); import codepack; "
+                "codepack._draw_child(%r)" % (here, job_path))
+        try:
+            proc = subprocess.Popen(
+                [sys.executable, "-c", code], cwd=here,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+        except OSError:
+            break
+        _HELPERS.append({"proc": proc, "key": hash(text)})
+
+
+def _draw_split(text, px, out_stem, plan, python, reader, title):
+    """Draw the planned sheets across the helpers plan_pages() started.
+    Returns what pack_code() returns, or None to draw in this process
+    alone."""
+    import json
+    import os
+    import pickle
+    import tempfile
+    global _DRAW_SHEETS
+    helpers = [r for r in _HELPERS if r["key"] == hash(text)]
+    if not helpers or _DRAW_SHEETS is not None:
+        _stop_helpers()
+        return None
+    _HELPERS.clear()
+    sheets = -(-int(plan["pages"]) // COLUMNS)
+    workers = min(len(helpers) + 1, max(1, sheets // 2))
+    cuts = [round(k * sheets / workers) for k in range(workers + 1)]
+    used = []
+    try:
+        for k, rec in enumerate(helpers, 1):
+            p = rec["proc"]
+            if k >= workers:
+                p.kill()
+                continue
+            fd, msg = tempfile.mkstemp(prefix="densepack-plan-",
+                                       suffix=".pkl")
+            with os.fdopen(fd, "wb") as fh:
+                pickle.dump({"plan": plan, "stem": "%s.d%d" % (out_stem, k),
+                             "sheets": (cuts[k], cuts[k + 1])}, fh)
+            p.stdin.write((msg + "\n").encode("utf-8"))
+            p.stdin.close()
+            used.append((k, p))
+        _DRAW_SHEETS = (cuts[0], cuts[1])
+        try:
+            out = pack_code(text, px, out_stem, python, None, None, reader,
+                            title)
+        finally:
+            _DRAW_SHEETS = None
+        written = list(out[0])
+        for _k, p in used:
+            data, err = p.communicate()
+            if p.returncode != 0:
+                raise RuntimeError(err[-400:])
+            for path, w, h in json.loads(data):
+                final = "%s-%d.png" % (out_stem, len(written) + 1)
+                os.replace(path, final)
+                written.append((final, w, h))
+        for rec in helpers[len(used):]:
+            rec["proc"].communicate()
+        firsts = plan["first_lines"]
+        if len(written) != len(firsts):
+            raise RuntimeError("split drew %d pages, plan has %d"
+                               % (len(written), len(firsts)))
+        for (path, _w, _h), first in zip(written, firsts):
+            PAGE_FIRST_LINE[str(path)] = first
+        return [written] + list(out[1:])
+    except Exception:  # noqa: BLE001
+        for rec in helpers:
+            try:
+                rec["proc"].kill()
+            except Exception:  # noqa: BLE001
+                pass
+        for k, _p in used:
+            for f in Path(out_stem).parent.glob(
+                    Path(out_stem).name + ".d%d-*.png" % k):
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+        return None
+
+
+def _draw_child(job_path):
+    """One helper of _draw_split(). Lays out the text in the pickled job at
+    job_path, which it removes, with no glyph drawn, so the layout is in
+    memory when the plan comes. Then reads the path of the pickled plan on
+    stdin, draws its run of sheets and answers with the pages it wrote as
+    a JSON list on stdout. An empty stdin means the plan has no sheets for
+    it."""
+    import json
+    import os
+    import pickle
+    import shutil
+    import tempfile
+    global _DRAW_SHEETS, _PLAN_ONLY, _FILL_GUARD, _WIDTH_GUARD, _NO_GLYPHS
+    with open(job_path, "rb") as fh:
+        job = pickle.load(fh)
+    try:
+        os.remove(job_path)
+    except OSError:
+        pass
+    _S.clear()
+    _S.update(job["settings"])
+    tmp = tempfile.mkdtemp(prefix="densepack-warm-")
+    _PLAN_ONLY = _FILL_GUARD = _WIDTH_GUARD = _NO_GLYPHS = True
+    try:
+        pack_code(job["text"], job["px"], str(Path(tmp) / "w"),
+                  job["python"], None, None, job["reader"], job["title"])
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        _PLAN_ONLY = _FILL_GUARD = _WIDTH_GUARD = _NO_GLYPHS = False
+        shutil.rmtree(tmp, ignore_errors=True)
+        PAGE_FIRST_LINE.clear()
+    msg = sys.stdin.readline().strip()
+    if not msg:
+        return
+    with open(msg, "rb") as fh:
+        got = pickle.load(fh)
+    try:
+        os.remove(msg)
+    except OSError:
+        pass
+    _DRAW_SHEETS = tuple(got["sheets"])
+    out = pack_planned(job["text"], job["px"], got["stem"], got["plan"],
+                       job["python"], None, None, job["reader"],
+                       job["title"])
+    sys.stdout.write(json.dumps([[str(p), w, h] for p, w, h in out[0]]))
+
+
 def _fit_page_width(text, px, out_stem, python, legend, layout, reader, title):
     """Draw at every page width in page.code_width_choices, keep the cheapest.
 
@@ -3766,6 +4364,14 @@ def _fit_page_width(text, px, out_stem, python, legend, layout, reader, title):
         # widening winner, or the base draw of a file of more than one page. A
         # one page file's fill draw is complete already. This is the one real
         # draw of the whole search.
+        # A plan stops here. It records the two widths the final draw would
+        # be given, and pack_planned() makes that same draw later.
+        if _PLAN_ONLY:
+            _PLAN_RESULT.clear()
+            if best is not None:
+                _PLAN_RESULT["width"] = best_w
+                _PLAN_RESULT["layout_width"] = layout_w.get(best_w, int(round(best_w * ratio)))
+            return best
         if best is not None and str(best[0][0][0]) in _GLYPHLESS:
             _S["page.code_width"] = best_w
             _S["page.code_layout_width"] = layout_w.get(best_w, int(round(best_w * ratio)))
@@ -3938,7 +4544,7 @@ def _fill_bottom(text, px, out_stem, python, legend, layout, reader, title):
     least as far from the bottom edge as the first ink is from the top, and
     never more than three rows further. Up to six passes correct the ratio
     when the wrap points move. A file of more than one page keeps the floor."""
-    global _FILL_GUARD, _FILL_PASS, _FILL_STRETCH
+    global _FILL_GUARD, _FILL_PASS, _FILL_STRETCH, _NO_GLYPHS
     base = int(_S.get("page.code_layout_width") or 0)
     if not base:
         return pack_code(text, px, out_stem, python, legend, layout, reader, title)
@@ -3954,6 +4560,23 @@ def _fill_bottom(text, px, out_stem, python, legend, layout, reader, title):
     # and that path leads back here. Returning without it recurses forever.
     page_w = int(_S.get("page.code_width") or 0)
     if page_w and base <= page_w:
+        # A plan counts pages and clamped marks, and neither needs a glyph.
+        # This branch drew every glyph of the file at each page width only to
+        # have its clamp count read, which was most of a plan's time. The
+        # glyphless base the helpers drew ahead is the same layout.
+        if _PLAN_ONLY:
+            hit = _PREFETCH.pop((page_w, base), None)
+            if hit is not None:
+                res, CLAMP_HITS[0] = hit
+                return res
+            _FILL_GUARD = True
+            _NO_GLYPHS = True
+            try:
+                return pack_code(text, px, out_stem, python, legend, layout,
+                                 reader, title)
+            finally:
+                _FILL_GUARD = False
+                _NO_GLYPHS = False
         _FILL_GUARD = True
         try:
             return pack_code(text, px, out_stem, python, legend, layout,
@@ -3969,8 +4592,8 @@ def _fill_bottom(text, px, out_stem, python, legend, layout, reader, title):
         # than one page keeps the floor and goes back glyphless, because
         # nothing reads its pixels and _fit_page_width() draws the winner once
         # with glyphs at the end. A one page file is drawn again with glyphs,
-        # because the fill below measures its white.
-        global _NO_GLYPHS
+        # because the fill below measures its white. _NO_GLYPHS is declared
+        # global at the top of this function.
         hit = _PREFETCH.pop((int(_S.get("page.code_width") or 0), base), None)
         if hit is not None:
             best, CLAMP_HITS[0] = hit
@@ -3980,6 +4603,11 @@ def _fill_bottom(text, px, out_stem, python, legend, layout, reader, title):
                 best = pack_code(text, px, out_stem, python, legend, layout, reader, title)
             finally:
                 _NO_GLYPHS = False
+        # A plan needs only the page count and start lines, which this first
+        # layout already holds. The growth passes below read pixels and only
+        # ever run for a one page file, which needs no page list.
+        if _PLAN_ONLY:
+            return best
         if len(best[0]) != 1:
             return best
         _forget(best)

@@ -1,4 +1,4 @@
-<!-- DensePack 1.1 -->
+<!-- DensePack 1.2 -->
 # How DensePack works
 
 The mechanics in full. [README.md](README.md) contains the summary of each part
@@ -86,6 +86,15 @@ of text:
 4. The agent receives the image instead of the text.
 
 A subagent gets its brief as an image and sends its report back as an image.
+
+### Folder files
+
+A prompt can say "this folder" or name a folder by its full path.
+Then `prompt_card.py` sends the names of the files in that folder with your prompt.
+The agent reads the files in its first turn and does not spend a turn on Glob.
+`prompt_card.py` also starts to draw those files in the background, many at a time.
+A Read of one of those files waits for that draw and does not draw the file again.
+A folder with more than 200 files gets no names.
 <br>
 
 ---
@@ -105,7 +114,7 @@ The plugin counts that turn and that extra text in the comparison. Thus Read pac
 ### What each DensePack part costs
 
 Claude Code writes each new token to the 1-hour cache. Anthropic charges that token at 2x the input price.
-Each later request sends the entire conversation again. Anthropic charges those same tokens at 0.1x the input price, or 0.025x on Fable 5.1.
+Each later request sends the entire conversation again. Anthropic charges those same tokens at 0.1x the input price, 0.05x on Opus 5.5 or 0.025x on Fable 5.1.
 An output token costs 5x the input price.
 
 The table shows what Anthropic charges for each part. Each number is a count of input tokens.
@@ -117,7 +126,7 @@ The image is not in the table. The size of the image changes with the file.
 | A Read of a file that fits one image | Each Read | Nothing. The hook changes the path and adds no text | Nothing |
 | The pointer in a Bash result, for one image | Each packed command output | 320 | 16, or 4 on Fable 5.1 |
 | The agent's Read call that opens the Bash image | Each packed command output | 510 | 10, or 3 on Fable 5.1 |
-| The extra request that the Read call makes | Each packed command output | The length of the conversation at 0.1x, or 0.025x on Fable 5.1 | Nothing. Anthropic charges it one time |
+| The extra request that the Read call makes | Each packed command output | The length of the conversation at 0.1x, 0.05x on Opus 5.5 or 0.025x on Fable 5.1 | Nothing. Anthropic charges it one time |
 
 When a part goes to the model a second time, Anthropic charges it as new again.
 A second Read of the same file uses the saved image. Anthropic charges that image at 2x again. The image is new at the end of the conversation.
@@ -187,6 +196,7 @@ same turn. The agent sends the Edit again with it.
 
 > One function, `pack_code()` in `plugin/scripts/codepack.py`, produces each image. 
 > The image is the same PNG, 756 or 784 pixels wide, for each model. The renderer keeps the width that saves more.
+> Several processes draw a file of 60,000 bytes or more at the same time. Each process draws its own pages. The pages are the same as from one process.
 <br>
 
 <p align="center">
@@ -391,7 +401,7 @@ the moment and the script. All rows below run on your computer.
 | --- | --- | --- | --- |
 | SessionStart | None | `ensure_python.sh`, `ensure_python.ps1` | Finds a Python and installs one when the machine has none |
 | SessionStart | None | `bootstrap.py` | Converts the instruction files, draws the legend card and sends the standing note |
-| UserPromptSubmit | None | `prompt_card.py` | Sends the legend card once a session and draws a Word file your prompt names |
+| UserPromptSubmit | None | `prompt_card.py` | Sends the legend card once a session, draws a Word file your prompt names and sends the file names of a folder your prompt names |
 | PreToolUse | Read | `drop_read_gate.py` | Draws a file you dropped in by hand and swaps the path |
 | PreToolUse | Read | `read_gate.py` | Swaps the file path for the image path before the Read runs |
 | PreToolUse | Edit | `edit_gate.py` | Stops an Edit whose text is not in the file and quotes the real lines |

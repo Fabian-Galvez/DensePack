@@ -293,6 +293,87 @@ def _word_file_sentence(path, event, dp, gate, pointer, pack_images):
     return _sentence(path, Path(image).parent, names or [Path(image).name])
 
 
+# THE FOLDER'S FILE NAMES. A message about the files in a folder makes the
+# agent spend its first turn on a listing, a Glob or an ls, only to learn
+# the names, and every turn resends the whole conversation. A message that
+# names a folder, or says "this folder", gets that folder's file names
+# here, so the agent's first turn can Read the files. It is the names
+# alone: each Read still returns image 1 and its own note, and the agent
+# picks any later image after it has seen image 1, as it always has.
+THIS_FOLDER = re.compile(r"\b(?:this|the current|the project)\s+(?:folder|directory)\b",
+                         re.IGNORECASE)
+# A folder holding more files than this is searched, not read whole.
+LIST_MAX_FILES = 200
+
+
+def predraw(event, paths):
+    """Start drop_read_gate.prefetch() on these files in a process of its
+    own, detached, and return at once. Never raises."""
+    import subprocess
+    import tempfile
+    try:
+        fd, job = tempfile.mkstemp(prefix="densepack-predraw-", suffix=".json")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump({"event": event, "paths": [str(p) for p in paths]}, fh)
+        here = os.path.dirname(os.path.abspath(__file__))
+        code = ("import json, os, sys; sys.path.insert(0, %r); "
+                "import drop_read_gate as g; j = json.load(open(%r)); "
+                "os.remove(%r); g.prefetch(j['event'], j['paths'])"
+                % (here, job, job))
+        flags = {}
+        if os.name == "nt":
+            # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP: a hidden console the
+            # drawing helpers share, so no window opens.
+            flags["creationflags"] = 0x08000000 | 0x00000200
+        else:
+            flags["start_new_session"] = True
+        subprocess.Popen([sys.executable, "-c", code], cwd=here,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, close_fds=True, **flags)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def folder_files(event):
+    """The file names of every folder this message is about, one sentence
+    per folder, or "" when it is about none. Never raises."""
+    prompt = str(event.get("prompt") or "")
+    folders = []
+    if THIS_FOLDER.search(prompt):
+        folders.append(Path(event.get("cwd") or os.getcwd()))
+    for token in re.split(r"""[\s"',;]+""", prompt):
+        if token and ABS_TOKEN.match(token) and len(folders) < MAX_FOLDERS:
+            try:
+                if Path(token).is_dir():
+                    folders.append(Path(token))
+            except OSError:
+                continue
+    rows, seen = [], set()
+    for folder in folders:
+        try:
+            key = str(folder.resolve()).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            names = sorted(e.name for e in folder.iterdir()
+                           if e.is_file() and not e.name.startswith("."))
+        except OSError:
+            continue
+        if not names or len(names) > LIST_MAX_FILES:
+            continue
+        # Drawn in the background, all at once, so the reader starts at once
+        # and its Reads find their images ready or wait for the one draw.
+        predraw(event, [folder / n for n in names])
+        try:
+            from common import no_metacharacters
+            names = [no_metacharacters(n) for n in names]
+        except Exception:  # noqa: BLE001
+            pass
+        rows.append("The folder %s holds these %d files: %s." % (
+            str(folder), len(names), ", ".join(names)))
+    return "\n".join(rows)
+
+
 def _sentence(path, folder, names):
     """What the reader is told: the file, its pages, and to open them. The
     file name goes through no_metacharacters for the same reason
@@ -328,7 +409,8 @@ def main():
         # makes Opus think before a read-and-answer task; a code page
         # carries its own key row and a packed output its own pointer.
         pasted = "[Image" in str(event.get("prompt") or "")
-        drawn = word_pages(event)
+        drawn = "\n\n".join(part for part in (word_pages(event),
+                                                folder_files(event)) if part)
         if has_delegated(session) or not pasted:
             text = warning or ""
         else:
