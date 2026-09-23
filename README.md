@@ -280,7 +280,7 @@ tool changes, how to skip the hotkeys and how to uninstall.
   
 - DensePack adds about 370 prompt tokens once a session.
   That is the list of its 7 commands and 1 skill, plus one short note at session start. The other hooks add nothing to a plain message.
-  <sub>Measured with Opus 5, as the same two messages with DensePack off and on.</sub>
+  <sub>Measured with Opus 5.5, as the same two messages with DensePack off and on.</sub>
   <br>
 
 - A file over 500,000 bytes stays text. A file that contains a null byte stays text.
