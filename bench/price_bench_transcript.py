@@ -33,7 +33,7 @@ INPUT_FIELDS = ("input_tokens", "cache_creation_input_tokens",
 # every model, which read an Opus pair 2.5 times low and a Fable pair about
 # 4.6 times low; bench/abgd-opus-2026-09-04.md holds that measurement.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from session_cost import RATES, family  # noqa: E402
+from session_cost import RATES, family, read_share as _read_share  # noqa: E402
 
 
 def rates(model):
@@ -51,8 +51,9 @@ def rates(model):
     # dollars a million, per the pricing page read 13 September 2026. Fable 5
     # bills 0.1 like every other model. Until this date every Fable 5.1 leg
     # was priced at the Fable 5 read rate.
-    name = str(model or "").lower()
-    read_share = 0.025 if re.search(r"(fable|mythos)[-_ ]?5[-_.]1", name) else 0.1
+    # Opus 5.5 bills 0.05, read 23 September 2026. session_cost.read_share()
+    # holds every model's share.
+    read_share = _read_share(model)
     return (inp / 1e6, out / 1e6, inp * 1.25 / 1e6,
             inp * 2.0 / 1e6, inp * read_share / 1e6)
 

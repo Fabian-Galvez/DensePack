@@ -1,4 +1,4 @@
-<!-- DensePack 1.1 -->
+<!-- DensePack 1.2 -->
 # Right-click tool
 
 The DensePack right-click tool turns a file or highlighted text into a DensePack image. The packed image costs fewer input tokens than text. Paste the image into a top vision capable model instead of the raw text.

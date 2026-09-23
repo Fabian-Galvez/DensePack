@@ -74,10 +74,10 @@ from common import (BURST_BYTES, actor_key, actor_reader, line_pull,
                     no_metacharacters, over_cap, queue_cap_row, quoted_path,
                     read_event, sibling_image, tmp_dir, turn_reads, vault_dir)
 
-# The largest file a Read converts. A 230 KB file of 20,000 short lines and a
-# 3 MB single line each held the hook for minutes, so a bigger file, or one
-# holding a null byte, stays text. The largest bench sample file is 95 KB and
-# 1,934 lines, and codepack.py at 196 KB and 4,070 lines converts in seconds.
+# The largest file a Read converts. A 3 MB single line held the hook for
+# minutes, so a bigger file, or one holding a null byte, stays text. There is
+# no line ceiling: a file is planned with no glyph drawn and then drawn once,
+# and 20,000 short lines no longer hold the hook.
 #
 # One ceiling, every file, whatever the suffix. Drawing runs at about 0.15 s
 # per 1,000 characters, measured 17 September 2026 and the same rate for a
@@ -87,7 +87,6 @@ from common import (BURST_BYTES, actor_key, actor_reader, line_pull,
 # file, not once per Read, because the pages are kept. Raise it and a reader
 # waits proportionally longer the first time.
 READ_MAX_BYTES = 500000
-READ_MAX_LINES = 6000
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".pdf",
                   ".ipynb")
@@ -668,32 +667,128 @@ def text_bytes(path):
         return 0
 
 
-def main():
-    # NEVER CRASH A CALLER. This runs before every Read in every session.
+# ONE DRAW PER FILE. prompt_card.py starts the files of a folder drawing in
+# the background, and the reader's own Reads of those files can arrive while
+# that is still running. A Read whose file is being drawn waits for that draw
+# and is served from it, rather than drawing the same file a second time.
+# A lock older than DRAW_LOCK_STALE seconds is left by a draw that died.
+DRAW_LOCK_STALE = 300
+
+
+def _draw_lock(path):
+    import hashlib
+    from pathlib import Path
+    from common import tmp_dir
     try:
-        event = read_event()
+        key = str(Path(path).resolve()).lower()
+    except OSError:
+        key = str(path).lower()
+    return tmp_dir() / ("densepack-drawing-%s" % hashlib.sha256(
+        key.encode("utf-8")).hexdigest()[:16])
+
+
+def draw_once(path, event):
+    """drop_and_draw(), with one draw of a file at a time."""
+    import os
+    import time
+    lock = _draw_lock(path)
+    held = False
+    deadline = time.time() + DRAW_LOCK_STALE
+    while not held:
+        try:
+            os.close(os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            held = True
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > DRAW_LOCK_STALE:
+                    lock.unlink()
+                    continue
+            except OSError:
+                continue
+            if time.time() > deadline:
+                break
+            time.sleep(0.1)
+        except OSError:
+            break
+    try:
+        return drop_and_draw(path, event)
+    finally:
+        if held:
+            try:
+                lock.unlink()
+            except OSError:
+                pass
+
+
+def prefetch_one(args):
+    """route() for one file ahead of its Read, so the Read finds its images
+    already drawn. One job of prefetch()."""
+    event, path, n = args
+    ev = dict(event)
+    ev.update({"hook_event_name": "PreToolUse", "tool_name": "Read",
+               "tool_input": {"file_path": path},
+               "tool_use_id": "predraw-%d" % n})
+    route(ev, prefetch=True)
+
+
+def prefetch(event, paths):
+    """Draw these files at once, split across processes, before the reader
+    asks for them. prompt_card.py calls this for the files of a folder the
+    message is about: each Read then serves images already on disk instead
+    of drawing its own file while the reader waits. A file the Read would
+    keep as text is left alone, and so is a batch past BURST_BYTES."""
+    import os
+    from common import BURST_BYTES
+    jobs = []
+    total = 0
+    for n, path in enumerate(paths):
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            continue
+        if 1000 <= size <= READ_MAX_BYTES:
+            jobs.append((event, str(path), n))
+            total += size
+    if not jobs or total > BURST_BYTES:
+        return
+    workers = min(len(jobs), os.cpu_count() or 1)
+    if workers < 2:
+        for job in jobs:
+            prefetch_one(job)
+        return
+    from concurrent.futures import ProcessPoolExecutor
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(prefetch_one, jobs))
+
+
+def route(event, prefetch=False):
+    """What this gate answers a Read event with: the hook output to emit, or
+    None to let the Read run as written. prefetch is a draw ahead of the
+    Read, from glob_draw.py: it draws and seals the images the Read will be
+    handed, and never denies. Never raises."""
+    try:
         if disabled(event.get("session_id")):
-            return 0
+            return None
 
         if (event.get("tool_name") or "") != "Read":
-            return 0
+            return None
 
         tool_input = event.get("tool_input")
         if not isinstance(tool_input, dict):
-            return 0
+            return None
         path = tool_input.get("file_path")
         if not isinstance(path, str) or not path:
-            return 0
+            return None
         # THE LINE PULL, common.line_pull(): a few lines by their green
         # number pass before the sibling redirect below, so a pull from a
         # sidecar comes back as text and never as the image again.
         if line_pull(tool_input):
-            return 0
+            return None
 
         if is_image(path):
-            return 0
+            return None
         if is_plugin_own(path):
-            return 0
+            return None
 
         # IMAGES ONLY TO MEASURED READERS. Both routes below hand this
         # actor a drawn image: the sibling redirect immediately after, and
@@ -705,7 +800,7 @@ def main():
         # This asks about the ACTOR, never the file. Sonnet gets images
         # images, and a Haiku lead gets text.
         if not gets_images(event):
-            return 0
+            return None
 
         # Sealed: a redirect hands the reader the image in place of the text,
         # so only a pair this machine's plugin wrote is swapped.
@@ -726,12 +821,11 @@ def main():
                 answer["additionalContext"] = pointer.later_images_note(
                     _Path(path).name, str(_Path(image).parent),
                     [_Path(n).name for n in names])
-            emit({"hookSpecificOutput": answer})
-            return 0
+            return {"hookSpecificOutput": answer}
         if is_drop_folder(path):
-            return 0
+            return None
         if is_scratch_or_temp(path):
-            return 0
+            return None
         # A Read of more than LINE_PULL_MAX lines is a whole read and is not
         # exempt, or a reader could read a file as text in a few wide slices.
         # The pull of a few lines passes at the top of main(), through
@@ -748,13 +842,13 @@ def main():
         model = actor_reader(event) or FALLBACK_READER
         cap = burst_cap(model)
         if capped(event, model, cap):
-            return 0
+            return None
 
         from pathlib import Path
         try:
             size = Path(path).stat().st_size
         except OSError:
-            return 0
+            return None
         # A .docx is a zip of XML, so neither its size nor its bytes say what
         # a Read delivers: the container is mostly styles and parts, and it
         # carries the nulls the check below refuses. Pull the paragraphs out
@@ -774,18 +868,16 @@ def main():
         # A file under 1 KB passes as text: converting a 483 byte file took
         # 2.5 s and 469 MB to save 10 tokens.
         if size < 1000:
-            return 0
+            return None
         if size > READ_MAX_BYTES:
-            return 0
+            return None
         if drawn_text is None:
             try:
                 raw = Path(path).read_bytes()
             except OSError:
-                return 0
-            if b"\x00" in raw or raw.count(b"\n") > READ_MAX_LINES:
-                return 0
-        elif drawn_text.count("\n") > READ_MAX_LINES:
-            return 0
+                return None
+            if b"\x00" in raw:
+                return None
         # A file the font cannot draw, such as Chinese, Japanese or Korean
         # text, converts to empty boxes nobody can read, so it stays text.
         # freetype_glyph and style load in a fraction of codepack's time and
@@ -796,11 +888,11 @@ def main():
         text = (drawn_text if drawn_text is not None
                 else raw.decode("utf-8", "replace"))
         if not freetype_glyph.font_covers(text, font):
-            return 0
+            return None
         # The renderer's own line marks are U+E000 to U+E003 and it refuses a
         # source holding one, so such a file stays text rather than a deny.
         if any(mark in text for mark in "\ue000\ue001\ue002\ue003"):
-            return 0
+            return None
 
         # NO FLOOR HERE. See the module note above the imports: this route
         # pays no delivery fee, so there is no fixed character count below
@@ -813,8 +905,8 @@ def main():
         # draws a different, harder image, so the file stays text instead.
         from common import ensure_pillow
         if not ensure_pillow():
-            return 0
-        image, patch_tokens, tags, drawn = drop_and_draw(path, event)
+            return None
+        image, patch_tokens, tags, drawn = draw_once(path, event)
         if image is not None:
             import densepack as dp
             text_tokens = round(size / dp.CHARS_PER_TOKEN)
@@ -833,7 +925,7 @@ def main():
                 # Every page and the legend sidecar go with it, not page
                 # one alone: they hold the same words.
                 discard(drawn)
-                return 0
+                return None
             # A Read that starts past image 1 gets the image that holds its
             # first line, so a Read of lines 400 to 460 does not get lines 1
             # to 318 again.
@@ -858,16 +950,15 @@ def main():
             # when there are any, and no path to any file.
             if tags:
                 answer["additionalContext"] = tags
-            emit({"hookSpecificOutput": answer})
-            return 0
+            return {"hookSpecificOutput": answer}
 
         sid = str(event.get("session_id") or "")
-        if not sid:
-            return 0
+        if not sid or prefetch:
+            return None
 
         marker = marker_path(sid, path)
         if marker.exists():
-            return 0
+            return None
         # Written before the deny goes out: a fault after this line lets
         # the Read through with the marker already down, which only means
         # this one file was never deflected. The reverse order could deny
@@ -875,9 +966,9 @@ def main():
         # Moved onto the name, so a link planted at it takes no write.
         from common import write_text_atomic
         if not write_text_atomic(marker, "1"):
-            return 0
+            return None
 
-        emit({
+        return {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
@@ -887,9 +978,19 @@ def main():
                 "permissionDecisionReason": MESSAGE % (
                     format(size, ","), quoted_path(path)),
             }
-        })
+        }
     except Exception:  # noqa: BLE001
-        return 0
+        return None
+
+
+def main():
+    # NEVER CRASH A CALLER. This runs before every Read in every session.
+    try:
+        out = route(read_event())
+        if out:
+            emit(out)
+    except Exception:  # noqa: BLE001
+        pass
     return 0
 
 

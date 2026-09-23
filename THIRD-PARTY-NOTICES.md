@@ -1,4 +1,4 @@
-<!-- DensePack 1.1 -->
+<!-- DensePack 1.2 -->
 # Third-party notices
 
 DensePack is MIT licensed. This lists what the plugin and the right-click

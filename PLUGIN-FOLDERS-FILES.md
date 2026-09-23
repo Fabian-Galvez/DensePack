@@ -1,4 +1,4 @@
-<!-- DensePack 1.1 -->
+<!-- DensePack 1.2 -->
 # DensePack folders and files
 
 This file lists all folders and working files that the DensePack plugin writes. It says what each one contains and when the plugin writes it.
@@ -115,6 +115,7 @@ You can delete these files by hand.
 | `densepack-leadmodel` | The model of each main session, as a `{session id: model}` map. It is a map because one project can be open in two windows at the same time |
 | `densepack-manifest.jsonl` | One row for each conversion. A row has the character count, the text tokens, the image tokens and a seal hash |
 | `densepack-settings.json` | The settings that the slash commands write |
+| `densepack-drawing-<hash>` | A lock while DensePack draws one file. A Read of the same file waits for it. DensePack deletes the lock when the draw ends, or when the lock is older than 300 seconds |
 
 `bootstrap.py` deletes the other working files in this folder when they are older than 24 hours.
 
@@ -137,6 +138,7 @@ DensePack uses the model name for three things:
 | `~/.claude/densepack-cards/` | Images that the plugin uses again in each session |
 | `~/.claude/densepack-state/`, or the plugin's data folder | The savings table of the last session, the style file, the key that seals image records and queue records, the list of converted instruction files and the images of your user `CLAUDE.md` and memory index |
 | `~/.claude/plugins/cache/densepack-marketplace/densepack/<version>/` | The plugin |
+| Your system temp folder | The job files `densepack-draw-*`, `densepack-plan-*` and `densepack-predraw-*`. The drawing process deletes its job file when it reads it |
 
 <sub>Run `/dense-remove` before you uninstall. It deletes `~/.claude/densepack-cards/`, `~/.claude/densepack-state/` and the vault of each project. `/plugin uninstall densepack` deletes the plugin.</sub>
 
@@ -168,7 +170,7 @@ DensePack never converts these Reads:
 - Images, PDFs and notebooks. Claude Code reads them as images or as structured cells.
 - A file in a `.claude` folder, or in a folder named `sandbox` or `scratch`. Those folders contain working files and DensePack's own images.
 - A file below 1,000 bytes because the image does not save tokens.
-- A file over 500,000 bytes or over 6,000 lines because the conversion takes too long.
+- A file over 500,000 bytes because the conversion takes too long.
 - A file that contains a null byte because that file is not text.
 
 <sub>One rule applies to Sonnet only. When one Sonnet turn asks for more than 32 files, or for more than 700,000 bytes of files, DensePack sends text. Opus and Fable have no such limit.</sub>
