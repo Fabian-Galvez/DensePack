@@ -1,9 +1,8 @@
-# DensePack 1.2
+# DensePack 1.3
 __pycache__/
 *.pyc
 .claude/
-bench/rows/
-bench/session-*/
 /out-*.png
 /tools/ctrl-shift-vault/
 /tools/ctrl-right_click-vault/
+/plugin/evals/results/

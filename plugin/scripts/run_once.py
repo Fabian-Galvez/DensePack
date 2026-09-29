@@ -1,22 +1,19 @@
-"""Runs a DensePack hook script once per event, under whichever Python works.
+"""Runs a DensePack hook script once per event, with a working Python.
 
-WHY THIS FILE EXISTS, in plain words.
-
-Every DensePack hook entry in hooks.json starts run_hook.sh, which picks a
-working Python and runs this file. This file runs the hook script once per
+Each DensePack hook entry in hooks.json starts run_hook.sh. run_hook.sh finds
+a working Python and runs this file. This file runs the hook script once per
 event.
 
-It creates one marker file for the event, with O_CREAT and O_EXCL. The first
-process whose create succeeds runs the hook script, and any other process for
-the same event exits. The plugin loaded twice, from an install and from
---plugin-dir, still does the work once.
+This file creates one marker file for the event, with O_CREAT and O_EXCL. The
+first process that creates the marker runs the hook script. Each other process
+for the same event exits. When Claude Code loads the plugin twice, from an
+install and from --plugin-dir, the hook script still runs once.
 
-WHY THE MARKER IS WRITTEN HERE AND NOT INSIDE THE HOOK SCRIPT.
-
-Some hook scripts exit before they read the event. pointer.py answers a Read
-event without loading common.py. A marker written inside the scripts would
-never appear for those events. Written here, before the script is loaded,
-the marker appears for every event.
+This file writes the marker, not the hook script. Some hook scripts exit
+before they read the event. pointer.py returns its output for a Read event
+without loading common.py. A marker written by the hook scripts does not
+appear for those events. This file writes the marker before it loads the
+script, and the marker appears for each event.
 """
 import io
 import json
@@ -27,9 +24,9 @@ import subprocess
 import sys
 import time
 
-# Pillow 12, which the plugin installs, has no wheel under Python 3.10, so an
-# older Python runs no hook and stays silent. ensure_python.sh and
-# ensure_python.ps1 tell the user at session start.
+# The plugin installs Pillow 12, which has no wheel for Python below 3.10. An
+# older Python runs no hook and prints nothing. ensure_python.sh and
+# ensure_python.ps1 show the problem at session start.
 if sys.version_info < (3, 10):
     sys.exit(0)
 
@@ -38,9 +35,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MARKER_PREFIX = "densepack-ran-"
 
 
-
 def read_stdin():
-    """The event as text, read once here and handed to the script later."""
+    """Read the event once and return it as text for the script."""
     try:
         sys.stdin.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
@@ -52,11 +48,11 @@ def read_stdin():
 
 
 def marker_path(raw, target=None):
-    """Where this one event's marker goes, the same answer in both entries.
+    """Return the marker path for this event. The two entries get one path.
 
-    The name carries the session and a short hash of the whole event, so two
-    different events never share a marker and the two entries handling one
-    event always agree on the name. The folder is the one the plugin prunes.
+    The name holds the session id and a short hash of the whole event. Two
+    different events never share a marker. The two entries for one event
+    always build the same name. The folder is the one that the plugin prunes.
     """
     if not raw:
         return None
@@ -72,25 +68,27 @@ def marker_path(raw, target=None):
         common.note_event_cwd(event)
         session = re.sub(r"[^A-Za-z0-9_-]", "",
                          str(event.get("session_id") or ""))[:36]
-        # The script name is part of the marker. Every PreToolUse Read gate
-        # receives the same event bytes, so a marker named by the event alone
-        # would let the first gate run and skip the others.
+        # The script name is part of the marker. Each PreToolUse Read gate
+        # gets the same event bytes. With a marker named by the event alone,
+        # the first gate runs and the others skip.
         digest = hashlib.sha1((raw + "|" + os.path.basename(str(target or "")))
                               .encode("utf-8", "replace")).hexdigest()[:12]
         return os.path.join(str(common.tmp_dir()),
                             MARKER_PREFIX + (session or "none") + "-" + digest)
     except Exception:
-        # Any failure here means the two entries cannot agree on a name, so
-        # the caller falls back to running the script. A hook done twice is
-        # a smaller fault than a hook not done at all.
+        # After a failure here, the two entries cannot build the same name.
+        # The caller then runs the script. A hook that runs twice is a
+        # smaller fault than a hook that does not run.
         return None
 
 
 def claim_marker(path):
-    """True for exactly one caller per marker path: the one whose create
-    succeeds. os.open with O_CREAT and O_EXCL is atomic on Windows, Linux
-    and macOS, so two entries racing for one event cannot both win. A
-    folder that cannot be written returns True, so the script still runs."""
+    """Return True for one caller per marker path, the caller that creates it.
+
+    os.open with O_CREAT and O_EXCL is atomic on Windows, Linux and macOS.
+    When two entries try to create the marker of one event at the same time,
+    only one succeeds. When the folder is not writable, the function returns
+    True and the script still runs."""
     try:
         handle = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
@@ -109,14 +107,14 @@ STALE_MARKER_SECONDS = 3600
 
 
 def sweep_stale_markers(folder, every=200):
-    """One claim in `every` deletes run markers older than an hour.
+    """Delete run markers older than an hour, once in `every` claims.
 
-    A marker is claimed within milliseconds of its event and never read
-    again, but bootstrap.py prunes only at session start, so a session that
-    runs for a day piles up tens of thousands of them, and a listing of
-    .claude/tmp slows every Bash call. The sweep is a scandir of the folder,
-    about a twentieth of a second at a few thousand files, taken once in two
-    hundred claims.
+    The hook claims a marker within milliseconds of its event and never reads
+    it again. bootstrap.py prunes markers only at session start. A session
+    that runs for a day can make tens of thousands of markers, and a listing
+    of .claude/tmp then slows each Bash call. The sweep is one scandir of the
+    folder. It takes about a twentieth of a second at a few thousand files,
+    and it runs once in two hundred claims.
     """
     import random
     import time
@@ -138,7 +136,7 @@ def sweep_stale_markers(folder, every=200):
 
 
 def run(target, raw, rest):
-    """Run the hook script in this process, with the event put back on stdin."""
+    """Run the hook script in this process, with the event on stdin again."""
     sys.argv = [target] + rest
     sys.stdin = io.StringIO(raw)
     try:
@@ -150,7 +148,7 @@ def run(target, raw, rest):
 
 def main():
     args = sys.argv[1:]
-    # --first and --second are stripped rather than rejected, so an old
+    # The code removes --first and --second and does not reject them. An old
     # hooks.json still runs.
     if args and args[0] in ("--first", "--second"):
         args = args[1:]
@@ -163,24 +161,23 @@ def main():
         return 0
     raw = read_stdin()
     marker = marker_path(raw, target)
-    # One claim, no clock. Both entries try to CREATE the event's marker
-    # with O_EXCL: the one that creates it runs the script, the other exits.
-    # A bounded wait fails under load, when parallel Reads start hundreds of
-    # hook processes at once. With no marker name at all, no session id or
-    # an unreadable event, both entries run, because a hook done twice is a
-    # smaller fault than a hook not done.
+    # One claim and no timer. The two entries try to create the marker of
+    # the event with O_EXCL. The entry that creates it runs the script, and
+    # the other exits. A timed wait fails under load, when parallel Reads
+    # start hundreds of hook processes at once. With no marker name, from an
+    # empty or unreadable event, the two entries run. A hook that runs twice
+    # is a smaller fault than a hook that does not run.
     if marker is not None and not claim_marker(marker):
         return 0
     return run(target, raw, args[1:])
 
 
 def guarded_main():
-    """Never let an exception out of this hook.
+    """Catch each exception that main() raises.
 
-    main() runs inside a try, so a fault in it cannot change the outcome of
-    the tool call that fired the hook. The error is written to stderr so the
-    fault is still visible. The exit code stays 0, which lets the call
-    through.
+    main() runs inside a try. A fault in main() cannot change the result of
+    the event that started the hook. The hook writes the error to stderr,
+    where it stays visible. The exit code stays 0.
     """
     try:
         return main()

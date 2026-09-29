@@ -61,26 +61,26 @@
 					<key>COMMAND_STRING</key>
 					<string># DensePack it, a Finder Quick Action for macOS.
 #
-# This is the macOS twin of the Windows right-click entry and of the Linux
-# script densepack-file.sh. Finder passes every selected file as an argument,
-# so the paths arrive in "$@".
+# This is the macOS version of the Windows right-click entry and of the Linux
+# script densepack-file.sh. Finder passes each selected file as an argument.
+# The paths are in "$@".
 #
 # Edit the PACKER line to the full path of tools/densepack.py in your copy of
 # the DensePack repo. That one line is the only thing to change.
 #
-# Each image lands beside the file it came from, named
-# &lt;file&gt;.densepack-1.png, the same name Windows and Linux write.
+# The packer writes each image beside its source file, with the name
+# &lt;file&gt;.densepack-1.png. Windows and Linux write the same name.
 
 PACKER="$HOME/DensePack/tools/densepack.py"
 
-# A Quick Action runs outside a login shell, so its PATH holds neither
-# Homebrew prefix. Apple silicon first, then Intel.
+# A Quick Action runs outside a login shell. Its PATH holds neither Homebrew
+# prefix. The next line adds the Apple silicon prefix first, then the Intel one.
 PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 export PATH
 
-# A Quick Action has no terminal, so a message has to reach Notification
-# Centre. A quote or a line break inside the text would end the AppleScript
-# string early, so both are taken out first.
+# A Quick Action has no terminal. alert sends each message to Notification
+# Center. A quote or a line break in the text ends the AppleScript string
+# early. alert first changes each line break to a space and removes each quote.
 alert() {
   msg=$(printf '%s' "$1" | tr '\n' ' ' | tr -d '"')
   /usr/bin/osascript -e "display notification \"$msg\" with title \"DensePack\""
@@ -102,8 +102,8 @@ for f in "$@"; do
   if [ ! -f "$f" ]; then
     continue
   fi
-  # No size is passed. The packer draws the plugin's one page, 17 px unless
-  # DENSEPACK_CODE_PX names another number.
+  # The script passes no size. The packer makes the plugin's one page at 17 px
+  # unless DENSEPACK_CODE_PX names another number.
   out=$("$PY" "$PACKER" "$f" --out "$f.densepack" 2&gt;&amp;1) || {
     alert "Packing failed. $out"
     exit 1
@@ -113,7 +113,7 @@ for f in "$@"; do
 done
 
 if [ "$packed" -eq 0 ]; then
-  alert "Nothing was packed. DensePack reads files, not folders."
+  alert "DensePack packed nothing. It reads files, not folders."
   exit 1
 fi
 alert "$packed packed. $last"

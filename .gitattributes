@@ -1,14 +1,14 @@
-# DensePack 1.2
-# Line endings a fresh clone gets, on any operating system.
+# DensePack 1.3
+# The line endings of a new clone, on each operating system.
 #
-# A shell script with CRLF line endings dies on Linux and macOS. The kernel
-# reads the carriage return as part of the interpreter path on the first
+# A shell script with CRLF line endings fails on Linux and macOS. The kernel
+# reads the carriage return as a part of the interpreter path on the first
 # line and reports "bad interpreter: /bin/sh^M: no such file or directory".
-# The same script still runs when a shell is called on it by hand, so the
-# fault appears only on the machine that clones the repo.
+# The same script runs when you call a shell on it by hand. For that reason,
+# the fault appears only on a computer that clones the repository.
 #
-# The files only Windows runs keep CRLF. Everything else is left to git's
-# own default, so no file already committed changes shape.
+# Only the files that Windows runs keep CRLF. Git uses its own default for
+# all other files, and no committed file changes its line endings.
 
 *.sh text eol=lf
 
@@ -16,11 +16,9 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 
+# The eval suite keeps LF on each system. A Windows clone with CRLF would give
+# the agent different bytes than the published runs used.
+plugin/evals/** text eol=lf
+
 *.ttf binary
 *.ttc binary
-
-# Bench inputs keep their exact bytes. The rebuild bench compares a rebuilt
-# file with its sample byte for byte, and the other benches read fixed files.
-bench/byte-identical-rebuild/samples/** -text
-bench/sample-files/** text eol=lf
-bench/single-1000-token-file/** text eol=lf

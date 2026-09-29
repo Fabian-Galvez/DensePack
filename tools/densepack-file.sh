@@ -2,22 +2,22 @@
 # ---------------------------------------------------------------------
 #  DensePack on a right-click, for Linux.
 #
-#  This is the Linux twin of the Windows right-click entry. The Windows
+#  This is the Linux version of the Windows right-click entry. The Windows
 #  installer writes a registry command that runs densepack.py on the file
-#  you clicked. Linux has no registry, so the same job needs a small
-#  script that a file manager can run, and this is that script.
+#  you clicked. Linux has no registry. On Linux, a file manager runs this
+#  small script to do the same job.
 #
 #  install-densepack.sh puts a copy of this file in the file manager's
-#  scripts folder under the name "DensePack it", and points
-#  densepack.desktop at the same copy. Both routes end here, so the menu
-#  and the Open With entry can never disagree.
+#  scripts folder under the name "DensePack it". It writes the path of the
+#  same copy into densepack.desktop. The menu and the Open With entry run
+#  the same file and give the same result.
 #
-#  The menu holds one item, DensePack it. It runs densepack.py with no size,
-#  so the packer draws the plugin's one page: 17 px unless DENSEPACK_CODE_PX
+#  The menu holds one item, DensePack it. It runs densepack.py with no size.
+#  The packer makes the plugin's one page at 17 px unless DENSEPACK_CODE_PX
 #  names another number.
 #
-#  Each image lands beside the file it came from, named
-#  <file>.densepack-1.png. That is the name the Windows entry writes too.
+#  The packer writes each image beside its source file, with the name
+#  <file>.densepack-1.png. The Windows entry writes the same name.
 #
 #  To remove this by hand, delete this file and
 #  ~/.local/share/applications/densepack.desktop.
@@ -25,17 +25,17 @@
 set -eu
 
 # install-densepack.sh rewrites the next line with the full path of
-# densepack.py. The placeholder is not a file, so an unsubstituted copy falls
-# through to the packer beside it and this file runs straight from a checkout.
-# The same fallback covers an installed copy whose repo has since moved.
-# The placeholder is written once on purpose: the installer replaces the first
-# match on every line it reads, so a second copy of it would be rewritten too.
+# densepack.py. An unchanged copy keeps the placeholder, which is not a file,
+# and then uses the packer beside it. That rule covers a run from a checkout
+# and an installed copy whose repo moved after the install. The placeholder
+# appears only on the next line, because the installer replaces it on each
+# line where it appears.
 PACKER='@PACKER@'
 [ -f "$PACKER" ] || PACKER="$(dirname "$0")/densepack.py"
 
-# A file manager gives the script no terminal, so a message has to reach the
-# desktop's own notification tray. echo is the fallback for a run from a
-# terminal, which is how the tests run it.
+# A file manager gives the script no terminal. The script sends each message
+# to the desktop notification tray. It uses echo when DENSEPACK_NO_NOTIFY is
+# set or notify-send is missing.
 say() {
   if [ -n "${DENSEPACK_NO_NOTIFY:-}" ] || ! command -v notify-send >/dev/null 2>&1; then
     echo "$1"
@@ -54,18 +54,18 @@ if [ "$#" -eq 0 ]; then
   oldifs=$IFS
   IFS='
 '
-  set -f          # a path holding * must not turn into a list of files
+  set -f          # a path with * must not become a list of files
   set -- $paths
   set +f
   IFS=$oldifs
 fi
 
 if [ "$#" -eq 0 ]; then
-  say "Select a file first. DensePack packs the files you have selected."
+  say "Select a file first. DensePack packs the selected files."
   exit 1
 fi
 
-# Ubuntu 24.04 and later carry python3 and no python at all.
+# Ubuntu 24.04 and later include python3 and no python command.
 py=python3
 command -v python3 >/dev/null 2>&1 || py=python
 if ! command -v "$py" >/dev/null 2>&1; then
@@ -79,8 +79,8 @@ if [ ! -f "$PACKER" ]; then
 fi
 
 # The packer prints the image paths on stdout and its own summary, the
-# character count and the saving, on stderr. Both go into the notification,
-# because the summary is the part worth reading.
+# character count and the saving, on stderr. The script puts the two into the
+# notification, because the summary holds the useful facts.
 packed=0
 report=""
 for f do
@@ -97,7 +97,7 @@ for f do
 done
 
 if [ "$packed" -eq 0 ]; then
-  say "Nothing was packed. DensePack reads files, not folders."
+  say "DensePack packed nothing. It reads files, not folders."
   exit 1
 fi
 

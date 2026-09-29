@@ -1,21 +1,21 @@
 ; DensePack hotkey.
 ;
-; Highlight text in any application, press Ctrl+Shift+D, and the selection is
-; replaced by a dense image of the same text.
+; Select text in any application and press Ctrl+Shift+D. The hotkey replaces
+; the selection with a packed image of the same text.
 ;
-; Windows gives no way to add an item to another application's text menu. Copy and
-; Cut are drawn by each application itself. A hotkey works in every application,
-; which is the same result by a different key.
+; Windows has no way to add an item to the text menu of another application.
+; Each application makes its own Copy and Cut items. A hotkey works in all
+; applications and gives the same result with a key.
 ;
 ;   Ctrl+Right-click   show the DensePack menu at the cursor, in any application
 ;   Ctrl+Shift+D       pack the selection and paste the image over it
 ;   Ctrl+Shift+C       pack the selection and leave the image on the clipboard,
 ;                      changing nothing
 ;
-; No hotkey or menu item passes a size, so the packer draws the plugin's one
-; image: 17 px unless DENSEPACK_CODE_PX names another number.
+; No hotkey or menu item passes a size. The packer makes the plugin's one image
+; at 17 px unless DENSEPACK_CODE_PX names another number.
 ;
-; Every pack saves the text and every image in a new folder. The folder name is
+; Each pack saves the text and all images in a new folder. The folder name is
 ; the first three words of the text. The hotkeys save under tools\ctrl-shift-vault.
 ; The menu saves under tools\ctrl-right_click-vault.
 
@@ -34,28 +34,30 @@ KEY_VAULT := "ctrl-shift-vault"
 MENU_VAULT := "ctrl-right_click-vault"
 
 ; The setting for the warning, and the list of images densepack-clip.ps1 writes
-; after each pack. Both are outside the DensePack folder.
+; after each pack. The two files are in %LOCALAPPDATA%\DensePack, not in the
+; repository.
 STATE := EnvGet("LOCALAPPDATA") "\DensePack"
 INI := STATE "\tool.ini"
 LAST := STATE "\last-pack.txt"
 try DirCreate(STATE)
 
-; Both vault folders exist from the first start, so the user can find them.
+; The script makes the two vault folders at the first start. You can then find
+; them.
 for name in [KEY_VAULT, MENU_VAULT]
     try DirCreate(TOOLS "\" name)
 
 ; An application does not show items from another program in its text menu. Cut,
-; Copy and Paste belong to each application. So DensePack shows its own menu at
-; the cursor on Ctrl+Right-click, which works in every text box: editors, chat
-; boxes, browsers.
+; Copy and Paste are part of each application. For that reason DensePack shows
+; its own menu at the cursor on Ctrl+Right-click. The menu works in all text
+; boxes, such as editors, chat boxes and browsers.
 DPMenu := Menu()
 DPMenu.Add("DensePack it (replace selection)", (*) => Pack(true, MENU_VAULT))
 DPMenu.Add("DensePack to clipboard", (*) => Pack(false, MENU_VAULT))
 
 TrayTip("DensePack ready", "Ctrl+Right-click for the menu. Ctrl+Shift+D replaces, Ctrl+Shift+C packs to clipboard.")
 
-; Shows the warning before the first replace. Returns false when the user
-; chooses Cancel. The check box saves the choice in tool.ini, and the warning
+; Shows the warning before the first replace. Returns false when you
+; choose Cancel. The check box saves the choice in tool.ini, and the warning
 ; does not show again.
 ReplaceWarningOk() {
     global INI, TOOLS, KEY_VAULT, MENU_VAULT
@@ -68,7 +70,7 @@ ReplaceWarningOk() {
     box.AddText("w480",
         "Ctrl+Shift+D and the menu item DensePack it remove the selected text "
         . "and paste a DensePack image in its place.`n`n"
-        . "DensePack saves the text and every image in a new folder here:`n"
+        . "DensePack saves the text and all images in a new folder here:`n"
         . TOOLS "\" KEY_VAULT "`n"
         . TOOLS "\" MENU_VAULT "`n`n"
         . "The text also stays in the Windows clipboard history (Win+V) when "
@@ -86,7 +88,8 @@ ReplaceWarningOk() {
         return false
     if choice.hide
         try IniWrite("1", INI, "warning", "replace_hidden")
-    ; The warning took the focus. Give it back to the window with the selection.
+    ; The warning takes the focus. The function returns the focus to the window
+    ; with the selection.
     if target {
         try WinActivate("ahk_id " target)
         WinWaitActive("ahk_id " target, , 1)
@@ -114,8 +117,9 @@ Pack(replace, vault) {
     }
 
     ; A chat box adds a pasted image as an attachment and does not remove the
-    ; selected text, so replace mode deletes the selection here. The copied text
-    ; is still on the clipboard, and goes back with Ctrl+V if packing fails.
+    ; selected text. For that reason replace mode deletes the selection here.
+    ; The copied text is still on the clipboard. If the pack fails, Ctrl+V
+    ; pastes the text again.
     if replace
         Send("{Delete}")
 
@@ -152,12 +156,12 @@ Pack(replace, vault) {
         if (images.Length = 1)
             TrayTip("DensePack", "The image is on the clipboard. The text and the image are in " folder)
         else
-            TrayTip("DensePack", "The text needed " images.Length " images. Image 1 is on the clipboard. The text and every image are in " folder)
+            TrayTip("DensePack", "The text needed " images.Length " images. Image 1 is on the clipboard. The text and all images are in " folder)
         return
     }
 
-    ; Image 1 is on the clipboard. Each later image goes on the clipboard and is
-    ; pasted in order, so a long text loses nothing.
+    ; Image 1 is on the clipboard. The loop puts each later image on the
+    ; clipboard and pastes it, in order. A long text loses no part.
     Send("^v")
     Loop images.Length - 1 {
         Sleep(400)
@@ -166,7 +170,7 @@ Pack(replace, vault) {
         Sleep(150)
         Send("^v")
     }
-    TrayTip("DensePack", "Pasted " images.Length (images.Length = 1 ? " image" : " images") ". The text and every image are in " folder)
+    TrayTip("DensePack", "Pasted " images.Length (images.Length = 1 ? " image" : " images") ". The text and all images are in " folder)
 }
 
 ^+d:: Pack(true, KEY_VAULT)

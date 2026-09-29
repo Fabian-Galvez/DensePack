@@ -1,6 +1,6 @@
 {
   "name": "densepack-marketplace",
-  "description": "The DensePack marketplace. One plugin: DensePack, which converts long text into dense images an AI reads for fewer input tokens.",
+  "description": "The DensePack marketplace holds one plugin, DensePack, which packs long text into dense images that an AI model reads for fewer input tokens.",
   "owner": {
     "name": "Fabian-Galvez"
   },
@@ -8,8 +8,8 @@
     {
       "name": "densepack",
       "source": "./plugin",
-      "version": "1.2",
-      "description": "DensePack converts long text into dense images an AI reads for fewer input tokens: file Reads, long shell output, long subagent briefs and subagent reports. It sends the text when the image would cost more. The conversion runs on your machine."
+      "version": "1.3",
+      "description": "DensePack packs file Reads, shell output, long subagent briefs and subagent reports into dense images that an AI model reads for fewer input tokens, and it sends the text when the image costs more. All work runs on your computer."
     }
   ]
 }

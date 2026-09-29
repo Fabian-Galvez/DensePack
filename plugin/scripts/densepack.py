@@ -1,26 +1,25 @@
-"""The engine. Turns a wall of text into one small picture.
+"""The engine. It packs a long text into one small picture.
 
-HOW THIS FILE FITS, in plain words: everything else here is plumbing, this is
-the machine the plumbing feeds. It lays the words out in tiny type, colors the
-characters that look alike so they cannot be confused, keeps the image inside
-the exact size the AI reads without shrinking, and saves it as a PNG. It is a
-faithful port of the DensePack browser app in the folder above, same rules,
-same colors, same measurements.
+HOW THIS FILE FITS. The other files bring text to this file. This file lays
+the words out in small type and colors the characters that look alike, and a
+model then does not confuse them. It keeps the image inside the exact size
+that the API accepts without a resize, and it saves the image as a PNG.
 
-Pack text into the smallest image the reader can still read.
-The size is the plugin's one size, common.CODE_PX, for every reader.
+Pack text into the smallest image the model can still read.
+The size is the one size of the plugin, common.CODE_PX, for all models.
 --size overrides it.
 
-A port of the browser app in the folder above, so a script, a right-click or an
-agent can do the same job with no browser. Same constants, same layout, same
-color coding, same downscale check.
+It is a port of the DensePack browser app, index.html at the root of the
+repository. It has the same rules, constants, layout, color coding,
+measurements and downscale check. A script, a right-click or an agent can
+do the same job without a browser.
 
     python densepack.py report.md
     python densepack.py report.md --size 14 --out packed
     some-command | python densepack.py - --out packed
 
-Writes packed-1.png and so on, prints one line per file, and prints the token
-comparison so the saving is a number rather than a claim.
+It writes packed-1.png and the next files, prints one line per file, and
+prints the token comparison. The saving is then a number and not a claim.
 """
 
 import os
@@ -38,77 +37,80 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import style  # noqa: E402
 
-# Every number and colour below comes from style.load(). A run with no
-# style.json on disk draws with the defaults in style.py.
+# All numbers and colors below come from style.load(). Without a style.json
+# on disk, a run uses the defaults in style.py.
 _S = style.load()
 
-# The API's real limits, taken from the app. The app follows the resize rule
-# Anthropic publishes rather than guessing at it; this file holds only the
-# constants that rule produces, not an implementation of it. They are the same for every model on
-# the high-resolution tier, so they do not change with the reader.
-# The API accepts 2576 px on the long edge for a single image, but a request
-# holding more than 20 images gets a stricter limit: any dimension over
-# 2000 px is shrunk, and shrinking destroys text this small. A busy session can
-# queue more than 20 packed reports, so every image is built under 2000 on
-# both sides. 1988 is 71 patches of 28 px, the largest patch-aligned edge
-# under that limit.
-EDGE = _S["page.edge"]  # longest side this packer will produce; past 1568 the
-                   # delivery layer can shrink an image silently
+# The real limits of the API, taken from the app. The app follows the resize
+# rule that Anthropic publishes and does not guess. This file holds only the
+# constants from that rule, not the rule itself. They are the same for all
+# models on the high-resolution tier and do not change with the model.
+# The API accepts 2576 px on the long edge for a single image. A request with
+# more than 20 images gets a stricter limit. The API shrinks any dimension
+# over 2000 px, and the shrink destroys text this small. A busy session can
+# queue more than 20 packed reports. For this reason, each image is under
+# 2000 px on the two sides. EDGE is lower still, 1568 px or 56 patches of
+# 28 px, from page.edge in style.py.
+EDGE = _S["page.edge"]  # longest side this packer makes. Past 1568 the
+                   # delivery layer can shrink an image without a notice
 MAX_TOK = _S["page.max_tok"]   # most patches the API accepts per image
 CAP_W = _S["page.cap_w"]       # largest guaranteed-no-downscale canvas
 CAP_H = _S["page.cap_h"]
 RATIO = _S["page.ratio"]       # a square uses the token budget best
 
-# The floor a reader was scored against. Below it digits misread even in
-# color: 6 px returned "#2___5" for a 5 digit number. One image is drawn for
-# every reader, so every entry answers with font.px; the map stays so callers
-# that ask by reader name still work. Haiku has no entry and gets no image:
-# Haiku readers invented well shaped wrong numbers from a packed image rather
-# than reporting UNREADABLE, and a larger size did not fix it.
+# The floor that a bench scored each model against. Below it a model
+# misreads digits, even in color. At 6 px a model returned "#2___5" for a 5
+# digit number. DensePack packs one image for all models, and each entry
+# returns font.px. The map stays, and callers that ask by model name still
+# work. Haiku has no entry and gets no image. Haiku invented well shaped
+# wrong numbers from a packed image and did not report UNREADABLE. A larger
+# size did not fix this.
 RISKY = {"fable": _S["font.px"], "opus": _S["font.px"],
          "sonnet": _S["font.px"]}
-RISKY_DEFAULT = _S["font.px"]  # used when the profile cannot be read
+RISKY_DEFAULT = _S["font.px"]  # the floor for an unreadable profile
 
-# pack() takes the reader as well as the size and refuses to draw under that
-# reader's own RISKY floor: it draws at the floor instead and prints one line
-# to stderr recording that it did, so a caller or a test can see the clamp
-# happened without pack()'s return value changing shape. No agent should be
-# handed an image it was never scored to read.
-FLOOR_NOTE = ("DensePack: %d px requested for %s is under its measured "
-              "%d px floor. Drew at %d px instead.")
+# pack() takes the model as well as the size. It does not pack under the
+# RISKY floor of that model. It packs at the floor and prints one line to
+# stderr about the clamp. A caller or a test can then see the clamp, and the
+# shape of the return value of pack() does not change. No agent gets an image
+# at a size that no bench scored.
+FLOOR_NOTE = ("DensePack got a request for %d px for %s, under the measured "
+              "%d px floor of that model. It packed the text at %d px.")
 
 # A page over 512,000 bytes reaches the model as a JPEG, not as the PNG on
 # disk. The number is a constant in the Claude Code binary, beside
 # imageMaxRawBytes, and the Read tool uses it when the session is local. Over
-# it the file is re-encoded by a JPEG quality search, 90 down to 20. No
-# setting reaches the number: the settings schema has no image key.
+# that size, Claude Code encodes the file again with a JPEG quality search,
+# from 90 to 20. No setting changes the number, because the settings schema
+# has no image key.
 #
-# The re-encode lands on the glyph edges, which is where a reader loses a
-# letter. A 756 by 1120 page at 574,654 bytes arrived as image/jpeg holding
-# 87,307 colours where the file holds 4,700. So a page is written to fit under
-# a cap instead, keeping every pixel position and rounding only the
-# anti-aliased shades.
+# The JPEG encode changes the glyph edges, and there a model loses a letter.
+# A 756 by 1120 page at 574,654 bytes arrived as image/jpeg with 87,307
+# colors, and the file has 4,700. For this reason the code writes a page
+# under a cap. It keeps each pixel position and rounds only the anti-aliased
+# shades.
 #
-# PNG_BYTE_CAP is the cap the renderer enforces, and save_png() enforces it.
-# It sits at half the JPEG threshold. A heavy page holds about 4,870 colours
-# and writes 487,088 bytes; from a 256 colour palette the same page writes
-# 172,358 bytes and 117 of its 550,621 ink pixels change colour, 0.02 per
-# cent, with every glyph in the same place.
+# PNG_BYTE_CAP is the cap of the renderer, and save_png() enforces it. It is
+# at half the JPEG threshold. A heavy page holds about 4,870 colors and
+# writes 487,088 bytes. From a 256 color palette the same page writes 172,358
+# bytes, and 117 of its 550,621 ink pixels change color, 0.02 percent. Each
+# glyph stays in the same place.
 PNG_BYTE_CAP = 250000
 PALETTE_STEPS = (256, 128, 64, 32)
 
 
 def clear_link(path):
-    """Remove any link at this name before anything writes to it.
+    """Remove any link at this name before a write to it.
 
-    A project can plant the part file's own name in the images folder as a
-    symbolic link, a junction or a second hard link, and a write to that name
-    would land in the file it shares. A hard link is a real directory entry,
-    so nothing but the link count tells it from an ordinary file. The move
-    that follows uses os.replace, which replaces a link rather than writing
-    through it, so only the part name needs this."""
+    A project can put the name of the part file in the images folder as a
+    symbolic link, a junction or a second hard link. A write to that name then
+    goes into the file that the link shares. A hard link is a real directory
+    entry, and only the link count separates it from an ordinary file. The
+    move after this uses os.replace, which replaces a link and does not write
+    through it. Only the part name needs this step."""
     # common.is_junction reads the reparse tag, because os.path.isjunction is
-    # 3.12 and both launchers accept 3.10, where a junction reads as a folder.
+    # 3.12 and the two launchers accept 3.10, where a junction looks like a
+    # folder.
     from common import clear_link as _clear_link
     _clear_link(path)
 
@@ -116,15 +118,17 @@ def clear_link(path):
 def save_png(im, path):
     """Write a PNG small enough to reach the model as a PNG.
 
-    The full-colour page is written first, and it stands when it fits. A page
-    over the cap is written again from a palette, fewest colours last, and the
-    first one under the cap is kept. A page that fits under none of them is
-    left at its smallest, which is still better than the JPEG that follows.
+    The function writes the full-color page first and keeps it when it fits.
+    It writes a page over the cap again from a palette, with the fewest
+    colors last, and keeps the first one under the cap. A page that fits
+    under none of them stays at its smallest size, which is still better than
+    the JPEG that follows.
     """
-    # Written beside the name and moved onto it in one step, the same rule
-    # sheet.save above follows: a reader served the path while this function
-    # writes its second, smaller copy would receive the first copy cut in
-    # half, a PNG with no IEND chunk that does not decode.
+    # The function writes beside the name and moves the file onto it in one
+    # step, the same rule that composite() and pack() follow. A process that
+    # reads the path while this function writes its second, smaller copy
+    # gets the first copy cut in half, a PNG with no IEND chunk that does
+    # not decode.
     part = str(path) + ".part"
     clear_link(part)
     im.save(part, "PNG", optimize=True)
@@ -139,13 +143,13 @@ def save_png(im, path):
 
 
 def replace_retry(src, dst, tries=40, wait=0.05):
-    """os.replace that waits out a busy destination.
+    """os.replace that waits while the destination is busy.
 
-    On Windows a replace onto a file another process holds open raises
-    PermissionError. The read gate of a neighbouring Read opens image files
-    to measure them while a draw writes its winner, so a wide burst of Reads
-    meets it. Forty tries at fifty milliseconds is two seconds, longer than
-    any measure holds a file open.
+    On Windows a replace onto a file that another process holds open raises
+    PermissionError. The read gate of a parallel Read opens image files to
+    measure them while a pack writes its chosen image. A wide burst of Reads
+    then gets this error. Forty tries at fifty milliseconds is two seconds,
+    longer than any measure holds a file open.
     """
     import time
     for n in range(tries):
@@ -161,72 +165,74 @@ def replace_retry(src, dst, tries=40, wait=0.05):
 PATCH = _S["page.patch"]   # one visual token is one 28 by 28 patch
 PAD = _S["page.text_pad"]
 BACKGROUND = _S["page.background"]
-# One ink for every character, or None for the per-group colours that ship.
+# One ink for all characters, or None for the per-group colors that ship.
 UNIVERSAL_INK = _S["ink.universal"]
-# A px offset a character group draws at, added to the body size. Every one
-# is zero in the shipped renderer.
+# A px offset for a character group, added to the body size. All offsets
+# are zero in the shipped renderer.
 GROUP_PX = _S["font.group_px"]
 LETTER_SPACE = _S["space.letter_text"]
 WORD_SPACE = _S["space.word"]
 LINE_FACTOR = _S["space.line_factor"]
-# Characters per token for the text this plugin packs. THE SINGLE SOURCE:
-# every script in plugin/scripts reads this name rather than writing a number
-# of its own. The browser app and the clipboard script cannot import Python,
-# so they carry the value with a comment naming this constant.
+# Characters per token for the text this plugin packs. THE SINGLE SOURCE.
+# All scripts in plugin/scripts read this name and do not write a number of
+# their own. The browser app and the clipboard script cannot import Python.
+# They hold the value with a comment that names this constant.
 #
 # Measured against Anthropic's count_tokens endpoint, model claude-opus-5,
-# over 92 packed source texts, 860,637 characters against 357,951 counted
-# tokens: 2.4043. A second sample balanced by kind rather than by traffic, 90
-# texts and 559,234 characters against 232,893 tokens, read 2.4012. Both round
-# to 2.40. A one character message is counted first and its wrapper
-# subtracted from every figure.
+# over 92 packed source texts. 860,637 characters against 357,951 counted
+# tokens give 2.4043. A second sample, balanced by kind and not by traffic,
+# with 90 texts and 559,234 characters against 232,893 tokens, gives 2.4012.
+# The two round to 2.40. The measure counts a one character message first
+# and subtracts its wrapper from each figure.
 #
 # The constant prices bash output, briefs and file reads as well as agent
-# reports, and bash output is most of what the plugin packs. By kind, in the
+# reports. Bash output is most of what the plugin packs. By kind, in the
 # traffic weighted sample: bash output 2.37, agent reports 2.60, briefs 2.79.
 CHARS_PER_TOKEN = 2.40
-# When the divisor was measured, as a value, so a page that prints the
-# constant can print the date without re-typing it.
+# The date of the divisor measure, as a value. A page that prints the
+# constant can then print the date without a second copy of it.
 CHARS_PER_TOKEN_MEASURED = "31 August 2026"
 
-# What one image content block costs on top of its patches. Measured on 28
-# packed PNGs, 418x412 up to 1144x1168: the counted token figure was the
-# patch count plus exactly 2, at every size.
+# The cost of one image content block on top of its patches. Measured on 28
+# packed PNGs, from 418x412 to 1144x1168, the counted token figure was the
+# patch count plus exactly 2 at each size.
 IMAGE_BLOCK = _S["page.image_block"]
 
-# Every pair of characters that look alike in small type. Each entry is one
-# edge in a confusion graph, and the coloring below gives no two characters
-# joined by an edge the same color. Written as pairs so a reader can check one
-# without reading the whole map.
+# All pairs of characters that look alike in small type. Each entry is one
+# edge in a confusion graph. The coloring below gives no two characters
+# joined by an edge the same color. The list holds pairs, and a check of one
+# pair needs no read of the whole map.
 #
-# The list starts from the standard small-type look-alikes and holds every
-# pair a reader confused in tests: 8 read as 3 and as 9, 9 read as 0, 5 read
-# as 3, O read as D, S read as D.
+# The list starts from the standard small-type look-alikes and holds each
+# pair that a model confused in tests. A model read 8 as 3 and as 9, 9 as 0,
+# 5 as 3, O as D and S as D.
 CONFUSABLE = [tuple(pair) for pair in _S["ink.confusable"]]
-# The pairs themselves live in style.py, under ink.confusable, so one
-# file holds every value the renderer draws with. The measurement
-# records for each batch stay in the comment above.
+# The pairs are in style.py, under ink.confusable, because one file holds
+# all values that the renderer uses.
 
-# Nine colors, spread around the hue circle so no two are close, and each one
-# dark enough to stay itself when the type is antialiased at a small size.
+# Nine colors, spread around the hue circle, and no two are close. Each one
+# is dark enough to keep its color when the renderer antialiases the type at
+# a small size.
 INK = {name: _S["ink." + name] for name in
        ("black", "blue", "green", "magenta", "orange", "teal", "red",
         "purple", "lime")}
 
-# The five the alphanumerics use, in the order the coloring hands them out.
-# black first, because it takes the largest group and is the most legible.
+# The five inks of the letters and digits, in the order the coloring uses
+# them. Black is first, because it takes the largest group and is the
+# easiest to read.
 #
-# These five are the ones that have to survive antialiasing at a small size,
-# because a letter and a digit are the same shape there and the color is the
-# only thing left. The closest two are 210 apart on the sum of their channel
+# These five must stay clear after antialiasing at a small size. There a
+# letter and a digit have the same shape, and the color is the only
+# difference. The closest two are 210 apart on the sum of their channel
 # differences.
 ALNUM_INKS = tuple(_S["ink.lookalike_groups"])
 
 
 def _colour_map():
-    """Assign each character in CONFUSABLE an ink, so that no two characters
-    that look alike share one. Greedy, highest degree first, which is what
-    keeps the count to five. Computed once at import, not per character."""
+    """Assign each character in CONFUSABLE an ink. No two characters that
+    look alike share one. The method is greedy, highest degree first, and
+    this keeps the count at five. The code computes it once at import, not
+    per character."""
     graph = {}
     for a, b in CONFUSABLE:
         graph.setdefault(a, set()).add(b)
@@ -243,66 +249,66 @@ def _colour_map():
 
 CHAR_INK = _colour_map()
 
-# The three classes a reader tells apart for a different reason than shape.
-# The line break mark, the symbols and the punctuation. These three do not
-# need the separation the five above need: none of them is the shape of a
-# letter or a digit, so a reader tells them apart by their glyph and the color
-# only says which class they belong to.
+# The three classes that a model separates for a reason other than shape.
+# These are the line break mark, the symbols and the punctuation. They do not
+# need the separation of the five inks above. None of them has the shape of
+# a letter or a digit. A model separates them by their glyph, and the color
+# only shows their class.
 PALETTE = {name: _S["palette." + name] for name in
            ("num", "sym", "nl", "punct", "tag")}
 
-# Shape-confusion pairs among the symbols. Each would otherwise share the one
-# symbol color with the character it is most often mistaken for.
+# Shape-confusion pairs among the symbols. Without this map, each one shares
+# the symbol color with the character that a model most often reads in its
+# place.
 CONFUSION = dict(_S["palette.confusion"])
 
 NL_MARK = _S["mark.pilcrow"]
 
-# The font files to try, in order, from style.py's font.regular. Pillow's
-# built-in fallback font ignores the size argument and returns a fixed bitmap,
-# so a missing font would draw the image at the wrong size and print a saving
-# that never happened. load() raises instead of falling back, and the caller
-# passes the text through unpacked, which is the same refuse-when-worse rule
-# the rest of the plugin follows. The draw loop measures every glyph with
-# getlength, so no fixed cell width is assumed anywhere.
+# The font files to try, in order, from font.regular in style.py. The
+# built-in fallback font of Pillow ignores the size argument and returns a
+# fixed bitmap. With a missing font, the image then has the wrong size, and
+# the tool prints a false saving. load() raises an error and does not use a
+# fallback. The caller then sends the text unpacked. The rest of the plugin
+# follows the same rule and skips the pack when the pack is worse. The render
+# loop measures each glyph with getlength and uses no fixed cell width.
 REGULAR = list(_S["font.regular"])
-# The bold face, from style.py's font.bold. When it names the same file as
-# font.regular, a character the classifier marks bold draws in the same face
-# and no second font file is loaded.
+# The bold face, from font.bold in style.py. When it names the same file as
+# font.regular, a character that the classifier marks bold uses the same face,
+# and the code loads no second font file.
 BOLD = list(_S["font.bold"])
 
 
-
-# What has to survive character for character. A token of 8 or more that mixes
-# letters with digits, optionally joined by hyphen, underscore, dot or slash,
-# or a number written in comma groups. That is an agent id, a hash, a commit, a
-# session id, a file name and a token count.
+# The text that must stay exact, character for character. A token of 8 or
+# more that mixes letters with digits, with an optional hyphen, underscore,
+# dot or slash between parts, or a number written in comma groups. These are
+# an agent id, a hash, a commit, a session id, a file name and a token count.
 #
-# A plain English word never mixes letters with digits, so prose is untouched.
-# Measured over 42 agent reports, 362,319 characters: this marks 0.96 per cent
-# of them, and the image grows 1.20 per cent.
-# The joiners may run two deep, so a path through a dot folder,
-# project\.claude\densepack-vault, is one token: with one joiner the token
-# would end at project and the next begin at claude, and a reader handed the
-# two tags composes the path without its dot.
+# A plain English word never mixes letters with digits, and the prose does
+# not change. Measured over 42 agent reports, 362,319 characters, this marks
+# 0.96 percent of them, and the image grows 1.20 percent.
+# Two joiners can be next to each other. A path through a dot folder,
+# project\.claude\densepack-vault, is then one token. With one joiner, the
+# token ends at project and the next one starts at claude. A model that gets
+# the two tags then writes the path without its dot.
 IDENT_TOKEN = re.compile(r"[A-Za-z0-9]+(?:[-_./\\]{1,2}[A-Za-z0-9]+)*")
 IDENT_NUMBER = re.compile(r"[0-9]{1,3}(?:,[0-9]{3})+")
 
-# The tag threshold. Every identifier a reader has been scored misreading was
-# 8 characters or longer, from "22,520,080" up to the 36 character
-# "12345678-90ab-cdef-1234-567890abcdef", and no string under 8 characters
-# has been scored misread at any size this packer draws. _is_identifier holds
-# this floor for the letter and digit mix, and big_mask() applies the same
-# floor to IDENT_NUMBER, so a comma grouped number as short as "1,234" is not
-# tagged.
+# The tag threshold. Each identifier that a model misread in a scored test
+# was 8 characters or longer, from "22,520,080" to the 36 character
+# "12345678-90ab-cdef-1234-567890abcdef". No test scored a misread string
+# under 8 characters at any size this packer uses. _is_identifier holds this
+# floor for the letter and digit mix, and big_mask() applies the same floor
+# to IDENT_NUMBER. A comma grouped number as short as "1,234" then gets no
+# tag.
 MIN_IDENT_CHARS = _S["font.min_ident_chars"]
 
-# The size an identifier is drawn at. Zero means the prose size, which is what
-# ships.
+# The size of an identifier. Zero means the prose size, which ships.
 #
-# Drawing identifiers larger works, partly: at 12 px two readers rose to 4 of
-# 5 for 4.54 per cent more pixels, and every failure that remained was the
-# same string in the same place. Set this to 12 to turn that on; the code
-# that reads it is still here.
+# Larger identifiers work in part. With 12 px identifiers on a smaller prose
+# size, two models rose to 4 of 5 for 4.54 percent more pixels, and each
+# remaining failure was the same string in the same place. font.ident_px in
+# style.json sets this size. pack() uses it only when it is larger than the
+# prose size.
 IDENT_PX = _S["font.ident_px"]
 
 
@@ -312,14 +318,14 @@ IDENT_PX = _S["font.ident_px"]
 #
 #   A long exact number with no comma grouping, such as a byte count or a
 #   timestamp written as one run of digits. IDENT_NUMBER matches only the
-#   comma grouped form, so "134217728" needs this rule. The same floor
-#   applies, so "2026" passes through untouched.
+#   comma grouped form, and "134217728" needs this rule. The same floor
+#   applies, and "2026" stays as it is.
 #
-#   An absolute or a multi-segment path with no digit in it at all, such as
-#   "plugin/scripts/bash_gate.py" or, on Windows, "C:\Projects\plugin\scripts".
-#   A path is counted by its own separators, two or more, so an ordinary
-#   slash-joined word pair such as "input/output" or "before/after", one
-#   separator and no digit, is not swept in with it.
+#   An absolute or a multi-segment path with no digit in it, such as
+#   "plugin/scripts/read_gate.py" or, on Windows, "C:\Projects\plugin\scripts".
+#   The rule counts the separators of a path and needs two or more. An
+#   ordinary slash-joined word pair such as "input/output" or "before/after",
+#   with one separator and no digit, does not count.
 def _is_identifier(token):
     body = re.sub(r"[-_./\\]", "", token)
     if len(body) < MIN_IDENT_CHARS:
@@ -334,7 +340,7 @@ def _is_identifier(token):
 
 
 def big_mask(text):
-    """One flag per character: True where it belongs to an identifier."""
+    """One flag per character. The flag is True where the character is part of an identifier."""
     big = [False] * len(text)
     for m in IDENT_TOKEN.finditer(text):
         if _is_identifier(m.group(0)):
@@ -348,27 +354,25 @@ def big_mask(text):
     return big
 
 
-
-# The forms lift_identifiers() may
-# tag with, tried in this fixed order. [#N] is first because it is what
-# shared.txt teaches every reader by default. The next two are reached only
-# when the SOURCE TEXT ITSELF already carries a run shaped like the form
-# before it, a markdown footnote or an issue reference the packer never
-# invented, which would otherwise read as the same tag a lifted identifier
-# gets and could not be told apart, in the plain-text sidecar, from one the
-# packer actually invented: the sidecar carries no color, only the shape
-# of the tag itself.
+# The tag forms that lift_identifiers() can use, tested in this fixed order.
+# [#N] is first, because it is the usual form. The code uses the next two
+# only when the SOURCE TEXT ITSELF already holds a run in the shape of the
+# form before it. This is a markdown footnote or an issue reference that the
+# packer did not make. Without the next form, that run has the same shape as
+# the tag of a lifted identifier. In the plain-text sidecar, a model cannot
+# separate the two, because the sidecar has no color, only the shape of the
+# tag.
 TAG_FORMS = ("[#%d]", "{#%d}", "<#%d>")
 TAG_PATTERNS = tuple(
     re.compile(re.escape(form % 0).replace("0", r"\d+")) for form in TAG_FORMS)
 
 
 def _tag_form(text):
-    """The first form in TAG_FORMS whose pattern matches nothing already in
-    `text`, checked against the text BEFORE any tag is inserted, so a form
-    is never picked against tags it is about to create itself. Falls back
-    to the last form when every one collides, rather than growing the list
-    without end against text no fixed list can ever fully clear."""
+    """The first form in TAG_FORMS whose pattern matches nothing in `text`.
+    The check runs on the text BEFORE the code inserts any tag, and a form
+    never matches tags that it is about to make. The function uses the last
+    form when all forms collide. It does not grow the list without end,
+    because no fixed list can clear all text."""
     for form, pattern in zip(TAG_FORMS, TAG_PATTERNS):
         if not pattern.search(text):
             return form
@@ -376,11 +380,11 @@ def _tag_form(text):
 
 
 def tag_pattern_from_legend(legend):
-    """The compiled TAG_PATTERNS entry matching the form lift_identifiers()
-    actually used, read off the first legend row rather than passed as a
-    second value, so callers written against the existing two-value
-    lift_identifiers() return keep working unchanged. None when legend is
-    empty: nothing was tagged, so pack() has no marker run to color."""
+    """The compiled TAG_PATTERNS entry that matches the form that
+    lift_identifiers() used. The function reads it from the first legend row.
+    It is not a second return value, and callers that use the two-value
+    return of lift_identifiers() work without a change. None when legend is
+    empty, because no text has a tag and pack() has no marker run to color."""
     if not legend:
         return None
     first_tag = legend[0][0]
@@ -390,32 +394,33 @@ def tag_pattern_from_legend(legend):
     return None
 
 
-# OFF by default. The look-alike colouring on every image keeps an identifier
-# readable, and the lift costs the reader every path and hash in a packed
-# command output, drawn as a tag it cannot open. With the switch off
-# lift_identifiers() returns the text unchanged and an empty legend, so no
-# caller writes a sidecar and no tag is drawn. Set it to True to get the tags
-# and the legend file.
+# OFF by default. The look-alike coloring on each image keeps an identifier
+# readable. The lift costs the model each path and hash in a packed command
+# output, because the image shows a tag that the model cannot open. With the
+# switch off, lift_identifiers() returns the text unchanged and an empty
+# legend. No caller then writes a sidecar, and the image has no tag. Set it
+# to True to get the tags and the legend file.
 LIFT_IDENTIFIERS = False
 
 
 def lift_identifiers(text, start=1):
-    """Replace every identifier with a short tag and return the values.
+    """Replace each identifier with a short tag and return the values.
 
-    Does nothing while LIFT_IDENTIFIERS is False, see the note above it.
+    Does nothing while LIFT_IDENTIFIERS is False. See the note above it.
 
     Returns (tagged_text, legend), where legend is a list of (tag, value).
-    An identifier is what big_mask marks: 8 or more characters mixing letters
-    with digits, joined by hyphen, underscore, dot or slash, or a number in
-    comma groups. A value that never enters the image cannot be misread, which
-    is the whole point.
+    An identifier is what big_mask marks. That is 8 or more characters that
+    mix letters with digits, joined by hyphen, underscore, dot or slash, or a
+    number in comma groups. A model cannot misread a value that is not in the
+    image. This is the purpose of the function.
 
-    The same value appearing twice takes the same tag, so a report naming one
+    A value that appears twice takes the same tag. A report that names one
     agent id ten times pays for it once.
 
-    The tag form is chosen by _tag_form() before any tag is written, so a
-    literal [#1] already in the source, a footnote or an issue reference,
-    never collides with one this function invents; see TAG_FORMS above.
+    _tag_form() chooses the tag form before the function writes any tag. A
+    literal [#1] already in the source, such as a footnote or an issue
+    reference, then never collides with a tag from this function. See
+    TAG_FORMS above.
     """
     if not LIFT_IDENTIFIERS:
         return text, []
@@ -447,38 +452,37 @@ def lift_identifiers(text, start=1):
     return "".join(out), legend
 
 
-# legend_sidecar() writes the lifted values to a file beside the image rather
-# than into the message, so a packed result does not pay for them again on
-# every later turn, and the file keeps the values exact bytes, which drawing
-# them larger cannot promise.
+# legend_sidecar() writes the lifted values to a file beside the image, not
+# into the message. A packed result then does not pay for them again on each
+# later turn. The file keeps the exact bytes of the values, and a larger size
+# in the image cannot do that.
 def legend_sidecar(legend, out_stem):
-    """Write every lifted identifier's value to a file beside the image,
-    named densepack-legend-<12 hex>.txt, and return that file's own name.
+    """Write the value of each lifted identifier to a file beside the image,
+    named densepack-legend-<12 hex>.txt, and return the name of that file.
 
-    Returns None when nothing was lifted, so a report with no identifier
-    writes no file and the pointer gains no tag line. The hex is a SHA-256
-    of the sidecar's own text, so packing the same values twice names the
-    same file instead of writing a second copy. out_stem is the same stem
-    pack() writes its image beside, str or Path; the sidecar lands in that
-    stem's own folder.
+    Returns None when the function lifted nothing. A report with no
+    identifier then writes no file, and the pointer gets no tag line. The hex
+    is a SHA-256 of the sidecar text. Two packs of the same values name the
+    same file and do not write a second copy. out_stem is the stem that
+    pack() writes its image beside, str or Path. The sidecar goes in the
+    folder of that stem.
     """
     if not legend:
         return None
     rows = ["%s = %s" % (tag, value) for tag, value in legend]
     text = "\n".join(rows) + "\n"
-    # The sidecar carries no color, only the tag's own shape, so the one case
-    # where lift_identifiers() escalated off the usual [#N] form has to say so
-    # here in plain text: a reader of the .txt alone has no other way to learn
-    # which form this report's tags use. Silent for the ordinary [#N] case,
-    # which shared.txt teaches every reader.
+    # The sidecar has no color, only the shape of the tag. When
+    # lift_identifiers() moved off the usual [#N] form, the sidecar must say
+    # so here in plain text. A model that reads only the .txt has no other way
+    # to find the tag form of this report. The sidecar adds no line for the
+    # usual [#N] form.
     first_tag = legend[0][0]
     if not TAG_PATTERNS[0].fullmatch(first_tag):
         for form, pattern in zip(TAG_FORMS, TAG_PATTERNS):
             if pattern.fullmatch(first_tag):
-                # form is a %-template such as "{#%d}"; "n" replaces "%d"
-                # so the header reads as a shape, [#n], {#n} or <#n>, the
-                # same lowercase-n convention shared.txt already teaches,
-                # never the raw Python format specifier.
+                # form is a %-template such as "{#%d}". "n" replaces "%d",
+                # and the header shows a shape, [#n], {#n} or <#n>, never
+                # the raw Python format specifier.
                 shape = form.replace("%d", "n")
                 text = ("# This report's tags read %s, not the usual [#n]: "
                          "a run shaped like [#n] was already in the source "
@@ -492,27 +496,28 @@ def legend_sidecar(legend, out_stem):
 
 
 def patches(width, height):
-    """Patch count alone. This is the figure the downscale limit is checked
-    against, so it must stay the raw count with no block cost added."""
+    """The patch count only. The downscale check uses this figure, and it
+    must stay the raw count with no block cost."""
     return -(-width // PATCH) * -(-height // PATCH)
 
 
 def image_cost(width, height):
-    """What one image really costs: its patches plus the content block itself."""
+    """The full cost of one image, its patches plus the content block."""
     return patches(width, height) + IMAGE_BLOCK
 
 
 def no_downscale(width, height):
-    """True when the API would leave the image at the size it was drawn."""
+    """True when the API keeps the image at its rendered size."""
     return (-(-width // PATCH) * PATCH <= EDGE
             and -(-height // PATCH) * PATCH <= EDGE
             and patches(width, height) <= MAX_TOK)
 
 
 def face(path, size, bold):
-    """The regular or the bold face out of one font file, or None when that
+    """The regular or the bold face from one font file, or None when that
     file holds neither. A .ttc file holds several faces, and the order differs
-    between builds, so the face is matched by its own name, not by an index."""
+    between builds. The function matches the face by its name, not by an
+    index."""
     if not path.lower().endswith(".ttc"):
         return ImageFont.truetype(path, size)
     for index in range(8):
@@ -527,25 +532,25 @@ def face(path, size, bold):
 
 
 def load(paths, size, bold=False):
-    """One font face at this pixel size. Raises when no font file is found,
-    because Pillow's fallback font ignores the size and would produce an image
-    at a size the reader was never tested on."""
+    """One font face at this pixel size. Raises an error when it finds no
+    font file. The fallback font of Pillow ignores the size and makes an
+    image at a size that no test checked for the model."""
     for path in paths:
         if Path(path).is_file():
             font = face(path, size, bold)
             if font is not None:
                 return font
-    raise RuntimeError("No monospace font found. Looked for: %s. Install one of "
+    raise RuntimeError("DensePack found no font file. It looked for %s. Install one of "
                        "them, or add the path to REGULAR and BOLD in %s."
                        % (", ".join(paths), Path(__file__).name))
 
 
 def flatten(raw, mark=NL_MARK):
-    """Collapse the text to one flowing string, with line breaks kept as a marker.
+    """Collapse the text to one string, and keep each line break as a marker.
 
-    This is what makes the packing dense. Real line breaks leave ragged right edges,
-    and the blank pixels beside a short line cost exactly as many tokens as inked
-    ones. Marking the break instead lets every line fill the full width.
+    This step makes the pack dense. Real line breaks leave ragged right edges,
+    and the blank pixels beside a short line cost as many tokens as inked
+    ones. A marker in place of the break lets each line fill the full width.
     """
     lines = []
     for line in raw.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
@@ -556,11 +561,11 @@ def flatten(raw, mark=NL_MARK):
 
 
 def group_for(ch):
-    """The group a character's size offset is looked up under.
+    """The group that holds the size offset of a character.
 
-    The names match the keys of style.py's font.group_px. A look-alike
-    character is its own group, so that set can draw at a size of its own.
-    The backtick and the comma are both in it.
+    The names match the keys of font.group_px in style.py. The look-alike
+    characters are a group of their own, and that set can have a size of its
+    own. The backtick and the comma are in it.
     """
     if ch == NL_MARK:
         return "nl"
@@ -574,8 +579,8 @@ def group_for(ch):
 
 
 def classify(ch, colors=True):
-    """Color and weight for one character, the universal ink laid over it,
-    and the character's own override ink over both."""
+    """Color and weight for one character, with the universal ink over it and
+    the override ink of the character over the two."""
     ink, bold = _classify(ch, colors)
     if colors and UNIVERSAL_INK is not None:
         ink = tuple(UNIVERSAL_INK)
@@ -585,9 +590,9 @@ def classify(ch, colors=True):
     return ink, bold
 
 
-# One character's overrides, everywhere it appears, from style.py's
-# char.overrides. codepack reads the same map through its own copy of these
-# two names.
+# The overrides of one character, at each place it appears, from
+# char.overrides in style.py. codepack reads the same map through its own
+# copy of these two names.
 CHAR_OVER = {k: dict(v) for k, v in (_S.get("char.overrides") or {}).items()
              if isinstance(v, dict)}
 
@@ -606,9 +611,9 @@ def char_over(ch, field, default=None):
 def _classify(ch, colors=True):
     """Color and weight for one character. Returns (rgb, bold).
 
-    A character that looks like another gets its own ink from CHAR_INK, so no
-    two look-alikes ever share one. Anything not in that map falls back to the
-    class colors.
+    A character that looks like another gets its own ink from CHAR_INK, and
+    no two look-alikes share one. A character that is not in that map uses
+    the class colors.
     """
     if not colors:
         return (0, 0, 0), False
@@ -628,27 +633,26 @@ def _classify(ch, colors=True):
 def pages_pdf(paths, out_path):
     """Bind several packed pages into one PDF, one page per image.
 
-    The delivery rule this exists for: one Read call returns every page of a
-    file, and no tool result ever asks the model to Read again for more pages.
-    composite() answers that by stacking, and refuses when the stack passes
-    CAP_H; side by side is no answer on a long code file either, where two
-    sheets stack to 1176 by 2856 and sit side by side at 2352 by 1428, both
-    over the 1568 cap. A Read of a
-    PDF returns each page as its own picture inside the one tool result, so
-    the pages arrive whole with no second Read and no sheet to shrink.
+    The delivery rule behind this function. One Read call returns all pages
+    of a file, and no tool result asks the model to Read again for more
+    pages. composite() meets that rule with a stack and returns None when the
+    stack passes CAP_H. Side by side does not work on a long code file
+    either. There two sheets stack to 1176 by 2856 and are 2352 by 1428 side
+    by side, and the two sizes are over the 1568 cap. A Read of a PDF returns
+    each page as its own picture inside the one tool result. The pages then
+    arrive whole, with no second Read and no sheet to shrink.
 
-    The pages are written at 72 points per inch, one point per pixel, so a
-    page keeps the exact size it was drawn at. Returns the PDF path, or None
-    when nothing could be bound; the caller keeps the PNG pages, which is what
-    the patch price is still read from.
+    The function writes the pages at 72 points per inch, one point per pixel,
+    and a page keeps its exact rendered size. Returns the PDF path, or None
+    when the function cannot bind the pages. The caller keeps the PNG pages,
+    and the patch price still comes from them.
 
-    The writer here is this file's own, and it writes every page through
-    FlateDecode, which is zlib and gives back the bytes it was handed.
-    Pillow's PdfImagePlugin writes an RGB page through DCTDecode, which is
-    JPEG: measured on a small code page, that path changed
-    96.00 per cent of the pixels with a worst channel error of 176 of 255,
-    and a 256 colour palette page still changed 8.26 per cent. This writer
-    changes none.
+    This file has its own writer. It writes each page through FlateDecode,
+    which is zlib and returns the same bytes it gets. The PdfImagePlugin of
+    Pillow writes an RGB page through DCTDecode, which is JPEG. Measured on a
+    small code page, that path changed 96.00 percent of the pixels with a
+    worst channel error of 176 of 255. A 256 color palette page still changed
+    8.26 percent. This writer changes no pixel.
     """
     rasters = []
     for path in paths:
@@ -676,10 +680,11 @@ def pages_pdf(paths, out_path):
             b"/Length %d >>\nstream\n" % (w, h, len(stream))
             + stream + b"\nendstream")
         # One point per pixel. A PDF rasterizer with no other instruction
-        # draws a page at 72 points to the inch, one point one pixel, so this
-        # box hands the reader the PNG's pixels unchanged. A smaller box, sized
-        # for a viewer's 100 per cent, makes such a rasterizer shrink every
-        # glyph first; a viewer's zoom is the place to scale, not the page box.
+        # renders a page at 72 points to the inch, one point to one pixel.
+        # This box then gives the model the pixels of the PNG unchanged. A
+        # smaller box, sized for 100 percent in a viewer, makes such a
+        # rasterizer shrink each glyph first. Scale with the zoom of the
+        # viewer, not with the page box.
         pw, ph = float(w), float(h)
         content = b"q %.4f 0 0 %.4f 0 0 cm /Im Do Q" % (pw, ph)
         cs = zlib.compress(content, 9)
@@ -696,7 +701,7 @@ def pages_pdf(paths, out_path):
     pages_id = add(b"<< /Type /Pages /Count %d /Kids [%s] >>"
                    % (len(page_ids),
                       b" ".join(b"%d 0 R" % i for i in page_ids)))
-    # every page names its parent, so the number above has to be the real one
+    # each page names its parent, and the number above must be the real one
     for i, pid in enumerate(page_ids):
         objs[pid] = objs[pid].replace(b"/Parent %d 0 R" % (1 + 1 + 2 * len(rasters)),
                                       b"/Parent %d 0 R" % pages_id)
@@ -731,26 +736,25 @@ def pages_pdf(paths, out_path):
 def composite(paths, out_path, size=None):
     """Stack several packed images into one, with a header line above each.
 
-    A composite here means one PNG holding every image that is waiting to be
-    read, so the lead fetches all of them in a single Read call. Each Read
-    call is a turn, and a turn re-reads the whole conversation: in one
-    measured session a turn averaged 220,917 tokens over 470 turns, and five
-    Read calls spent 1,104,584 tokens against the 3,602,187 that drawing the
-    reports as images saved.
+    A composite here is one PNG with all images that wait for a Read. The
+    lead agent then gets all of them in a single Read call. Each Read call is
+    a turn, and a turn reads the whole conversation again. In one measured
+    session a turn averaged 220,917 tokens over 470 turns. Five Read calls
+    spent 1,104,584 tokens, and the packed reports saved 3,602,187 tokens.
 
-    The header names which image each block came from, because a reader given
-    three stacked pages with nothing between them cannot say where one report
-    ends and the next begins.
+    The header names the source image of each block. A model that gets three
+    stacked pages with nothing between them cannot tell where one report ends
+    and the next starts.
 
     Returns (out_path, width, height), the same shape pack() returns for one
-    image, or None when the stack would come out larger than the API leaves
-    alone. A downscaled composite loses the text, so refusing is the only
-    safe answer.
+    image, or None when the stack is larger than the size the API keeps
+    unchanged. A downscaled composite loses the text, and None is the only
+    safe result.
     """
-    # The header size, not the page size. It sits above each stacked image and
-    # names the file that image came from. densepack.py holds no default size
-    # of its own: every caller passes one, which is why this argument has a
-    # literal default here.
+    # The header size, not the page size. The header is above each stacked
+    # image and names the source file of that image. densepack.py has no
+    # default size of its own, and each caller passes one. For this reason
+    # this argument has a literal default here.
     size = size or 10
     regular = load(REGULAR, size)
     line_h = size + 3
@@ -777,9 +781,9 @@ def composite(paths, out_path, size=None):
         y += line_h
         sheet.paste(img, (0, y))
         y += img.height + 2
-    # Drawn beside the final name and moved into place in one step: a
-    # reader served the path mid-write uploads a truncated file, and the
-    # API rejects it as an image it cannot process.
+    # The code writes beside the final name and moves the file into place in
+    # one step. A process that reads the path during the write uploads a
+    # truncated file, and the API rejects it as an image it cannot process.
     part = Path(str(out_path) + ".part")
     save_png(sheet, part)
     os.replace(part, out_path)
@@ -798,14 +802,42 @@ def grid_size(sizes):
     return per_row, width, height
 
 
-def composite_grid(paths, out_path):
-    """The pages of one file laid side by side, left to right then down,
-    with a divider line between them, as one PNG the API will not downscale.
+# A pixel this close to the background on all channels is not ink. The page
+# edge leaves single pixels such as (254, 253, 255) at x = 0 under the last
+# line. When the code counts them as ink, a stack keeps many blank rows.
+NEAR_BLANK = 6
 
-    Returns (out_path, width, height), or None when even the grid would be
-    downscaled, so the caller falls back to the vertical composite or the
-    PDF. The count_tokens endpoint bills a PDF page about 1,577 tokens flat
-    whatever its pixels, so three 392 by 700 pages cost 4,780 as a PDF and
+
+def last_ink_row(im):
+    """The last row holding a pixel further than NEAR_BLANK from the
+    background, or 0."""
+    w, h = im.size
+    rgb = im.convert("RGB")
+    bg = tuple(BACKGROUND)[:3]
+    for y in range(h - 1, 0, -1):
+        lo, hi = zip(*rgb.crop((0, y, w, y + 1)).getextrema())
+        if any(abs(v - b) > NEAR_BLANK for v, b in zip(lo + hi, bg + bg)):
+            return y
+    return 0
+
+
+def ink_crop(im, margin=4):
+    """im cut under its last row of ink, with margin rows kept. No rounding
+    here, because the code rounds the full sheet that holds the page."""
+    w, h = im.size
+    last = last_ink_row(im)
+    keep = min(h, last + 1 + margin)
+    return im.crop((0, 0, w, keep)) if keep < h else im
+
+
+def composite_grid(paths, out_path):
+    """The pages of one file side by side, left to right and then down, with
+    a divider line between them, as one PNG that the API does not downscale.
+
+    Returns (out_path, width, height), or None when the API downscales even
+    the grid. The caller then uses the vertical composite or the PDF. The
+    count_tokens endpoint bills a PDF page a flat fee of about 1,577 tokens
+    for any pixel count. Three 392 by 700 pages then cost 4,780 as a PDF and
     996 as PNGs. A grid of 392 px pages holds four across under the 1568 px
     edge and two rows under it, eight pages in one Read at about 1,400
     patches a row.
@@ -818,12 +850,25 @@ def composite_grid(paths, out_path):
             continue
     if not pages:
         return None
-    # No gap between columns: a page ends in its own white margin, and four
-    # 392 px pages are exactly the 1568 px edge. A divider line sits between
-    # rows, where nothing else marks the break.
+    # No gap between columns, because a page ends in its own white margin,
+    # and four 392 px pages are exactly the 1568 px edge. A divider line is
+    # between rows, where no other mark shows the break.
     gap = int(_S["page.divider_width"])
     divider = tuple(_S["page.divider"])
     per_row, width, height = grid_size([im.size for im in pages])
+    if per_row == 1 and len(pages) > 1:
+        # ONE COLUMN. The pages run top to bottom, and their line numbers
+        # continue. The stack needs no divider. The code cuts a page above
+        # another page to its own ink. The code rounds each page up to whole
+        # 28 px patches to ship on its own, and in a stack that rounding puts
+        # blank rows in the middle. A tall stack can hold many blank rows and
+        # a divider between its pages. This step removes them. The code rounds
+        # only the finished sheet to the patch grid.
+        pages = [ink_crop(im) for im in pages]
+        gap = 0
+        width = max(im.width for im in pages)
+        height = sum(im.height for im in pages)
+        height = -(-height // PATCH) * PATCH
     rows = [pages[i:i + per_row] for i in range(0, len(pages), per_row)]
     if not no_downscale(width, height):
         return None
@@ -837,7 +882,7 @@ def composite_grid(paths, out_path):
             sheet.paste(im, (x, y))
             x += im.width
         y += row_h
-        if y < height:
+        if gap and y < height:
             draw.rectangle((0, y, width - 1, y + gap - 1), fill=divider)
             y += gap
     part = Path(str(out_path) + ".part")
@@ -847,12 +892,12 @@ def composite_grid(paths, out_path):
 
 
 def _tag_mask(text, pattern):
-    """One flag per character: True where it belongs to a marker tag this
-    packer invented, matched by `pattern`. Every flag False when pattern is
-    None, the default: nothing was tagged in this text, so pack() colors
-    nothing as a tag. Get this from
-    tag_pattern_from_legend(), never guessed, so a coincidental [#N]-shaped
-    run the source carried is never painted as a marker it is not."""
+    """One flag per character. The flag is True where the character is part
+    of a marker tag from this packer, matched by `pattern`. All flags are
+    False when pattern is None, the default. The text then has no tag, and
+    pack() colors nothing as a tag. Get the pattern from
+    tag_pattern_from_legend(). Do not guess it. A [#N]-shaped run in the
+    source then never gets the color of a marker."""
     mask = [False] * len(text)
     if pattern is None:
         return mask
@@ -862,30 +907,29 @@ def _tag_mask(text, pattern):
     return mask
 
 
-# A 0.85 line gap costs 13 to 20 per cent fewer tokens than 1.0 at every pixel
+# A 0.85 line gap costs 13 to 20 percent fewer tokens than 1.0 at each pixel
 # size, and the glyph the model reads does not change.
 LINE_GAP = _S["space.line_gap"]
 
 
 def pack(text, size, out_stem, spacing=LINE_GAP, colors=True, tag_pattern=None,
         reader=None):
-    # Refuse a size under the reader's own scored floor. `reader` is
-    # optional and defaults to None so every caller that already computes a
-    # correct size from common.font_size() or common.MEASURED_MODELS is
-    # unaffected; a caller that names its reader gets the floor enforced even
-    # if its own size math was wrong. Bumping size up, never down: a
-    # bigger-than-needed image only costs a few more tokens, while a smaller
-    # one produces wrong answers.
+    # Reject a size under the scored floor of the model. `reader` is optional
+    # and defaults to None. A caller that already computes a correct size from
+    # common.font_size() or common.MEASURED_MODELS then sees no change. A
+    # caller that names its model gets the floor even when its own size math
+    # is wrong. The code raises the size and never lowers it. A larger image
+    # costs only a few more tokens, and a smaller one gives wrong answers.
     if reader is not None:
         floor = RISKY.get(reader, RISKY_DEFAULT)
         if size < floor:
             print(FLOOR_NOTE % (size, reader, floor, floor), file=sys.stderr)
             size = floor
 
-    # Flatten here, not in the caller. A line break the font cannot draw
-    # vanishes, and the page then runs together with nothing marking where a
-    # line ended. flatten() on text that is already flat finds no line break
-    # and changes nothing, so calling it twice is safe.
+    # Flatten here, not in the caller. A line break that the font cannot
+    # render disappears, and the lines of the page then run together with no
+    # mark at the end of a line. flatten() on flat text finds no line break
+    # and changes nothing. Two calls are safe.
     text = flatten(text)
     big = big_mask(text)
     tag = _tag_mask(text, tag_pattern)
@@ -931,28 +975,29 @@ def pack(text, size, out_stem, spacing=LINE_GAP, colors=True, tag_pattern=None,
         return total
 
     def height_of(pairs):
-        """A line takes the height of the tallest thing on it."""
+        """A line takes the height of its tallest character."""
         return big_line_h if any(b for _c, b, _t in pairs) else line_h
 
     pairs = list(zip(text, big, tag))
 
-    # Aim for a square. A square spends the patch budget most efficiently.
+    # The target is a square. A square uses the patch budget best.
     max_text_w = CAP_W - 2 * PAD
     total_w = measure(pairs)
     target = math.sqrt(total_w * line_h * RATIO) if total_w else 180
     target = min(max(target, 180), max_text_w)
 
-    # The API pads every image up to whole 28 px patches and charges for the padding
-    # either way, so widening to the next boundary is free room, never a cost.
+    # The API pads each image up to whole 28 px patches and charges for the
+    # padding in any case. A wider page up to the next boundary is free room
+    # and never a cost.
     grid_w = (max_text_w + 2 * PAD) // PATCH * PATCH - 2 * PAD
     snapped = -(-int(target + 2 * PAD) // PATCH) * PATCH - 2 * PAD
     if snapped <= grid_w and snapped <= max_text_w:
         target = snapped
 
-    # Greedy wrap on spaces, splitting any word too long to fit. A line is a
-    # list of (character, big, tag) triples, not a string, because a string
-    # cannot carry the flags that say which characters draw bigger or in the
-    # marker color.
+    # Greedy wrap on spaces. The wrap splits any word too long to fit. A line
+    # is a list of (character, big, tag) triples, not a string, because a
+    # string cannot hold the flags that mark the characters that render
+    # bigger or in the marker color.
     words, word = [], []
     for pair in pairs:
         if pair[0] == " ":
@@ -990,7 +1035,7 @@ def pack(text, size, out_stem, spacing=LINE_GAP, colors=True, tag_pattern=None,
     if cur:
         lines.append(cur)
 
-    # Fill a page until one more line would let the API downscale it.
+    # Fill a page. Stop before the line that makes the API downscale the page.
     chunks, chunk, chunk_w = [], [], 0.0
     for line in lines:
         lw = measure(line)
@@ -1017,18 +1062,18 @@ def pack(text, size, out_stem, spacing=LINE_GAP, colors=True, tag_pattern=None,
             row_h = height_of(line)
             for ch, is_big, is_tag in line:
                 color, is_bold = classify(ch, colors)
-                # A marker tag draws as one color for the whole run, so a tag
-                # this packer invented never reads as the same red-blue-red a
-                # literal [#1] the source carried would draw under the
-                # ordinary per-character classes.
+                # A marker tag has one color for the whole run. A tag from
+                # this packer then never looks like a literal [#1] from the
+                # source, which gets the red-blue-red of the ordinary
+                # per-character classes.
                 if is_tag and colors:
                     color = PALETTE["tag"]
-                # Every character sits on one baseline, so a bigger one grows
-                # upward out of the line rather than shifting the rest down.
+                # All characters are on one baseline. A bigger character grows
+                # upward out of the line and does not move the rest down.
                 top = y + row_h - (ident_px if is_big else size) - 1
                 if ch in CHAR_OVER:
-                    # The character's own nudge, and a second draw one
-                    # pixel right when it is marked thick.
+                    # The offset of the character, and a second render one
+                    # pixel to the right when its entry sets thick.
                     ox = char_over(ch, "dx", 0) or 0
                     oy = char_over(ch, "dy", 0) or 0
                     spots = ((ox, oy), (ox + 1, oy)) if char_over(
@@ -1042,7 +1087,7 @@ def pack(text, size, out_stem, spacing=LINE_GAP, colors=True, tag_pattern=None,
             y += row_h
 
         path = Path("%s-%d.png" % (out_stem, number))
-        # Same one-step move as sheet.save above: no reader ever sees a
+        # The same one-step move as in composite(). No process sees a
         # half-written page.
         part = Path(str(path) + ".part")
         save_png(img, part)
@@ -1053,19 +1098,20 @@ def pack(text, size, out_stem, spacing=LINE_GAP, colors=True, tag_pattern=None,
 
 
 def reader_size():
-    """The size this session draws at, from the reader profile, or 17 when
-    the settings cannot be found.
+    """The pack size of this session and the model profile, or 17 and
+    "unknown" when the function cannot import common.py.
 
-    The briefing tells the lead to pack a long brief with this command, so it
-    has to agree with the hooks, which is why it asks common.font_size()
-    rather than holding a default of its own. The import is guarded because
-    this file is also shipped beside the app, where common.py is not present."""
+    The command line uses this size when --size is absent. The size must
+    match the size of the hooks. For this reason the function gets it from
+    common.font_size(). A try block guards the import, because a copy of
+    this file can run with no common.py beside it."""
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from common import font_size, resolved_reader
         return font_size(), resolved_reader()
     except Exception:
-        # common.py is absent, so CODE_PX cannot be read. 17 is its value.
+        # common.py is absent, and the code cannot read CODE_PX. 17 is its
+        # value.
         return 17, "unknown"
 
 
@@ -1095,9 +1141,10 @@ def main():
     except RuntimeError as err:
         raise SystemExit(str(err))
 
-    # The API charge for an image is its patch count and nothing else. A
-    # pipeline that hands the image to an agent pays its own handover cost on
-    # top, so the plugin's receipt is lower than this one by that fee.
+    # The API charge for an image is its patch count and nothing more. A
+    # pipeline that gives the image to an agent also pays its own handover
+    # cost. The saving on the plugin's receipt is lower than this one by that
+    # cost.
     text_tokens = len(raw) / CHARS_PER_TOKEN
     image_tokens = sum(image_cost(w, h) for _p, w, h in written)
 
@@ -1114,21 +1161,21 @@ def main():
     print("layout       %d px wide, %d px line height, %d px font" % (target, line_h, args.size), file=out)
     print("images       %d, all checked against the API's own resize rule" % len(written), file=out)
     if profile == "unknown":
-        print("reader       NOT READ. Defaulted to %d px." % args.size,
+        print("model        NOT FOUND. The tool uses the default, %d px." % args.size,
               file=out)
     elif profile:
-        print("reader       %s profile, %d px" % (profile, args.size), file=out)
+        print("model        %s profile, %d px" % (profile, args.size), file=out)
     print("as text      %d tokens" % round(text_tokens), file=out)
     print("as image     %d tokens" % image_tokens, file=out)
     floor = RISKY.get(profile, RISKY_DEFAULT)
     if args.size < floor:
-        print("WARNING      %d px is under the %d px floor measured for this reader. "
-              "Digits misread even in color. Verify a test image first."
+        print("WARNING      %d px is under the %d px floor measured for this model. "
+              "A model misreads digits under this floor, even in color. Verify a test image first."
               % (args.size, floor), file=out)
     if saving > 0:
         print("saving       %.0f percent, patches only. The plugin's receipt "
-              "also charges the handover cost, about 148 tokens for one image. "
-              "It reads a few points lower for the same report."
+              "also counts the handover cost, about 148 tokens for one image. "
+              "The receipt shows a saving a few points lower for the same report."
               % saving, file=out)
     else:
         print("WORSE by     %.0f percent. Send the text instead." % -saving, file=out)

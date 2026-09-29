@@ -6,25 +6,26 @@
 #
 #  What it does, in order:
 #
-#    1  finds a Python 3 and makes sure Pillow is there, because Pillow
-#       draws the image
-#    2  copies densepack-file.sh to ~/.local/share/densepack/, with the
-#       full path of densepack.py written into it
-#    3  copies that same file into the scripts folder of every file
+#    1  finds a Python 3 and makes sure Pillow, freetype-py and NumPy are
+#       there, because they render the image
+#    2  copies densepack-file.sh to ~/.local/share/densepack/ and writes
+#       the full path of densepack.py into the copy
+#    3  copies that same file into the scripts folder of each file
 #       manager it finds, under the name "DensePack it"
 #    4  writes densepack.desktop into ~/.local/share/applications/, which
 #       gives the Open With entry, one item, no size
-#    5  prints every path it wrote and what each one shows
+#    5  prints each path it wrote and what each one shows
 #
 #  It writes nothing outside your home folder and asks for no password.
-#  To remove it, delete the paths the last block prints.
+#  To remove it, run uninstall-densepack.sh. It deletes the paths that
+#  the last block prints.
 #
-#  The Windows twin of this file is install-densepack.ps1.
+#  The Windows version of this file is install-densepack.ps1.
 # ---------------------------------------------------------------------
 set -eu
 
-# CDPATH is cleared, or cd could pick a folder of the same name elsewhere
-# and install from that copy.
+# The script clears CDPATH. Without that, cd can pick a folder of the same
+# name in another place, and the script then installs from that copy.
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 packer="$here/densepack.py"
 src_script="$here/densepack-file.sh"
@@ -43,9 +44,9 @@ for f in "$packer" "$src_script" "$src_desktop"; do
   fi
 done
 
-# The paths go into the copies through sed, and sed needs one character that
-# the paths do not contain. | is that character everywhere except a path that
-# holds one, which is why this stops rather than writing a broken file.
+# sed writes the paths into the copies. sed needs one separator character that
+# the paths do not contain. The script uses |. When a path holds a |, the
+# script stops and does not write a broken file.
 case "$here$icon" in
   *'|'*|*"'"*|*'
 '*)
@@ -56,7 +57,7 @@ case "$here$icon" in
 esac
 
 # ---------------------------------------------------------------- python
-# Ubuntu 24.04 and later carry python3 and no python at all.
+# Ubuntu 24.04 and later include python3 and no python command.
 py=python3
 command -v python3 >/dev/null 2>&1 || py=python
 if ! command -v "$py" >/dev/null 2>&1; then
@@ -70,8 +71,8 @@ have_pillow() {
 }
 if [ "$(have_pillow)" != "yes" ]; then
   echo "installing Pillow"
-  # --user fails on Debian and Ubuntu with a PEP 668 error, so a failure here
-  # is expected on those and the message below names the two routes that work.
+  # --user fails on Debian and Ubuntu with a PEP 668 error. The message below
+  # names the two commands that work there.
   "$py" -m pip install --quiet --user --only-binary :all: "pillow>=12" >/dev/null 2>&1 || true
 fi
 if [ "$(have_pillow)" != "yes" ]; then
@@ -83,8 +84,8 @@ if [ "$(have_pillow)" != "yes" ]; then
 fi
 echo "Pillow ready"
 
-# freetype-py draws the glyphs. Without it the image falls back to Pillow and
-# differs from the plugin's image.
+# freetype-py renders the glyphs. Without it, Pillow renders them, and the
+# image differs from the plugin's image.
 have_freetype() {
   "$py" -c 'import importlib.util,sys; sys.stdout.write("yes" if importlib.util.find_spec("freetype") else "no")'
 }
@@ -93,7 +94,7 @@ if [ "$(have_freetype)" != "yes" ]; then
   "$py" -m pip install --quiet --user --only-binary :all: "freetype-py>=2" >/dev/null 2>&1 || true
 fi
 if [ "$(have_freetype)" != "yes" ]; then
-  echo "freetype-py did not install. Run this, then run this again:"
+  echo "freetype-py did not install. Run this command, then run this installer again:"
   echo "    $py -m pip install --break-system-packages freetype-py"
   exit 1
 fi
@@ -108,7 +109,7 @@ if [ "$(have_numpy)" != "yes" ]; then
   "$py" -m pip install --quiet --user --only-binary :all: "numpy>=2" >/dev/null 2>&1 || true
 fi
 if [ "$(have_numpy)" != "yes" ]; then
-  echo "numpy did not install. Run this, then run this again:"
+  echo "numpy did not install. Run this command, then run this installer again:"
   echo "    $py -m pip install --break-system-packages numpy"
   exit 1
 fi
@@ -126,7 +127,7 @@ esac
 home_dir="$data/densepack"
 mkdir -p "$home_dir"
 script="$home_dir/densepack-file.sh"
-# sed reads & and | in a replacement as commands, so a path holding either is escaped.
+# sed reads & and | in a replacement as commands. sed_escape escapes them in a path.
 sed_escape() { printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'; }
 sed "s|@PACKER@|$(sed_escape "$packer")|" "$src_script" >"$script"
 chmod 755 "$script"
@@ -160,11 +161,11 @@ done
 apps="$data/applications"
 mkdir -p "$apps"
 desktop="$apps/densepack.desktop"
-# The Desktop Entry format reads % as a field code, so a % in the path doubles.
-# Inside the quoted Exec argument a \ " ` or $ takes a backslash, and the file
-# format then doubles every backslash once more.
+# The Desktop Entry format reads % as a field code. The script doubles each %
+# in the path. Inside the quoted Exec argument, a \ " ` or $ gets a backslash.
+# The script then doubles each backslash once more for the file format.
 exec_path=$(printf '%s' "$script" | sed -e 's/\\/\\\\\\\\/g' -e 's/["`$]/\\\\&/g' -e 's/%/%%/g')
-# Icon is a plain string value, where only the backslash takes an escape.
+# Icon is a plain string value. Only the backslash gets an escape there.
 icon_path=$(printf '%s' "$icon" | sed -e 's/\\/\\\\/g')
 sed -e "s|@SCRIPT@|$(sed_escape "$exec_path")|g" -e "s|@ICON@|$(sed_escape "$icon_path")|g" "$src_desktop" >"$desktop"
 chmod 644 "$desktop"
@@ -172,19 +173,19 @@ if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$apps" >/dev/null 2>&1 || true
 fi
 echo "desktop entry     $desktop"
-echo "                  right-click a file, Open With, DensePack it. The"
-echo "                  one item; the plugin draws one size for every model."
+echo "                  right-click a file, Open With, DensePack it. One"
+echo "                  item. The plugin packs one size for all models."
 
 if [ "$menus" -eq 0 ]; then
   echo
-  echo "No file manager with a scripts folder is installed here, so the"
-  echo "desktop entry is the only menu written. It is the one Thunar,"
-  echo "Dolphin and PCManFM read, and it is enough on its own."
+  echo "No file manager with a scripts folder is installed here. The"
+  echo "installer wrote only the desktop entry. Thunar, Dolphin and"
+  echo "PCManFM read it, and it works on its own."
 fi
 
 echo
 echo "Done. Nautilus and Nemo read their scripts folder again after"
-echo "'nautilus -q' or 'nemo -q', or after you log out and back in."
+echo "'nautilus -q' or 'nemo -q', or after you log out and log in again."
 echo
 echo "To remove all of it, run: sh \"$here/uninstall-densepack.sh\""
 echo "It deletes these:"

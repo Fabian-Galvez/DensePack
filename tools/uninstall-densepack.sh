@@ -2,9 +2,10 @@
 # ---------------------------------------------------------------------
 #  Remove the DensePack right-click tool on Linux.
 #
-#  This removes what install-densepack.sh wrote for this user: the packer
-#  script, the file manager menu items and the Open With entry.
-#  Pillow, freetype-py and NumPy stay, because other programs may use them.
+#  This script removes what install-densepack.sh wrote in your home folder,
+#  which is the packer script, the file manager menu items and the Open
+#  With entry.
+#  Pillow, freetype-py and NumPy stay, because other programs can use them.
 #  The DensePack folder you downloaded also stays.
 # ---------------------------------------------------------------------
 set -u
@@ -30,7 +31,7 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 
 if [ "$removed" -eq 0 ]; then
-  echo "Nothing to remove. The right-click tool is not installed for this user."
+  echo "Nothing to remove. The right-click tool is not installed in your home folder."
 else
   echo
   echo "Done. Pillow, freetype-py and NumPy stay installed."

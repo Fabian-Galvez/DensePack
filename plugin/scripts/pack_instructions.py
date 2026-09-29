@@ -1,35 +1,37 @@
-"""Turn the instruction files Claude Code loads as text into DensePack images.
+"""Pack the instruction files that Claude Code loads as text into images.
 
-Claude Code puts every CLAUDE.md, CLAUDE.local.md and the auto memory index
+Claude Code puts each CLAUDE.md, CLAUDE.local.md and the auto memory index
 MEMORY.md into each request as text, before any hook runs, and sends them
-again on every call. No hook can swap that text for an image. A Read can.
+again on each call. No hook can replace that text with an image. A Read can.
 
-So each file becomes three files, and all three sit side by side:
+Each file becomes three parts. The pointer and the .bak stay side by side,
+and the images go into the images folder of that file.
 
     CLAUDE.md                  a short pointer, the only text Claude Code loads
     CLAUDE.md.densepack.bak    the original text, byte for byte, which Claude
                                Code never loads because of its name
     <images folder>/<label>-image-N-of-M-DensePack.png
-                               the text drawn as images, which the pointer
+                               the text packed as images, which the pointer
                                names by full path for the Read tool
 
-The pointer tells the agent that DensePack made the images, names every image,
-and tells a model DensePack sends text, such as Haiku, to read the .bak.
+The pointer tells the agent that DensePack made the images and names each
+image. It tells a model that gets text from DensePack, such as Haiku, to
+read the .bak.
 
-Claude Code loads these files before SessionStart hooks run, so a conversion
+Claude Code loads these files before SessionStart hooks run. A conversion
 reaches the model from the next session on.
 
-Each session start, for each file:
-- a pointer with text added below it: the added text moves into the .bak,
-  because Claude Code's auto memory appends new index lines to MEMORY.md and
-  a person may add a rule to CLAUDE.md;
-- a .bak that changed: the images are drawn again;
-- a file that is not a pointer: it is the new original. An older .bak is kept
-  as .densepack.bak.old-N, and the file is converted;
-- a file whose images cost more than its text, with the pointer counted: it
-  stays text, and a pointer is turned back into its original.
+At each session start, for each file:
+- A pointer with text added below it. The added text moves into the .bak,
+  because the auto memory of Claude Code appends new index lines to
+  MEMORY.md, and you can add a rule to CLAUDE.md.
+- A .bak that changed. The code packs the images again.
+- A file that is not a pointer. It is the new original. The code keeps an
+  older .bak as .densepack.bak.old-N and converts the file.
+- A file whose images cost more than its text, with the pointer counted. It
+  stays text, and the code restores the original in place of a pointer.
 
-restore_all() puts every original back. /dense-remove runs it.
+restore_all() restores each original. /dense-remove runs it.
 """
 import hashlib
 import json
@@ -44,27 +46,27 @@ OPEN = "<!-- densepack-pointer: DensePack wrote this block -->"
 CLOSE = "<!-- /densepack-pointer -->"
 BAK = ".densepack.bak"
 IMAGE_NAME = re.compile(r"-image-\d+-of-\d+-DensePack\.png$")
-# The renderer's own limits for a Read: past these a file stays text.
+# The renderer limits for a Read. Past these limits, a file stays text.
 MAX_CHARS = 250000
 MAX_LINES = 6000
 PRIVATE_MARKS = ("\ue000", "\ue001", "\ue002", "\ue003")
 
 
 def read(path):
-    """The file's text with its own line endings kept."""
+    """Return the text of the file with its line endings kept."""
     with open(str(path), encoding="utf-8", newline="") as fh:
         return fh.read()
 
 
 def joined(original, added):
-    """The original with text added at its end, in the original's own line endings."""
+    """Return the original plus the added text, in the original line endings."""
     nl = "\r\n" if "\r\n" in original else "\n"
     added = added.replace("\r\n", "\n").replace("\n", nl)
     return original.rstrip("\r\n") + nl + added + nl
 
 
 def plain(text):
-    """The text the renderer draws: it takes no carriage return."""
+    """Return the text for the renderer, which takes no carriage return."""
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
@@ -86,8 +88,8 @@ def save_state(state):
 
 
 def targets(event):
-    """(file, label, what the file is, images folder) for every file Claude Code
-    loads as instructions in this session."""
+    """Return (file, label, what the file is, images folder) for each file
+    that Claude Code loads as instructions in this session."""
     from common import project_dir
     home = Path.home() / ".claude"
     found = folder_targets(Path(project_dir()))
@@ -103,7 +105,7 @@ def targets(event):
 
 
 def folder_targets(project):
-    """The three project instruction files of one folder."""
+    """Return the three project instruction files of one folder."""
     images = project / ".claude" / "densepack-vault" / "instruction-images"
     return [
         (project / "CLAUDE.md", "project-CLAUDE.md", "this project's CLAUDE.md", images),
@@ -114,11 +116,12 @@ def folder_targets(project):
 
 
 def convert_folder(folder, reader="opus"):
-    """Convert another folder's CLAUDE.md files without a session in that folder.
+    """Convert the CLAUDE.md files of another folder without a session there.
 
-    A session started elsewhere never loads that folder's CLAUDE.md, so the
-    agent that runs this reads none of it. The vault gets the same .gitignore
-    session start writes, so the images stay out of that folder's commits."""
+    A session that started in another folder never loads the CLAUDE.md of
+    that folder, and the agent that runs this reads none of it. The vault
+    gets the same .gitignore that session start writes. The images then stay
+    out of the commits of that folder."""
     project = Path(folder).resolve()
     if not project.is_dir():
         return [(str(project), "not a folder")]
@@ -140,7 +143,7 @@ def convert_folder(folder, reader="opus"):
 
 
 def split_pointer(text):
-    """(is a pointer, text outside the pointer block)."""
+    """Return (is a pointer, text outside the pointer block)."""
     start = text.find(OPEN)
     end = text.find(CLOSE)
     if start < 0 or end < start:
@@ -183,7 +186,7 @@ def label_images(folder, label):
 
 
 def draw(text, label, folder, reader):
-    """Draw text into <label>-image-N-of-M-DensePack.png. Returns (paths, cost)."""
+    """Pack text into <label>-image-N-of-M-DensePack.png. Returns (paths, cost)."""
     import codepack
     import densepack as dp
     from common import code_size, READER_SIZES
@@ -214,7 +217,7 @@ def keep_old_bak(bak):
 
 
 def restore(path, state):
-    """Put one original back from its .bak, with any text added below the pointer."""
+    """Restore one original from its .bak, with the text added below the pointer."""
     from common import write_text_atomic
     bak = path.with_name(path.name + BAK)
     entry = state.pop(str(path), None)
@@ -239,7 +242,7 @@ def restore(path, state):
 
 
 def convert_one(path, label, what, folder, reader, state):
-    """Bring one file to its pointer, its .bak and its images. Returns a word for the log."""
+    """Make the pointer, .bak and images of one file. Returns the log text."""
     from common import write_text_atomic
     if not path.is_file():
         return "absent"
@@ -248,7 +251,7 @@ def convert_one(path, label, what, folder, reader, state):
     is_pointer, added = split_pointer(current)
     if is_pointer:
         if not bak.is_file():
-            # The original is gone. Keep what the person added and drop the pointer.
+            # The original is gone. Keep what you added and drop the pointer.
             write_text_atomic(path, (added + "\n") if added else "")
             state.pop(str(path), None)
             return "pointer without its .bak, pointer removed"
@@ -282,7 +285,7 @@ def convert_one(path, label, what, folder, reader, state):
         state.pop(str(path), None)
         return "kept as text, images cost more"
 
-    # The original reaches the .bak before the pointer replaces it.
+    # The code copies the original to the .bak before the pointer replaces it.
     if not is_pointer:
         if bak.exists():
             keep_old_bak(bak)
@@ -299,13 +302,13 @@ def convert_one(path, label, what, folder, reader, state):
 
 
 def converted_note(log):
-    """One line for the person when this session start converted a file."""
+    """Return one line for the screen when this session start converted a file."""
     names = [name for name, result in log if result.startswith("converted")]
     if not names:
         return None
-    return ("DensePack converted %s into images behind a short pointer, to save tokens on every call. "
+    return ("DensePack converted %s into images behind a short pointer, to save tokens on each call. "
             "Each original is unchanged beside it as <name>.densepack.bak, and the change applies from "
-            "your next session. /dense-remove puts the originals back." % ", ".join(names))
+            "your next session. /dense-remove restores the originals." % ", ".join(names))
 
 
 def convert_all(event, reader):

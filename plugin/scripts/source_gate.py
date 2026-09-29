@@ -1,41 +1,42 @@
-"""Stops the lead reading a packed report's text instead of its image.
+"""Blocks a Bash read of the text of a packed report and names its image.
 
-HOW THIS FILE FITS, in plain words: the plugin draws an agent's report as a
-small picture and hands the lead a note saying where the picture is. The words
-are still on disk next to it. Nothing stopped the lead opening those words with
-cat or sed, and when it did the plugin's saving was spent for nothing. This
-script blocks that one thing and names the picture to open instead.
+The plugin packs the report of an agent as a small image and gives the model
+a note with the image path. The text stays on disk next to the image. Without
+this gate, the model can open that text with cat or sed, and the saving of
+the plugin is lost. This script blocks that one step and names the image to
+open.
 
-WHY IT EXISTS, measured in one session. Fourteen Bash
-commands opened packed report text with cat, sed, grep and wc. They put 48,298
-characters into the lead's prefix, about 20,064 tokens at the measured 2.41
-characters per token for report prose. Drawing those same reports as images
-had saved 20,014 tokens in that session. The leak cancelled the whole saving
-and left the session 50 tokens worse off than never drawing them at all.
+One measured session shows the reason. Fourteen Bash commands opened packed
+report text with cat, sed, grep and wc. They put 48,298 characters into the
+prefix of the model, about 20,064 tokens at the measured 2.41 characters per
+token for report prose. Packing those same reports as images saved 20,014
+tokens in that session. The leak canceled the whole saving. The session
+ended 50 tokens worse than a session with no packs.
 
-WHAT IT BLOCKS. A Bash command naming densepack-report-<id>.txt,
+What the gate blocks. A Bash command that names densepack-report-<id>.txt,
 densepack-src-<id>.txt, densepack-bashsrc-<id>.txt or
-densepack-briefsrc-<stamp>.txt when the image for that id exists beside it:
-densepack-img-<id>-1.png for an agent's report, densepack-bash-<id>-1.png for
-a packed command output, or densepack-brief-<stamp>-1.png for a packed brief.
-The image holds the same words.
+densepack-briefsrc-<stamp>.txt when the image for that id is next to it. The
+image is densepack-img-<id>-1.png for the report of an agent,
+densepack-bash-<id>-1.png for a packed command output, or
+densepack-brief-<stamp>-1.png for a packed brief. The image holds the same
+text.
 
-WHAT IT LETS THROUGH.
+What the gate allows.
 
-  Packing turned off with /dense-off. Nothing was drawn, so the text is
+  Packing off with /dense-off. The plugin packed nothing, and the text is
   the only copy.
-  No image on disk for that id. The report was never packed, or was refused
-  for costing more as a picture.
-  A command carrying the word DENSEPACK_SOURCE_OK. Checking the packer against
-  its own source is real work. The word is deliberate rather than a flag, so
-  it cannot be typed by accident.
-  Anything that names the file without reading it, such as ls or a path in an
-  argument to the packer itself.
+  No image on disk for that id. The plugin did not pack the report, or it
+  rejected the pack because the image cost more.
+  A command with the word DENSEPACK_SOURCE_OK. A check of the packer against
+  its own source is real work. The override is a word and not a flag, and
+  no command holds it by accident.
+  A command that names the file without reading it, such as ls or a path in
+  an argument to the packer.
 
-images_for() below resolves every candidate name through
-common.sibling_image(), the single place that pairs a source file with its
-image, so this gate names the same image common.py names and keeps no
-private copy that a new source name can miss.
+images_for() below resolves each candidate name through
+common.sibling_image(). That function is the one place that pairs a source
+file with its image. This gate then names the same image as common.py and
+keeps no private copy of the pairing rule that a new source name can miss.
 """
 
 import hashlib
@@ -47,26 +48,26 @@ import time
 from common import disabled, emit, read_event, sibling_image, tmp_dir
 from subagent_stop import manifest_write
 
-# The basename of any source-text sidecar this plugin writes: densepack-,
-# then a lowercase word naming which packer wrote it (report, src, bashsrc,
-# briefsrc, or any later one), then a dash, an id or stamp, and .txt. This
-# only recognizes the SHAPE of a name; whether a name found this way is
-# really one of the plugin's own source files, and which image sits beside
-# it, is decided in exactly one place, common.sibling_image(), never here.
+# The basename of each source-text sidecar that this plugin writes. It is
+# densepack-, then a lowercase word that names the packer (report, src,
+# bashsrc, briefsrc, or a later one), then a dash, an id or stamp, and .txt.
+# This pattern matches only the SHAPE of a name. common.sibling_image() is
+# the one place that checks whether a name is a real source file of the
+# plugin and which image is next to it.
 FILENAME = re.compile(r"densepack-[a-z]+-[A-Za-z0-9-]+\.txt")
 
-# Commands that read a file's contents. A command that only names the path,
-# such as ls or rm, moves no words into the prefix and is left alone.
+# Commands that read the contents of a file. A command that only names the
+# path, such as ls or rm, moves no text into the prefix. The gate allows it.
 READERS = ("cat", "head", "tail", "sed", "grep", "awk", "less", "more",
            "type", "wc", "sort", "uniq", "cut", "nl", "strings", "od",
            "Get-Content", "Select-String")
 
 OVERRIDE = "DENSEPACK_SOURCE_OK"
 
-# The two halves of what this gate says. ACTION is what the caller must do and
-# rides on every fire. WHY is the reason it was stopped, identical every time,
-# and rides on the first fire of a session only, so fixed prose is said
-# once rather than re-sent on every fire.
+# The two parts of the gate message. ACTION tells the model what to do. The
+# gate sends it on each block. WHY gives the reason for the block. It is the
+# same each time, and the gate sends it on the first block of a session
+# only. The fixed text then costs characters once and not on each block.
 ACTION = (
     "DensePack replaced this command. Read this with the Read tool instead: "
     "%s . To read the words themselves, put DENSEPACK_SOURCE_OK in the "
@@ -75,32 +76,34 @@ ACTION = (
 )
 
 WHY = (
-    " It read the words of a report already drawn as an image, and reading "
-    "them costs what the image saved: measured 25 August 2026, fourteen such "
+    " It read the words of a report already packed into an image, and reading "
+    "them costs what the image saved. Fourteen such "
     "commands in one session put 48,298 characters back into the prefix and "
-    "cancelled the whole session's saving. Read every image you have waiting "
+    "canceled the whole session's saving. Read every image you have waiting "
     "in ONE turn, because each Read call is a turn and a turn re-reads the "
     "whole conversation."
 )
 
-# Kept so a caller that imports MESSAGE still gets the whole thing.
+# A caller that imports MESSAGE still gets the whole message.
 MESSAGE = ACTION + WHY
 
 
 def why_already_sent(session):
-    """True when this session has already been told why the gate fires.
+    """Return True when the gate already sent WHY in this session.
 
-    A marker file, the same mechanism pointer.py and bash_pack.py use, because
-    every hook run is a fresh process. A session that cannot be identified is
-    told every time, which is the safe failure: a repeated reason costs
-    characters, a missing one leaves a reader that does not know what happened.
+    The function uses a marker file, the same method that pointer.py uses,
+    because each hook run is a new process. A session
+    without an id gets WHY each time. That is the safe failure. A repeated
+    reason costs characters. A missing reason leaves the model without the
+    cause of the block.
     """
     if not session:
         return False
     marker = tmp_dir() / ("densepack-sourcewhy-%s" % str(session)[:16])
     if marker.exists():
         return True
-    # Moved onto the name, so a link planted at it takes no write.
+    # write_text_atomic moves a new file onto the name. The move replaces a
+    # link at that name and does not write through it.
     from common import write_text_atomic
     if not write_text_atomic(marker, "1"):
         return False
@@ -108,15 +111,14 @@ def why_already_sent(session):
 
 
 def images_for(command):
-    """The packed image for every source-text file this command would read.
+    """Return the packed image of each source-text file that the command reads.
 
-    Every densepack- named .txt file the command text mentions is looked
-    up by common.sibling_image(), against the copy of a source file's own
-    name, resolved inside this project's own tmp_dir() because every source
-    file this plugin writes lives there and nowhere else, whatever path form
-    the command used to name it. A name with no image on disk is left out,
-    because there is nothing to read instead and blocking would leave the
-    caller with no way to the words at all.
+    common.sibling_image() finds the image for each densepack- .txt name in
+    the command text. The function uses that file name inside tmp_dir() of
+    this project, whatever path form the command used. Each packer writes
+    its source file there, and the vault holds only copies. The function
+    skips a name with no image on disk, because there is no image to read
+    in its place, and a block leaves the caller no way to the text.
     """
     out = []
     for match in FILENAME.finditer(command):
@@ -127,59 +129,62 @@ def images_for(command):
     return out
 
 
-# Every character a shell acts on. A file path holding one of these is shown
-# with an underscore in its place rather than quoted, because quoting does
-# not hold: Git Bash can expand a backtick inside single quotes.
+# Each character that a shell acts on. The gate replaces each such character
+# in a file path with an underscore and does not quote it. Quoting is not
+# safe here. Git Bash can expand a backtick inside single quotes.
 META = set("`$\"'<>|&;()!*?[]{}~\n\r")
 
 
 def _no_metacharacters(path):
-    """A path the reader can still use, with nothing a shell would act on.
+    """Return a path that the model can still use, with no character that a
+    shell acts on.
 
-    The separators are turned to forward slashes first. Windows accepts a
-    forward slash path everywhere, and the Read tool takes one, so the path
-    stays usable while the backslash, which a shell treats as an escape,
-    leaves. Anything else on META becomes an underscore; only a project
-    folder deliberately named with one is affected, and the id in the file
-    name is unchanged because SOURCE matches letters and digits only.
+    The function first changes the separators to forward slashes. Windows
+    accepts a forward slash path in all places, and the Read tool takes one.
+    The path stays usable and loses the backslash, which a shell reads as an
+    escape. Each other character in META becomes an underscore.
+    This affects only a project folder with such a character in its name.
+    The id in the file name does not change, because FILENAME matches only
+    letters, digits and dashes in the id.
     """
     from common import no_metacharacters
     return no_metacharacters(path)
 
 
-# ONE LINE, and only one. sed -n '92p' prints line 92 and nothing else, so it
-# puts nothing back into the conversation and the image keeps its saving.
+# ONE LINE, and only one. sed -n '92p' prints line 92 and nothing else. It
+# puts nothing more into the conversation, and the image keeps its saving.
 #
-# The size is one because a reader with no way to fetch a single line pulls
-# the whole exact-text file with the Read tool, answers worse than plain text
-# and spends more tokens.
+# The size is one because a model with no way to get a single line reads
+# the whole exact-text file with the Read tool. It then answers worse than
+# with plain text and uses more tokens.
 #
-# A range stays blocked, whatever its span. sed -n '1,60p' on a report is the
-# report, and head and tail skim rather than address, so neither is a way to
-# reach one known line.
+# This pattern does not match a range, whatever its span. sed -n '1,60p' on
+# a report is the whole report. head and tail read from an end and do not
+# address a line. Neither is a way to get one known line.
 ONE_LINE = r"sed\s+-n\s+['\"]?\d+p"
 
-# A RANGE. Freely on command output. On a report, src or briefsrc sidecar it
-# is taught once and then let through.
+# A RANGE. Always allowed on command output. On a report, src or briefsrc
+# sidecar, the gate blocks it once with the reason and then allows it.
 #
-# Command output is different from a REPORT, where the words exist only in
-# that file and a range is the whole report. The thing a command printed is
-# still on disk at its own path, so blocking a range does not keep anything
-# out of the conversation. It only forces a bigger read of the original file.
+# Command output is not like a REPORT. In a report, the text exists only in
+# that file, and a range is the whole report. The text that a command
+# printed is still on disk at its own path. A block of a range keeps nothing
+# out of the conversation. It only forces a bigger read of the original
+# file.
 #
-# A reader can need many exact strings out of a report or a briefsrc sidecar,
-# and a range denied on every call leaves it no allowed route at all.
-# A range on a report, src or briefsrc sidecar is therefore denied once per session
-# per file, with the same teaching any other blocked read gets, and a marker
-# goes down; the repeat of a range on that same file passes straight through,
-# because asking again after being told about the image is a real reason for
-# the raw bytes, paid for knowingly.
+# A model can need many exact strings from a report or a briefsrc sidecar.
+# A block on each call leaves it no allowed route. The gate blocks a range
+# on a report, src or briefsrc sidecar once per session per file, with the
+# same reason as each other blocked read, and writes a marker. A repeat of a
+# range on that same file passes. A second request after the note about the
+# image is a real reason for the raw bytes, and the model pays for them by
+# choice.
 RANGE = r"sed\s+-n\s+['\"]?\d+\s*,\s*\d+p"
 BASHSRC = re.compile(r"densepack-bashsrc-[A-Za-z0-9]+\.txt")
 
-# One marker per session and sidecar name: its presence means a range read of
-# that file was already taught once this session, so the next one passes.
-# Pruned with the other working files by bootstrap.py.
+# One marker per session and sidecar name. When the marker exists, the gate
+# already blocked a range read of that file once in this session, and the
+# next one passes. bootstrap.py prunes it with the other working files.
 RANGE_MARKER = "densepack-rangeonce-%s-%s"
 
 
@@ -189,13 +194,13 @@ def range_marker(session, source_name):
 
 
 def bounded_read(command, session=None):
-    """True when the command asks for named lines rather than the file.
+    """Return True when the command asks for named lines and not the file.
 
-    One line from anything, always. A range from command output, always. A
-    range from a report, src or briefsrc sidecar the first time it is asked
-    for in a session is not bounded, so the caller is denied and taught; the
-    marker that denial leaves behind makes every later range on that same
-    file bounded, so the repeat passes.
+    One line from any file is always bounded. A range from command output is
+    always bounded. A range from a report, src or briefsrc sidecar is not
+    bounded the first time in a session. The gate blocks that call and gives
+    the reason. The block writes a marker, and each later range on that same
+    file is then bounded and passes.
     """
     if re.search(ONE_LINE, command) is not None:
         return True
@@ -208,7 +213,8 @@ def bounded_read(command, session=None):
         return False
     if all(range_marker(session, name).exists() for name in names):
         return True
-    # Moved onto the name, so a link planted at one takes no write.
+    # write_text_atomic moves a new file onto each name. The move replaces a
+    # link at that name and does not write through it.
     from common import write_text_atomic
     for name in names:
         write_text_atomic(range_marker(session, name), "1")
@@ -216,11 +222,12 @@ def bounded_read(command, session=None):
 
 
 def reads_a_file(command, session=None):
-    """True when the command runs something that prints a file's contents.
+    """Return True when the command runs a program that prints the contents
+    of a file.
 
-    Matched on a word boundary so that a path holding the letters cat, such as
-    a folder named catalog, does not count as the cat command. A bounded read
-    is not one of these: it prints the lines it names and nothing else.
+    The match uses a word boundary. A path with the letters cat, such as a
+    folder named catalog, does not count as the cat command. A bounded read
+    does not count. It prints the lines that it names and nothing else.
     """
     if bounded_read(command, session):
         return False
@@ -231,17 +238,16 @@ def reads_a_file(command, session=None):
 
 
 def record_bypass(command, session):
-    """One row in densepack-manifest.jsonl, the running record of every pack
-    and every skipped pack, for an override read of packed words.
+    """Write one row in densepack-manifest.jsonl for an override read of
+    packed text. The manifest records each pack and each skipped pack.
 
-    The override is legitimate work, so nothing here blocks or warns. But
-    the row has to exist: the manifest's own charter, written above
-    subagent_stop.manifest_write(), says a stat that only counts successes
-    cannot prove the plugin is saving more than it costs, and without the
-    row an override moves characters into the conversation with no record
-    anywhere. The chars field
-    holds the byte size of every sidecar the command names whose image
-    exists, the words the override chose to read at full price.
+    The override is valid work, and this function does not block or warn.
+    The row must still exist. The comment at the top of
+    subagent_stop.manifest_write() states the rule. A stat that counts only
+    successes cannot show that the plugin saves more than it costs. Without
+    the row, an override moves characters into the conversation with no
+    record. The chars field holds the byte size of each named sidecar whose
+    image exists. That is the text that the override reads at full price.
     """
     try:
         if not reads_a_file(command, session):
@@ -273,8 +279,8 @@ def record_bypass(command, session):
 
 
 def main():
-    # NEVER CRASH A CALLER. This runs before every Bash command in the
-    # session. A fault here must let the command through, not stop the work.
+    # A fault never blocks the call. This gate runs before each Bash command
+    # in the session. After a fault, the command runs unchanged.
     try:
         event = read_event()
         if disabled(event.get("session_id")):
@@ -292,33 +298,33 @@ def main():
         images = images_for(command)
         if not images:
             return 0
-        # Rewritten, never refused. A refusal comes back as a tool result and
-        # the lead has to answer it, so a refusal costs the same turn the
-        # command would have cost. The command was going to take one turn
-        # either way; replacing what it prints costs nothing extra and keeps
-        # the words out of the prefix.
+        # The gate changes the command and never rejects it. A rejection
+        # returns as a tool result, and the model must answer it. A
+        # rejection costs the same turn as the command. The command costs
+        # one turn with or without the gate. A change to what it prints
+        # costs nothing more and keeps the text out of the prefix.
         #
-        # updatedInput REPLACES the whole input object rather than merging
-        # into it, so every field the event carried is sent back. A partial
-        # object fails validation with "the required parameter is missing".
-        # The path is stripped of shell metacharacters BEFORE it is quoted,
-        # because quoting is not enough here: Git Bash can run a backtick
-        # inside SINGLE quotes.
+        # updatedInput REPLACES the whole input object and does not merge
+        # into it. The gate returns each field of the event input. A
+        # partial object fails validation with "the required parameter is
+        # missing". The gate removes shell metacharacters from the path
+        # BEFORE it quotes the path. Quoting is not enough here. Git Bash can
+        # run a backtick inside SINGLE quotes.
         #
         #   echo 'read this: proj`whoami`x .'   printed   read this: projrootx .
         #
-        # A project folder's name is chosen by a person and is free to hold a
-        # backtick, a dollar sign or a backslash, and every image path in this
-        # message starts with that folder. json.dumps was worse still, because
-        # it wraps in double quotes, which every shell expands. Taking the
-        # characters out removes the question: a name holding one is shown
-        # with an underscore in its place, and the file is still found by the
-        # id, which SOURCE already restricts to letters and digits.
+        # The name of a project folder can hold a backtick, a dollar sign
+        # or a backslash, and each image path in this message starts with
+        # that folder. json.dumps is worse, because it uses double quotes,
+        # and each shell expands them. The gate removes those characters,
+        # and the risk is gone. The path shows an underscore in place of
+        # each such character. The id still finds the file, because
+        # FILENAME matches only letters, digits and dashes in the id.
         replacement = dict(event.get("tool_input") or {})
         safe = " , ".join(_no_metacharacters(p) for p in images[:3])
-        # The reason goes out on this session's first fire and on none after
-        # it. The path and the override token go out every time, because they
-        # are what the caller acts on.
+        # The gate sends the reason on the first block of this session and
+        # on no later block. It sends the path and the override token each
+        # time, because the model acts on them.
         text = ACTION % safe
         if not why_already_sent(event.get("session_id")):
             text += WHY

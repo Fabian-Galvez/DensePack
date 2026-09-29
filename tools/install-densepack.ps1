@@ -1,23 +1,23 @@
-# Install everything the DensePack right-click tool needs, in one run.
+# Install all parts of the DensePack right-click tool in one run.
 #
 #   .\install-densepack.ps1             install all of it
 #   .\install-densepack.ps1 -NoCard     skip the Claude Code reading card
 #   .\install-densepack.ps1 -NoHotkey   skip AutoHotkey and the Ctrl+Shift+D hotkey
-#   .\install-densepack.ps1 -Remove     take all of it back out
+#   .\install-densepack.ps1 -Remove     remove all of it
 #
 # This script installs Python 3.13 and AutoHotkey v2 with winget, and Pillow,
 # freetype-py and NumPy with pip, when they are missing. Python and the
-# packages install for the current user. AutoHotkey installs for the whole
-# machine, so Windows can ask for administrator rights for that one step.
+# packages install for your Windows account only. AutoHotkey installs for the
+# whole machine, and Windows can ask for administrator rights for that step.
 #
-# The script writes three things, all under the current user and none of them
-# machine-wide:
+# The script writes three things, all under your Windows account and none of
+# them machine-wide:
 #
 #   HKCU\Software\Classes\*\shell\DensePack   the right-click entry
 #   the Startup folder                        the hotkey shortcut
 #   ~\.claude\hooks and ~\.claude\settings.json   the reading card
 #
-# -Remove undoes all three.
+# -Remove removes all three.
 
 param([switch]$Remove, [switch]$NoCard, [switch]$NoHotkey)
 
@@ -33,24 +33,23 @@ $fileKey = 'HKCU:\Software\Classes\*\shell\DensePack'
 $startup = [Environment]::GetFolderPath('Startup')
 $link    = Join-Path $startup 'DensePack.lnk'
 
-# The reading card is a Claude Code hook, so it lives beside Claude Code's own
-# settings rather than in this folder. Installed here because packing an image
-# is only half the job: without a standing instruction Claude can describe a
-# condensed image, this tool's name for text drawn as a small picture,
-# instead of acting on it, and the user would have to type an
-# explanation every time.
+# The reading card is a Claude Code hook. It goes beside the Claude Code
+# settings, not in this folder. The installer adds it because the image alone
+# is not enough. Without the card, the model can describe a packed image and
+# not act on the text in it. You then must type an explanation each time.
 $claudeHooks = Join-Path $HOME '.claude\hooks'
 $cardTarget  = Join-Path $claudeHooks 'densepack_reading_card.py'
 $claudeSettings = Join-Path $HOME '.claude\settings.json'
 
-# The reading card hook is registered in $claudeSettings by Python, never by
-# PowerShell. PowerShell 5.1's Set-Content -Encoding utf8 put a UTF-8 BOM on
-# the file, Claude Code then rejected the whole file, ignored every setting in
-# it, model included, and ran the default model. Python's json writes the
-# file back exactly, adds or removes the one entry, and writes no BOM.
+# Python registers the reading card hook in $claudeSettings. PowerShell does
+# not. PowerShell 5.1's Set-Content -Encoding utf8 puts a UTF-8 BOM on the
+# file. Claude Code rejects a settings file with a BOM, ignores all settings
+# in it, the model included, and runs the default model. Python's json writes
+# the file back exactly, adds or removes the one entry, and writes no BOM.
 # argv: settings path, "add" or "remove", python path, card path.
-# Single quotes only: PowerShell strips double quotes from an argument it
-# hands a native command, and the snippet travels as one -c argument.
+# The snippet uses single quotes only. PowerShell strips double quotes from an
+# argument that it passes to a native command, and the snippet goes as one -c
+# argument.
 $hookEdit = @'
 import json, sys
 p, op = sys.argv[1], sys.argv[2]
@@ -69,14 +68,15 @@ open(p, 'w', encoding='utf-8', newline=chr(10)).write(s)
 
 function Remove-ReadingCard {
     if (Test-Path $cardTarget) { Remove-Item $cardTarget -Force }
-    # -Remove runs before Find-Python is defined, so look Python up here.
+    # -Remove runs before the script defines Find-Python. This function finds
+    # Python itself.
     $py = @(Get-Command python -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source } |
             Where-Object { $_ -notmatch 'WindowsApps' })[0]
     if ($py -and (Test-Path $claudeSettings)) {
         & $py -c $hookEdit $claudeSettings remove
         'removed the reading card hook'
     } else {
-        "no Python found, so the reading card entry in $claudeSettings was left in place"
+        "no Python found. The installer left the reading card entry in $claudeSettings"
     }
 }
 
@@ -84,11 +84,11 @@ if ($Remove) {
     if (Test-Path -LiteralPath $fileKey) { Remove-Item -LiteralPath $fileKey -Recurse -Force; 'removed the right-click entry' }
     if (Test-Path $link)    { Remove-Item $link -Force; 'removed the startup entry' }
     Remove-ReadingCard
-    # Stop only the AutoHotkey process that runs DensePack.ahk, never the user's other scripts.
+    # Stop only the AutoHotkey process that runs DensePack.ahk, never your other scripts.
     Get-CimInstance Win32_Process -Filter "Name LIKE 'AutoHotkey%'" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -like '*DensePack.ahk*' } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    # The hotkey's two small files. The vault folders stay: they contain the user's text.
+    # The hotkey's two small files. The vault folders stay because they contain your text.
     foreach ($f in @('tool.ini', 'last-pack.txt')) {
         $p = Join-Path (Join-Path $env:LOCALAPPDATA 'DensePack') $f
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
@@ -102,15 +102,15 @@ foreach ($f in @($packer, $clip, $ahk, $card)) {
 }
 
 # ---------------------------------------------------------------- what this tool needs
-# Python and Pillow are installed here, so the whole install is one
-# double-click on a machine that has neither. It used to stop with "Install
-# Python, then rerun", and it never installed Pillow at all, so the right-click
-# entry failed on its first use even after the user installed Python by hand.
+# The script installs Python and Pillow. The whole install is one
+# double-click, even on a machine that has neither. Without Pillow, the
+# right-click entry fails on its first use, even with Python installed.
 #
-# The bare name "python" can resolve to the Windows Store alias stub, whose only
-# behavior is to open the Microsoft Store. Explorer and AutoHotkey launch with
-# their own PATH, so the real interpreter's full path is written in instead.
-# A candidate has to print its own version. A python.bat that ignores its
+# The bare name "python" can resolve to the Windows Store alias stub, which
+# only opens the Microsoft Store. Explorer and AutoHotkey start with their own
+# PATH. For these two reasons, the script writes the full path of the real
+# interpreter into the right-click entry.
+# A candidate must print its own version. A python.bat that ignores its
 # arguments and exits 0 is not an interpreter, and Pillow cannot install into it.
 function Test-RealPython($c) {
     if ($c -notmatch '\.exe$') { return $false }
@@ -123,8 +123,8 @@ function Test-RealPython($c) {
 }
 
 function Find-Python {
-    # python3 and py as well: a machine whose only Python answers to py.exe
-    # would otherwise be sent to winget to install a Python it already has.
+    # The search includes python3 and py. Without them, a machine with only
+    # py.exe gets a second Python from winget.
     $candidates = @(Get-Command python, python3, py -All -ErrorAction SilentlyContinue |
                     ForEach-Object { $_.Source })
     $candidates += @(Get-ChildItem "$env:LOCALAPPDATA\Programs\Python" -Filter 'python.exe' `
@@ -136,11 +136,11 @@ function Find-Python {
     return $null
 }
 
-# winget ships with Windows 10 1809 and every Windows 11. User scope means no
-# administrator prompt.
+# Windows 10 1809 and all versions of Windows 11 include winget. An install in
+# user scope shows no administrator prompt.
 function Install-WithWinget($id, $label, $userScope) {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        throw "$label is missing and winget is not on this machine. Install $label, then run this installer again."
+        throw "$label is missing and winget is not installed. Install $label, then run this installer again."
     }
     "installing $label"
     $winArgs = @('install', '--id', $id, '-e', '--source', 'winget',
@@ -152,16 +152,17 @@ function Install-WithWinget($id, $label, $userScope) {
 $python = Find-Python
 if (-not $python) {
     Install-WithWinget 'Python.Python.3.13' 'Python 3.13' $true
-    # winget updates PATH for new processes only, so this one reloads it.
+    # winget updates PATH for new processes only. This script reloads PATH itself.
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
                 [Environment]::GetEnvironmentVariable('Path', 'User')
     $python = Find-Python
 }
-if (-not $python) { throw 'Python installed but no python.exe was found. Run this installer again.' }
+if (-not $python) { throw 'The Python install ran, but the installer found no python.exe. Run this installer again.' }
 "using $python"
 
-# Pillow draws the image. find_spec returns without raising and the exit code
-# stays 0 either way, so this check never trips $ErrorActionPreference.
+# Pillow makes the image. find_spec returns without an exception, and the exit
+# code is 0 in the two cases. For that reason $ErrorActionPreference does not
+# stop the script at this check.
 $havePillow = & $python -c "import importlib.util,sys; sys.stdout.write('yes' if importlib.util.find_spec('PIL') else 'no')"
 if ($havePillow -ne 'yes') {
     'installing Pillow'
@@ -171,8 +172,8 @@ if ($havePillow -ne 'yes') {
 if ($havePillow -ne 'yes') { throw "Pillow did not install. Run: `"$python`" -m pip install pillow" }
 'Pillow ready'
 
-# freetype-py draws the glyphs. Without it the image falls back to Pillow and
-# differs from the plugin's image.
+# freetype-py renders the glyphs. Without it, Pillow renders them, and the
+# image differs from the plugin's image.
 $haveFreetype = & $python -c "import importlib.util,sys; sys.stdout.write('yes' if importlib.util.find_spec('freetype') else 'no')"
 if ($haveFreetype -ne 'yes') {
     'installing freetype-py'
@@ -193,10 +194,10 @@ if ($haveNumpy -ne 'yes') { throw "numpy did not install. Run: `"$python`" -m pi
 'numpy ready'
 
 # ---------------------------------------------------------------- right-click on a file
-# One menu item, DensePack it. It runs the packer with no size, so the packer
-# draws the plugin's one page: common.CODE_PX, 17 px unless DENSEPACK_CODE_PX
-# names another number. The item held a per-model size menu until
-# 12 September 2026.
+# One menu item, DensePack it. It runs the packer with no size. The packer
+# then makes the plugin's one page at common.CODE_PX. That size is 17 px unless
+# DENSEPACK_CODE_PX names another number. The script deletes the old key
+# first, which removes an older size submenu under it.
 if (Test-Path -LiteralPath $fileKey) { Remove-Item -LiteralPath $fileKey -Recurse -Force }
 New-Item -Path $fileKey -Force | Out-Null
 Set-ItemProperty -LiteralPath $fileKey -Name 'MUIVerb' -Value 'DensePack it'
@@ -210,10 +211,10 @@ Set-ItemProperty -LiteralPath $c -Name '(Default)' -Value $cmd
 'right-click entry added: DensePack it, on any file'
 
 # ---------------------------------------------------------------- the hotkey
-# AutoHotkey runs Ctrl+Shift+D. It is installed here too, so one double-click
-# covers the hotkey as well as the right-click entry. A failed AutoHotkey
-# install never stops the installer, because the right-click entry works
-# without it. -NoHotkey skips this whole section.
+# AutoHotkey runs Ctrl+Shift+D. The script installs AutoHotkey too. One
+# double-click installs the hotkey and the right-click entry. A failed
+# AutoHotkey install does not stop the installer, because the right-click
+# entry works without it. -NoHotkey skips this whole section.
 function Find-AutoHotkey {
     foreach ($p in @("$env:ProgramFiles\AutoHotkey\v2\AutoHotkey64.exe",
                      "$env:ProgramFiles\AutoHotkey\AutoHotkey.exe",
@@ -232,7 +233,7 @@ function Find-AutoHotkey {
 
 $ahkExe = $null
 if ($NoHotkey) {
-    'hotkey skipped, -NoHotkey was passed'
+    'skipped the hotkey because of -NoHotkey'
 } else {
     $ahkExe = Find-AutoHotkey
     if (-not $ahkExe) {
@@ -253,34 +254,34 @@ if ($ahkExe) {
     $s.WorkingDirectory = $tools
     $s.Save()
     Start-Process $ahkExe -ArgumentList "`"$ahk`""
-    "hotkey running and set to start with Windows, using $ahkExe"
+    "the hotkey runs now and starts with Windows, using $ahkExe"
     'Ctrl+Shift+D packs the selection and replaces it. Ctrl+Shift+C packs to the clipboard.'
 } else {
-    'AutoHotkey was not found, so the hotkey was skipped. The right-click entry still works.'
+    'The installer found no AutoHotkey and skipped the hotkey. The right-click entry still works.'
 }
 
 # ---------------------------------------------------------------- the reading card
-# A UserPromptSubmit hook that tells Claude, in every project, that a condensed
-# color coded image from the user IS the user's prompt. Without it Claude can
-# read a packed image as a picture to describe rather than instructions to act
-# on, and the user would have to explain that by hand each time.
+# A UserPromptSubmit hook that tells the model, in each project, that a packed
+# color coded image in the chat IS the prompt. Without it, the model can read a
+# packed image as a picture to describe and not as instructions. You then must
+# explain that by hand each time.
 #
-# It stays quiet wherever the DensePack PLUGIN is running, because the plugin's
-# own standing reminder, the short text sent before each message, says the same
-# thing and more, and two of them would arrive on every message and cost twice.
+# The hook prints nothing in a project where the DensePack plugin runs. The
+# plugin sends its own card before each message, with the same facts and more.
+# Two cards on each message cost twice the tokens.
 if ($NoCard) {
-    'reading card skipped, -NoCard was passed'
+    'skipped the reading card because of -NoCard'
 } else {
     New-Item -ItemType Directory -Force -Path $claudeHooks | Out-Null
     Copy-Item $card $cardTarget -Force
 
-    # Exec form, not a shell string. A single shell string is a parse error
-    # under PowerShell, which Claude Code uses on Windows when Git Bash is
-    # absent, and then the hook never runs at all. Re-running the installer
-    # replaces the entry rather than stacking a second copy.
+    # Exec form, not a shell string. Claude Code uses PowerShell on Windows when
+    # Git Bash is absent. A single shell string gives a parse error in
+    # PowerShell, and the hook then does not run. A second run of the installer
+    # replaces the entry and does not add a second copy.
     & $python -c $hookEdit $claudeSettings add $python $cardTarget
     if ($LASTEXITCODE -ne 0) { throw "could not register the reading card hook in $claudeSettings" }
 
-    "reading card installed to $cardTarget and registered in $claudeSettings"
-    'Paste a packed image into any Claude Code session and it is read as your prompt.'
+    "installed the reading card to $cardTarget and registered it in $claudeSettings"
+    'Paste a packed image into any Claude Code session. The model reads it as your prompt.'
 }

@@ -1,27 +1,22 @@
-"""Runs when the conversation closes. The final bill.
+"""Runs when the conversation ends and writes the totals of the conversation.
 
-SessionEnd fires for a claude -p run, after SessionStart and Stop. No
-transcript carries a SessionEnd row, because the transcript is closed before
-this hook runs, so a transcript is no evidence either way about this hook.
+This hook adds up the totals that pointer.py records and writes one small
+table with the total cost as text, the total cost as images and the total
+saved.
 
-The file this hook leaves behind is densepack-last-session.md, and the next
-session's bootstrap.py deliver_context() reads it and deletes it. The file
-this hook DELETES is densepack-totals.json, at the unlink below. So an empty
-.claude/tmp after several sessions is what a working hook looks like, and a
-missing densepack-totals.json proves nothing about it. A conversation that
-packed no report and no brief writes no totals at all, and this hook then
-returns at the totals check below with nothing to file.
+A session that ends cannot print into the conversation, because Claude Code
+discards the JSON output fields of a SessionEnd hook, systemMessage
+included. For that reason this hook writes the summary to
+densepack-last-session.md. At the next session start, deliver_context() in
+bootstrap.py reads that file, shows the table on screen unless receipts are
+quiet, and deletes the file. This hook also deletes densepack-totals.json,
+and the next conversation counts from zero. An empty .claude/tmp after
+several sessions is the normal result.
 
-HOW THIS FILE FITS, in plain words: adds up everything pointer.py recorded and
-writes one small table, total cost as words, total cost as pictures, total
-saved. A closing conversation cannot speak, so the table waits on disk and
-bootstrap.py hands it over the moment the next conversation opens.
-
-A session that ends cannot print into the conversation, and Claude Code
-discards a SessionEnd hook's JSON output fields, systemMessage included, so
-nothing this hook returns reaches anyone. The summary is written to a file and
-the next session's start hook shows it to the user. The totals reset so the
-next conversation counts from zero.
+Claude Code runs SessionEnd after SessionStart and Stop, also for a
+claude -p run. Claude Code closes the transcript before this hook runs, and
+a transcript has no SessionEnd row. A conversation that packed no report and
+no brief writes no totals, and this hook then writes nothing.
 """
 
 import sys
@@ -32,50 +27,51 @@ from pointer import RECEIPT_FILE, totals_table
 
 
 def main():
-    # The event is read before the switch is checked, because the off
-    # switch is per session and the id that names the session is on the
-    # event.
+    # The hook reads the event before it checks the off switch. The off
+    # switch is per session, and the session id is on the event.
     event = read_event()
     if disabled(event.get("session_id")):
         return 0
     totals = read_totals()
-    # Briefs count as well as reports, so a conversation that packed only
-    # outbound briefs still files its saving and clears the totals file.
+    # Briefs count as well as reports. A conversation that packed only
+    # outbound briefs still writes its saving and deletes the totals file.
     if not totals.get("reports") and not totals.get("briefs"):
         return 0
 
-    # The same mode the receipts use. A user who set quiet is not greeted next
-    # session with the very table they silenced.
+    # This is the same mode that the receipts use. When you set quiet, the
+    # next session does not show the table on screen.
     mode = receipts_mode()
     table = totals_table(totals, mode)
-    # The user reads this line now that the next session start shows it
-    # directly, so it counts in words that match the number.
+    # The next session start shows this line to you on screen. plural()
+    # makes each word match its number.
     def plural(number, word):
         return "%d %s%s" % (number, word, "" if number == 1 else "s")
 
-    count = ("DensePack totals for the conversation that just ended, %s, %s:"
+    count = ("DensePack totals for the conversation that ended, %s, %s:"
              % (plural(totals["reports"], "report"),
                 plural(totals.get("images", 0), "image")))
 
     if mode == "quiet":
-        # Quiet still files the numbers. The lead is told where they are and
-        # shows them only when the user asks.
+        # Quiet mode still writes the numbers to a file. The note tells the
+        # model where the file is. The model shows the table only when you
+        # ask.
         receipt = tmp_dir() / RECEIPT_FILE
         receipt.write_text("\n".join([count, ""] + table) + "\n",
                            encoding="utf-8")
         summary = ("DensePack receipts are quiet. Last conversation's totals "
-                   "are in %s . Show that table only if the user asks for "
+                   "are in %s . Show that table only if the prompt asks for "
                    "one.\n" % receipt)
     else:
-        # The next session's start hook puts this table in systemMessage,
-        # which Claude Code shows the user directly, so the file holds no
-        # instruction for the lead. The hook tells the two shapes apart by the
-        # table rows, so the quiet summary above must stay free of the pipe
-        # character.
+        # The start hook of the next session puts this table in
+        # systemMessage, and Claude Code shows it on screen. The file holds
+        # no instruction for the model. The start hook finds the table by
+        # its rows, which start with the pipe character. The quiet summary
+        # above must not contain a line that starts with the pipe character.
         summary = "\n".join([count, ""] + table + [""])
 
-    # The next session start reads this back as the plugin's own words, so it
-    # lives outside the project, where a cloned project cannot plant it.
+    # The next session start reads this file as text from the plugin. The
+    # file is outside the project. A cloned project cannot put a false copy
+    # there.
     from common import machine_state_dir
     (machine_state_dir() / "densepack-last-session.md").write_text(summary, encoding="utf-8")
     totals_path().unlink(missing_ok=True)
@@ -83,12 +79,11 @@ def main():
 
 
 def guarded_main():
-    """Never let an exception out of this hook.
+    """Catch each exception that main() raises.
 
-    main() runs inside a try, so a fault in it cannot change the outcome of
-    the tool call that fired the hook. The error is written to stderr so the
-    fault is still visible. The exit code stays 0, which lets the call
-    through.
+    main() runs inside a try. A fault in main() cannot change the result of
+    the event that started the hook. The hook writes the error to stderr,
+    where it stays visible. The exit code stays 0.
     """
     try:
         return main()
