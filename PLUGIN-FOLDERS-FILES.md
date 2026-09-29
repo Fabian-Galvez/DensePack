@@ -1,4 +1,4 @@
-<!-- DensePack 1.3 -->
+<!-- DensePack 1.3.1 -->
 # DensePack folders and files
 
 This doc lists the folders and working files that the DensePack plugin writes, what they hold and when the plugin writes them.

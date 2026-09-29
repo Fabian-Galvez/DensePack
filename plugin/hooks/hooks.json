@@ -98,7 +98,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/prompt_card.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/prompt_card.py\" ; exit $LASTEXITCODE"
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/prompt_card.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/prompt_card.py\" ; exit $LASTEXITCODE",
+            "timeout": 1800
           }
         ]
       }
