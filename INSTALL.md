@@ -18,6 +18,12 @@ DensePack sends images to each Fable, Opus and Sonnet model. `/max-off` sends So
 - [Install the right-click tool](#install-the-right-click-tool)
 - [Use the HTML app](#use-the-html-app)
 
+<br>
+
+---
+
+<br>
+
 ## Windows
 
 1. Open the Start menu, type `PowerShell` and open Windows PowerShell.
@@ -52,6 +58,12 @@ DensePack sends images to each Fable, Opus and Sonnet model. `/max-off` sends So
     `/helppack`
     Claude prints the DensePack commands.
 
+<br>
+
+---
+
+<br>
+
 ## macOS
 
 1. Open the Terminal app from Applications, Utilities.
@@ -85,6 +97,12 @@ DensePack sends images to each Fable, Opus and Sonnet model. `/max-off` sends So
 15. Check that DensePack is on.
     `/helppack`
     Claude prints the DensePack commands.
+
+<br>
+
+---
+
+<br>
 
 ## Linux
 
@@ -123,6 +141,12 @@ These steps are the same on each Linux system. Only step 13 names a package mana
     `/helppack`
     Claude prints the DensePack commands.
 
+<br>
+
+---
+
+<br>
+
 ## The size limit
 
 DensePack packs a file into images the first time the agent reads it, and the table below gives that first wait for five file sizes. DensePack saves the images of the whole file, and each later Read of the whole file is fast. For a Read with an offset and no limit, or with a limit of more than 20 lines, DensePack packs those lines again at each Read. After a change to the file or a new plugin version, DensePack packs the file again. At session start, DensePack deletes images older than 24 hours and packs those files again at their next Read.
@@ -136,7 +160,7 @@ When your message names a folder by its full path or says "this folder", DensePa
 
 DensePack packs each Word file that your message names. After each Glob, Grep, Bash or LS call, it packs up to 6 of the Word files that the result names by full path. When your message names no Word file, DensePack packs up to 8 Word files from the folders that your message names by full path, before your message goes to the model. This Word pack has no 200-file limit and no 700,000-byte limit. "This folder" does not start it.
 
-DensePack does not pack a file over 500,000 bytes. The pack times below come from tests on one computer. The wait is longer when DensePack packs files in other sessions at the same time.
+DensePack does not pack a file over 1,000,000 bytes. The pack times below come from tests on one computer. The wait is longer when DensePack packs files in other sessions at the same time.
 
 | File size | First wait |
 | --- | --- |
@@ -148,26 +172,32 @@ DensePack does not pack a file over 500,000 bytes. The pack times below come fro
 
 The wait grows with the size of the file.
 
-The agent reads a file over the limit as text, and that file saves nothing. A Word file over the limit gets no images, and the Read tool cannot open it. The agent can still read its text with a shell command.
+The agent reads a file over the limit as text, and that file saves nothing. Word files over the limit get no images, and the Read tool cannot open them. The agent can still read their text with a shell command.
 
-To pack a file over 500,000 bytes, raise the limit and accept the wait. Paste this line into Claude Code.
+To pack a file over 1,000,000 bytes, raise the limit and accept the wait. Paste this line into Claude Code.
 
 ```
-Raise DensePack's READ_MAX_BYTES to 1000000
+Raise DensePack's READ_MAX_BYTES to 2000000
 ```
 
-`READ_MAX_BYTES` is a number in the file `scripts/drop_read_gate.py` of the installed plugin, in `~/.claude/plugins/cache/densepack-marketplace/densepack/<version>`. Because it is not a setting, Claude Code edits the number in that file when you paste the line. The copy in the marketplace folder does not run. A plugin update replaces the file, and you must make the change again after each update.
+`READ_MAX_BYTES` is a number in the file `scripts/drop_read_gate.py` of the installed plugin, in `~/.claude/plugins/cache/densepack-marketplace/densepack/<version>`. Because it is not a setting, Claude Code edits the number in that file when you paste the line. The copy in the marketplace folder does not run. Plugin updates replace the file, so make the change again after each update.
 
 The same limit applies to Word files and to Bash output. For a Word file, DensePack measures the text in the file, not the size of the file. For Bash output, it counts the characters. DensePack packs `.docx` and the older `.doc` like other files, with no extra step and no extra install.
 
 DensePack also keeps these files as text.
 
-- a file under 1,000 bytes
-- a file with a null byte
-- a file in which the font has no glyph for more than 2% of the characters that are not spaces, such as a file in Chinese, Japanese or Korean
-- a file in a `.claude` folder, or a file whose path holds `scratch` or `sandbox`, except a Word file
-- a file whose images and their note cost as much as its text or more
-- each file, when Pillow, freetype-py or NumPy is missing
+- Files under 1,000 bytes.
+- Files with a null byte.
+- Files in which the font has no glyph for more than 2% of the characters that are not spaces, such as files in Chinese, Japanese or Korean.
+- Files in a `.claude` folder, or files whose path holds `scratch` or `sandbox`. Word files are the exception.
+- Files whose images and note cost as much as their text or more.
+- Every file, when Pillow, freetype-py or NumPy is missing.
+
+<br>
+
+---
+
+<br>
 
 ## Remove DensePack
 
@@ -200,13 +230,13 @@ Then it deletes these files and folders.
 - the Python install markers in `~/.densepack` and `%LOCALAPPDATA%\densepack`. In `%LOCALAPPDATA%\densepack`, it deletes only the file `python-install-tried`. The right-click tool keeps its own files in `%LOCALAPPDATA%\DensePack`, and Windows treats the two names as one folder
 - the `densepack-trial-*.pkl` files in the temp folder
 - the `.claude/densepack-vault` folder and the `densepack-*` and `.densepack-*` files in `.claude/tmp` of each folder that a transcript in `~/.claude/projects` names
-- the trust entry of the marketplace folder. A reinstall at the same path asks for trust again
+- the trust entry of the marketplace folder. Reinstalls at the same path ask for trust again
 
 It keeps all other files, such as your settings, your transcripts, your own files in `.claude/tmp` and the `.gitignore` that DensePack wrote in `.claude/tmp`. It also keeps each older `<name>.densepack.bak.old-N` copy and the `densepack-archive` folder that `dpctl.py keep <conversation>` makes. Claude Code can write the trust entry again when you close the session that ran `/dense-remove`.
 
 Some DensePack files can stay after `/dense-remove`.
 
-- A project whose transcripts are no longer in `~/.claude/projects` keeps its `.claude/densepack-vault` folder and its `densepack-*` files in `.claude/tmp`. Delete them by hand.
+- Projects whose transcripts are no longer in `~/.claude/projects` keep their `.claude/densepack-vault` folder and their `densepack-*` files in `.claude/tmp`. Delete them by hand.
 - The hooks of the session that ran `/dense-remove` still run until you close it. They can write a few `densepack-ran-*` files in `.claude/tmp`, and an image of the printed list with its text copy `bash-output-<id>.txt` in `.claude/densepack-vault/images`. Delete them by hand after you close Claude Code.
 - The Python that winget installed stays. When no other program needs it, remove it with `winget uninstall --id Python.Python.3.13`.
 - The right-click tool stays. [tools/Tool-README.md](tools/Tool-README.md) has its own uninstall.
@@ -236,7 +266,7 @@ The benches in [BENCHMARKS.md](BENCHMARKS.md) ran the same way. `claude plugin e
 
 **In each session**
 
-- Read a whole file with the Read tool. A Read with a limit of 20 lines or fewer stays text.
+- Read a whole file with the Read tool. Reads with a limit of 20 lines or fewer stay text.
 - Search the way you do without DensePack. DensePack packs Bash output of 400 characters or more into images when the images cost less than the text. The Grep tool output stays text.
 - Before an Edit, Read the lines you will change with a limit of 20 or fewer. That Read returns them as exact text, and the Edit copies them from it.
 - For Bash output of more than one image, the result holds image 1, and a note names the other images. Each line with a `git --stat` bar, a `pip list` rule, a number of 18 or more digits, a random ID that mixes capital and small letters and holds a capital I or a small l, only spaces or tabs, or a tab inside a line other than the tab after a line number goes beside the image as exact text.
@@ -267,9 +297,9 @@ The right-click tool uses files from this repository. You need a copy of them on
 
 | Your computer | What to do | What the tool packs |
 | --- | --- | --- |
-| Windows | Double-click `install-densepack.bat` | A file, from the right-click menu of File Explorer. Selected text, with `Ctrl + Shift + D`, `Ctrl + Shift + C` or the `Ctrl + Right-click` menu |
-| macOS | Double-click `DensePack it.workflow`. The workflow runs `~/DensePack/tools/densepack.py`. For a copy in another folder, edit the PACKER line of the workflow | A file, from the Quick Action in Finder |
-| Linux | Open a terminal in that folder and run `sh install-densepack.sh` | A file, from the Scripts menu of Nautilus, Nemo or Caja. A text, Markdown, CSV, log, JSON or XML file, from Open With in Thunar, Dolphin or PCManFM |
+| Windows | Double-click `install-densepack.bat` | Files, from the right-click menu of File Explorer. Selected text, with `Ctrl + Shift + D`, `Ctrl + Shift + C` or the `Ctrl + Right-click` menu |
+| macOS | Double-click `DensePack it.workflow`. The workflow runs `~/DensePack/tools/densepack.py`. For a copy in another folder, edit the PACKER line of the workflow | Files, from the Quick Action in Finder |
+| Linux | Open a terminal in that folder and run `sh install-densepack.sh` | Files, from the Scripts menu of Nautilus, Nemo or Caja. Text, Markdown, CSV, log, JSON and XML files, from Open With in Thunar, Dolphin or PCManFM |
 
 The selected text and the hotkeys work on Windows only. On each system, the tool writes each image of a file beside the file, as `<file>.densepack-N.png`.
 
@@ -279,7 +309,7 @@ The selected text and the hotkeys work on Windows only. On each system, the tool
 
 [tools/Tool-README.md](tools/Tool-README.md) lists the changes that the installers make, how to install without the hotkeys or the reading card and how to uninstall.
 
-On Windows, `Ctrl + Shift + D` and the menu item **DensePack it** replace the selected text with its image. The tool saves the text and all images of each pack in `tools\ctrl-shift-vault` or `tools\ctrl-right_click-vault`, or in the folder of the same name in `%LOCALAPPDATA%\DensePack` when the `tools` folder is read-only. A window shows this the first time. One check box stops the window.
+On Windows, `Ctrl + Shift + D` and the menu item **DensePack it** replace the selected text with its image. The tool saves the text and all images of each pack in `tools\ctrl-shift-vault` or `tools\ctrl-right_click-vault`, or in the folder of the same name in `%LOCALAPPDATA%\DensePack` when the `tools` folder is read-only. The tool shows this in a window the first time. One check box stops the window.
 
 <sub>The right-click tool needs this repository on your computer. You do not need Claude Code or the plugin.</sub>
 
