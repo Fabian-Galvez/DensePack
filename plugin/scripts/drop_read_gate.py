@@ -94,12 +94,12 @@ from common import (BURST_BYTES, actor_key, actor_reader, line_pull,
 #
 # One ceiling for all files, for any suffix. The pack runs at about 0.15 s
 # per 1,000 characters, at the same rate for a .docx as for plain text.
-# 500,000 is then about 75 seconds in the worst case. The code splits a file
+# 1,000,000 is then about 150 seconds in the worst case. The code splits a file
 # longer than one page across as many pages as it needs. The ceiling only
 # limits the wait. The wait comes once per file, not once per Read, because
 # the code keeps the pages. A higher ceiling makes the first wait longer in
 # proportion.
-READ_MAX_BYTES = 500000
+READ_MAX_BYTES = 1000000
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".pdf",
                   ".ipynb")

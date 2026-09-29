@@ -331,7 +331,10 @@ def image_output(event):
     # universal newlines. Without this step, write_text() below changes each
     # CRLF to CR CR LF, and the page shows an empty line after each line.
     text = text.replace("\r\n", "\n")
-    if len(text) < MIN_CHARS or "\x00" in text:
+    # The same ceiling as for files, READ_MAX_BYTES in drop_read_gate.py.
+    # Output over it stays text, because the pack wait grows with its length.
+    from drop_read_gate import READ_MAX_BYTES
+    if len(text) < MIN_CHARS or len(text) > READ_MAX_BYTES or "\x00" in text:
         return None
     exact = exact_lines_note(text)
     if not gets_images(event) or not ensure_pillow():
