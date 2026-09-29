@@ -1,4 +1,4 @@
-<!-- DensePack 1.3 -->
+<!-- DensePack 1.3.1 -->
 # Privacy policy
 
 DensePack does all its work on your computer.

@@ -1,4 +1,4 @@
-<!-- DensePack 1.3 -->
+<!-- DensePack 1.3.1 -->
 <p align="left">
   <img src="images/densepack-readme-banner.svg" alt="DensePack" />
 </p>
@@ -270,7 +270,7 @@ DensePack also writes the text of each Word file beside its images.
   - Your prompt names the folder of the file by its full path. DensePack then packs up to 8 Word files of that folder before your message goes to the model.
   - The agent finds the file with Glob, Grep or a Bash listing.
   - You copy the file into `.claude/densepack-vault/to-pack/`.
-- When Word files get no images, the agent can still read their text with a shell command.
+- When a Word file that your prompt names gets no images, DensePack tells the agent the reason and tells it to read the text with a shell command.
 - Short tasks can cost more with DensePack, because the session note and the extra steps of some runs cost more than the images save. In the task that copies 6 lines of a Python file on Opus 5.5, each run with DensePack cost $0.0915 to $0.1082, and each run without it cost $0.0827 to $0.0839. [BENCHMARKS.md](BENCHMARKS.md#why-some-short-tasks-cost-more) gives the price of each run and each cause.
 - Edit and Write work on files that arrived as images. They do not work on Word files because Claude Code does not Read Word files. See [Word files](#word-files).<br>
   <sub>DensePack tells this to the agents that get images. The lead agent gets it at session start, and each subagent gets it when the subagent starts.</sub>

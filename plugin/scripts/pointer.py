@@ -333,12 +333,16 @@ def _word_rows(text, event, Path, prompt_card, dp, gate, pack_images):
             # This file IS the pointer module that _word_file_sentence()
             # takes. prompt_card imports it only inside its own function.
             # prompt_card.pointer does not exist to pass.
-            sentence = prompt_card._word_file_sentence(
+            sentence, why = prompt_card._word_file_result(
                 path, event, dp, gate, sys.modules[__name__], pack_images)
         except Exception:  # noqa: BLE001
             continue
         if sentence:
             rows.append(sentence)
+        elif why in ("failed", "unreadable"):
+            # A tool result can list many Word files that the agent never
+            # reads, so this route sends a note only when the pack failed.
+            rows.append(prompt_card.skip_note(path, why, gate))
     return "\n\n".join(rows)
 
 
