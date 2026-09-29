@@ -1,4 +1,4 @@
-<!-- DensePack 1.3 -->
+<!-- DensePack 1.3.1 -->
 # Right-click tool
 
 The DensePack right-click tool packs a file or selected text into a DensePack image that costs fewer input tokens than the text. Paste the image in place of the text into models that read images well.

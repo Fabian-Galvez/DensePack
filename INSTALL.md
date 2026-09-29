@@ -1,4 +1,4 @@
-<!-- DensePack 1.3 -->
+<!-- DensePack 1.3.1 -->
 # Install DensePack
 
 Follow the steps for your system in order. Type each command exactly and press Enter after it.
@@ -203,7 +203,7 @@ DensePack packs `.docx` files and older `.doc` files the same way as other files
 ### Files over the limit
 
 - The agent reads files over the limit as text, and DensePack saves nothing on them.
-- Word files over the limit get no images, and the Read tool cannot open them. The agent can still read their text with a shell command.
+- Word files over the limit get no images, and the Read tool cannot open them. DensePack tells the agent why and tells it to read the text with a shell command.
 - The same limit applies to Word files and to Bash output.
 - For Word files, DensePack measures the text in the file, not the size of the file.
 - For Bash output, DensePack counts the characters.

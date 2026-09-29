@@ -29,6 +29,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from common import (delegation_path, disabled, emit, lead_model_name,
@@ -226,16 +227,69 @@ def word_pages(event):
     # names what you want. A folder listing on top of that packs pages that
     # nobody asked for.
     paths = named or folder_word_files(prompt, seen)
+    start = time.monotonic()
     for path in paths:
-        sentence = _word_file_sentence(path, event, dp, gate, pointer,
-                                       pack_images)
+        sentence, why = _word_file_result(path, event, dp, gate, pointer,
+                                          pack_images, start)
         if sentence:
             rows.append(sentence)
+        elif why and (path in named or why in LOUD_REASONS):
+            rows.append(skip_note(path, why, gate))
     return "\n\n".join(rows)
+
+
+# THE ALERT. Claude Code's Read rejects a Word file, so a Word file with no
+# images leaves the agent with nothing to read. A Word file that the message
+# names and that gets no images gets a note with the reason and the way to
+# read its text. A Word file from a folder gets the note only for the
+# reasons in LOUD_REASONS, because a folder can hold many small files.
+LOUD_REASONS = ("failed", "time", "large", "unreadable")
+# The timeout of this hook in hooks.json. Claude Code stops the hook at
+# this limit, and a stopped hook cannot send a note.
+HOOK_TIMEOUT_S = 1800
+# The worst pack rate in drop_read_gate.py is 0.15 s per 1,000 characters.
+# The estimate doubles it as padding.
+PACK_S_PER_BYTE = 0.15 / 1000 * 2
+# The hook starts no new pack this close to the timeout.
+HOOK_MARGIN_S = 120
+
+
+def pack_fits(start, size):
+    """True when the estimated pack of `size` bytes ends before the hook
+    timeout, with the margin."""
+    if start is None:
+        return True
+    left = HOOK_TIMEOUT_S - HOOK_MARGIN_S - (time.monotonic() - start)
+    return size * PACK_S_PER_BYTE <= left
+
+
+def skip_note(path, why, gate):
+    """Return the note for a Word file that got no images."""
+    reasons = {
+        "unreadable": "DensePack could not open the file",
+        "notext": "DensePack found no text in the file",
+        "small": "its text is under 1,000 bytes",
+        "large": "its text is over %s bytes" % format(gate.READ_MAX_BYTES, ","),
+        "worse": "the images cost more tokens than the text",
+        "failed": "the pack failed",
+        "time": "the pack did not have enough time left in this prompt",
+    }
+    return ("DensePack did not pack %s into images, because %s. Claude Code's "
+            "Read rejects Word files. Read the text of %s with a shell "
+            "command." % (path.name, reasons.get(why, "the pack failed"),
+                           path))
 
 
 def _word_file_sentence(path, event, dp, gate, pointer, pack_images):
     """Return the pointer sentence of one file, or None when it stays text."""
+    return _word_file_result(path, event, dp, gate, pointer, pack_images)[0]
+
+
+def _word_file_result(path, event, dp, gate, pointer, pack_images,
+                      start=None):
+    """Return (sentence, None) for a packed file, or (None, reason) when the
+    file stays text. `start` is the time the hook started, for the time
+    check. With no `start`, the function does no time check."""
     # The text that a Read returns. The code compares the pages against this
     # text. The size of the container shows nothing. A .docx is a zip and a
     # .doc is an OLE2 filesystem, and the two are mostly structure.
@@ -244,14 +298,16 @@ def _word_file_sentence(path, event, dp, gate, pointer, pack_images):
         words = (pointer.docx_text(str(path)) if suffix == ".docx"
                  else pointer.doc_text(str(path)))
     except Exception:  # noqa: BLE001
-        return None
+        return None, "unreadable"
     if not words:
-        return None
+        return None, "notext"
     size = len(words.encode("utf-8"))
     # The same floor and ceiling as in drop_read_gate.py. A small file costs
     # more to pack than it saves, and a large file makes a long wait.
-    if size < 1000 or size > gate.READ_MAX_BYTES:
-        return None
+    if size < 1000:
+        return None, "small"
+    if size > gate.READ_MAX_BYTES:
+        return None, "large"
     # THE PACK USES A COPY WITH A FIXED NAME. drop_and_draw() copies the
     # bytes that it gets into a staging folder and leaves the file in place.
     # The code packs a copy in the plugin working folder, and the name of
@@ -266,18 +322,22 @@ def _word_file_sentence(path, event, dp, gate, pointer, pack_images):
     except Exception:  # noqa: BLE001
         done = []
     if done:
-        return _sentence(path, done[0].parent, [p.name for p in done])
+        return _sentence(path, done[0].parent, [p.name for p in done]), None
+    # The time check. The hook starts a pack only when the estimate of its
+    # time, from the size of the text, ends before the hook timeout.
+    if not pack_fits(start, size):
+        return None, "time"
     try:
         shutil.copy2(str(path), str(copy))
     except OSError:
-        return None
+        return None, "failed"
     try:
         image, patch_tokens, tags, drawn = gate.drop_and_draw(str(copy),
                                                               event)
     except Exception:  # noqa: BLE001
-        return None
+        return None, "failed"
     if image is None:
-        return None
+        return None, "failed"
     # REJECT WHEN WORSE, on the measurement of this file, the same test as
     # in drop_read_gate.py. The sentence goes in the same message as the
     # pages, and it counts against them.
@@ -288,12 +348,13 @@ def _word_file_sentence(path, event, dp, gate, pointer, pack_images):
             gate.discard(drawn)
         except Exception:  # noqa: BLE001
             pass
-        return None
+        return None, "worse"
     try:
         names = [Path(name).name for name in pack_images(str(copy))]
     except Exception:  # noqa: BLE001
         names = []
-    return _sentence(path, Path(image).parent, names or [Path(image).name])
+    return _sentence(path, Path(image).parent,
+                     names or [Path(image).name]), None
 
 
 # THE FILE NAMES OF THE FOLDER. For a message about the files in a folder,

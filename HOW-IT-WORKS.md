@@ -1,4 +1,4 @@
-<!-- DensePack 1.3 -->
+<!-- DensePack 1.3.1 -->
 # How DensePack works
 
 This file explains each part of DensePack in full. [README.md](README.md) has a short summary of each part.
@@ -385,6 +385,11 @@ Two hooks find Word files, `prompt_card.py` and `pointer.py`. They miss Word fil
 
 Word files take a different route because the Read tool of Claude Code does not open Word files. The table shows each difference.
 
+When a Word file gets no images, the agent has nothing to Read. For that reason `prompt_card.py` sends the agent a note for each Word file that the prompt names and that gets no images. The note gives the reason and tells the agent to read the text with a shell command. `pointer.py` sends the same note only when a pack fails.
+
+- `prompt_card.py` estimates the time of each pack from the size of the text, at 0.3 seconds for each 1,000 bytes, which is twice the slowest measured rate.
+- It starts a pack only when that estimate ends at least 2 minutes before its 30-minute hook timeout. Otherwise the note says that the pack did not have enough time.
+
 | | `.docx` | `.doc` | All other files |
 | --- | --- | --- | --- |
 | **File format** | It is a zip of XML | It is an OLE2 container, a small file system of streams | They are plain text on disk |
@@ -515,13 +520,13 @@ The hooks read the settings files again on each event, and a change applies at t
 
 To run a verb, open a terminal in the project folder and run the `dpctl.py` of the installed plugin with the verb and its value.
 
-- `1.3` in the path is the version of the plugin.
+- `1.3.1` in the path is the version of the plugin.
 - On Windows, run the line in PowerShell and type `python` in place of `python3`.
 
 This line shows a receipt table in the conversation.
 
 ```
-python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/1.3/scripts/dpctl.py receipts default
+python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/1.3.1/scripts/dpctl.py receipts default
 ```
 
 `/dense-off` stops only the conversation that ran it and the subagents of that conversation. All other conversations keep packing.
