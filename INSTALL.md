@@ -136,7 +136,7 @@ When your message names a folder by its full path or says "this folder", DensePa
 
 DensePack packs each Word file that your message names. After each Glob, Grep, Bash or LS call, it packs up to 6 of the Word files that the result names by full path. When your message names no Word file, DensePack packs up to 8 Word files from the folders that your message names by full path, before your message goes to the model. This Word pack has no 200-file limit and no 700,000-byte limit. "This folder" does not start it.
 
-DensePack does not pack a file over 500,000 bytes. The pack times below come from tests on one computer on 27 September 2026. The wait is longer when DensePack packs files in other sessions at the same time.
+DensePack does not pack a file over 500,000 bytes. The pack times below come from tests on one computer. The wait is longer when DensePack packs files in other sessions at the same time.
 
 | File size | First wait |
 | --- | --- |
@@ -232,7 +232,7 @@ DensePack saves the most in long sessions in which the agent reads many files or
 1. Start Claude Code in an empty folder outside the repository.
 2. Give the agent the full path of the repository. Each file that the agent reads comes as images when the images cost less than the text. [The size limit](#the-size-limit) lists the files that stay text.
 
-The realistic benches in [BENCHMARKS.md](BENCHMARKS.md) ran the same way. `claude plugin eval` starts each run in an empty folder, and the case's setup script copies in only the code of the task.
+The benches in [BENCHMARKS.md](BENCHMARKS.md) ran the same way. `claude plugin eval` starts each run in an empty folder, and the case's setup script copies in only the code of the task.
 
 **In each session**
 

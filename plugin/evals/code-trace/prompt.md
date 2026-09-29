@@ -1,7 +1,7 @@
 ---
 max_turns: 200
 allowed_tools: [Read, Glob, Grep, Write, Edit, Bash]
-tags: [realistic]
+tags: [bench]
 timeout_seconds: 3600
 ---
 

@@ -59,7 +59,7 @@ from common import (actor_key, actor_reader, disabled, emit, ensure_pillow,  # n
 MIN_CHARS = 400
 
 # Output lines that hold one of these go beside the image as exact text. In
-# a test, Opus 5.5 copied realistic Bash output from its images two times,
+# a test, Opus 5.5 copied real Bash output from its images two times,
 # and two kinds of string failed.
 #   A random ID that holds a capital I or a small l. 76 of 108 were typed
 #   wrong, each time with I and l swapped. The two letters have the same
