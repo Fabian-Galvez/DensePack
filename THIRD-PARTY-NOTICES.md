@@ -1,16 +1,16 @@
-<!-- DensePack 1.2 -->
+<!-- DensePack 1.3 -->
 # Third-party notices
 
-DensePack is MIT licensed. This lists what the plugin and the right-click
-tool use that is not DensePack's own.
+DensePack uses the MIT license. This file lists the software and the font
+that the plugin and the right-click tool use and that are not a part of DensePack.
 
 Pillow, MIT-CMU. Copyright (c) 1997-2011 Secret Labs AB, Copyright (c) 1995-2011 Fredrik Lundh and contributors, Copyright (c) 2010 Jeffrey A. Clark and contributors. `plugin/scripts/densepack.py` and `tools/densepack.py` import it.
 
-freetype-py, BSD 3-Clause. Copyright (c) 2011-2024 Nicolas P. Rougier. `plugin/scripts/freetype_glyph.py` imports it to render every glyph.
+freetype-py, BSD 3-Clause. Copyright (c) 2011-2024 Nicolas P. Rougier. `plugin/scripts/freetype_glyph.py` imports it to render each glyph.
 
 NumPy, BSD 3-Clause, with bundled parts under 0BSD, MIT, Zlib and CC0-1.0. Copyright (c) 2005-2025, NumPy Developers. `plugin/scripts/codepack.py` imports it to blend each glyph into the image.
 
-FreeType, FreeType License. Portions of this software are copyright The FreeType Project (www.freetype.org). All rights reserved. freetype-py carries it.
+FreeType, FreeType License. Portions of this software are copyright The FreeType Project (www.freetype.org). All rights reserved. freetype-py includes it.
 
 Inter, SIL Open Font License 1.1. Copyright (c) 2016 The Inter Project Authors. `plugin/fonts/Inter-SemiBold.ttf`, with the license in `plugin/fonts/LICENSE-Inter.txt`.
 

@@ -1,69 +1,82 @@
-"""Stops a raw Read of a text file worth packing, and redirects it to a
-drawn image of the same words instead.
+"""Packs a text file that a Read names into an image of the same words, and
+picks the image that the model gets in place of the text.
 
-HOW THIS FILE FITS, in plain words: this is a PreToolUse hook on Read, for
-every agent, lead and subagent alike. It draws the file the agent asked
-for and hands it the image.
+HOW THIS FILE FITS. This is a PreToolUse hook on Read, for all agents, the
+lead agent and each subagent. Before a Read, the gate lets the Read run on
+the real file (read_runs_on_source() and the check in route()). Claude Code
+then records a Read of that file, and a later Edit of it passes.
+read_image.py runs on PostToolUse and PostToolUseFailure on Read. It calls
+route() with post=True and replaces the Read result with the image after the
+Read runs. All rules for the image stay in route().
 
-WHAT IT DOES. A Read of a text file with no sibling image already sitting
-beside it (see sibling_image() in common.py for the file that does have
-one) is copied into a staging folder and drawn immediately, in the SAME
-hook turn, through pointer.draw_drop_file(): the one place this plugin
-turns a dropped file into an image. The Read is then rewritten to that
-image, exactly like the sibling-image redirect, so the agent never copies
-the file itself and never spends a retry turn waiting.
+A WORD FILE. The gate still redirects a Read of a .doc or .docx to its
+images before the Read runs, because Read cannot open a Word file.
 
-READING AGENT'S MODEL UNKNOWN. When common.actor_reader() cannot name the
-reading agent's model, drop_and_draw() draws for FALLBACK_READER instead.
-A gate that cannot decide a reader still redirects.
+PACK AHEAD. prefetch() and a route() call with prefetch=True pack a file
+before its Read. The image is then ready when the Read ends.
 
-FALLBACK, when the automatic draw fails for a real reason (Pillow
-missing, the file vanished, or the draw itself raised): the first Read is
-denied instead, naming the to-draw folder to copy the file into by hand. A
-retry of the identical Read passes, so an agent about to Edit the file
-still gets the real bytes on its second try. That retry runs only when
-the draw itself failed; a file that drew gives the image on every Read,
-and an agent changes it with Edit and not with Write.
+WHAT IT DOES. After a Read of a text file, read_image.py calls route() with
+post=True. route() copies a text file with no sibling image beside it (see
+sibling_image() in common.py for a file that has one) into a staging folder
+and packs the copy at once through pointer.draw_drop_file(), the one
+function in this plugin that packs a dropped file into an image.
+read_image.py then replaces the Read result with that image. A .doc or
+.docx is packed the same way before the Read, and route() returns its image
+as the new file_path, because Read cannot open a Word file. The agent does
+not copy the file itself and does not spend a turn on a retry.
 
-EXEMPTIONS, each one required or the plugin deadlocks on itself.
-  A file already an image: checked by its own suffix. Never by a
-  densepack- name prefix; a name prefix is the wrong key for whether a
-  file is a picture, because a plugin file can be text too, the exact
-  sidecar densepack-bashsrc-*.txt beside every packed image.
-  Anything under a scratchpad: a .claude folder or a path holding
-  "sandbox" or "scratch", where a working file lives and is never worth
-  a gate. The OS temp root is not exempt: a browser unpacks a download
-  there, and the plugin's own working files all sit under .claude.
-  The vault's own drop and image folders under densepack-vault/, so
-  pointer.py's own scan can still read what it just copied or just drew.
-  A densepack- named file with NO image beside it, the plugin's own
-  bookkeeping (settings, manifest, legend sidecar). A densepack- named
-  file that DOES have an
-  image beside it, a source-text sidecar such as
-  densepack-briefsrc-<stamp>.txt or densepack-src-<agent id>.txt, is not
-  exempt: the drawn image right beside it, densepack-brief-<stamp>-1.png
-  or densepack-img-<agent id>-1.png, already holds the same words. The
-  Read is redirected to that image instead, through
-  common.sibling_image(), which matches the file's own name against the
-  patterns the packers write and checks the image is really on disk
-  before redirecting to it.
-  A line pull, common.line_pull(): a Read of a few lines by offset and
-  limit.
+MODEL UNKNOWN. When common.actor_reader() cannot name the model of the
+agent that reads, drop_and_draw() packs for FALLBACK_READER. A gate that
+cannot name a model still gives the image.
 
-NEVER CRASH A CALLER. One try around everything; any fault allows the
-Read, the same failure mode every gate in this folder chooses.
+FALLBACK, when the automatic pack fails for a real reason (Pillow is
+missing, the file is gone, or the pack step raised an error). Before a Read
+of a .doc or .docx, the gate rejects the first Read and names the to-pack
+folder to copy the file into by hand. A second, identical Read passes. That
+retry runs only when the pack step failed. After the Read of any other
+file, read_image.py leaves the result as text. A file that packed gives the
+image on each Read, and an agent changes it with Edit and not with Write.
 
-NO FLOOR, A LIVE COMPARISON INSTEAD. This route pays no delivery fee: the
-Read call was already going to happen (drop_and_draw() rewrites the SAME
-call, it never adds one) and no pointer line is printed, the redirect
-happens inside this one PreToolUse turn. A fixed character floor priced
-for the report and Bash routes, whose fee is a printed pointer line plus
-a Read call per image, would refuse a redirect on most of what this route
-sees. So there is no floor pre-check: draw the image, price it in real
-patches, price the raw Read in text tokens at the same CHARS_PER_TOKEN
-divisor densepack.py holds, and redirect only when the image is actually
-cheaper. A file too small to redirect self-selects out of the comparison;
-nothing hardcodes where that point is, so it never goes stale.
+EXEMPTIONS. Each one is required, or the plugin blocks itself.
+  A file that is already an image. The check uses the suffix of the file,
+  never a densepack- name prefix. A name prefix does not show whether a
+  file is a picture, because a plugin file can be text too, such as the
+  sidecar densepack-bashsrc-*.txt beside each packed image.
+  Any file in a scratch folder. This is a .claude folder, or a path with
+  "sandbox" or "scratch" in it, where working files are. The OS temp root
+  is not exempt, because a browser unpacks a download there, and all
+  working files of the plugin are under .claude.
+  The drop and image folders of the vault under densepack-vault/. The scan
+  in pointer.py can then read what it copied or packed.
+  A densepack- named file with NO image beside it. This is the bookkeeping
+  of the plugin (settings, manifest, legend sidecar). A densepack- named
+  file that DOES have an image beside it is not exempt. This is a
+  source-text sidecar such as densepack-briefsrc-<stamp>.txt or
+  densepack-src-<agent id>.txt. The packed image beside it,
+  densepack-brief-<stamp>-1.png or densepack-img-<agent id>-1.png, already
+  holds the same words. The gate gives that image through
+  common.sibling_image(). That function matches the name of the file
+  against the patterns that the packers write, and it checks that the image
+  is on disk.
+  A line pull, common.line_pull(). This is a Read of a few lines by offset
+  and limit.
+
+NEVER CRASH A CALLER. One try block covers all code. Any fault allows the
+Read. All gates in this folder use the same failure mode.
+
+NO PRICE FLOOR. A LIVE COMPARISON. This route pays no delivery fee. The
+Read call happens in any case, and read_image.py replaces its result, or
+route() rewrites the SAME call for a Word file. The route adds no call and
+prints no pointer line. The report and Bash routes pay a fee of a printed
+pointer line plus a Read call for each image, and a fixed character floor
+priced for those routes rejects the image on most files that this route
+gets. For this reason the gate uses no price floor. It packs the image,
+prices it in real patches, prices the raw Read in text tokens at the
+CHARS_PER_TOKEN divisor of densepack.py, and gives the image only when the
+image costs less. The only size limits before the pack are in
+_drawable_text(), a 1,000 byte minimum and READ_MAX_BYTES. They limit the
+pack time, not the price, and the comparison decides each file between
+them. A file too small for an image loses the comparison.
 """
 
 import hashlib
@@ -74,44 +87,46 @@ from common import (BURST_BYTES, actor_key, actor_reader, line_pull,
                     no_metacharacters, over_cap, queue_cap_row, quoted_path,
                     read_event, sibling_image, tmp_dir, turn_reads, vault_dir)
 
-# The largest file a Read converts. A 3 MB single line held the hook for
-# minutes, so a bigger file, or one holding a null byte, stays text. There is
-# no line ceiling: a file is planned with no glyph drawn and then drawn once,
-# and 20,000 short lines no longer hold the hook.
+# The largest file that a Read converts. A single line of 3 MB held the hook
+# for minutes. A bigger file, or one with a null byte, stays text. There is
+# no line ceiling. The code plans a file with no glyph rendered and then
+# renders it once, and 20,000 short lines do not hold the hook.
 #
-# One ceiling, every file, whatever the suffix. Drawing runs at about 0.15 s
-# per 1,000 characters, measured 17 September 2026 and the same rate for a
-# .docx as for plain text, so 500,000 is roughly 75 seconds in the worst case.
-# A file longer than one page is split across as many pages as it needs, so
-# the ceiling buys a bounded wait and nothing else. The wait is paid once per
-# file, not once per Read, because the pages are kept. Raise it and a reader
-# waits proportionally longer the first time.
+# One ceiling for all files, for any suffix. The pack runs at about 0.15 s
+# per 1,000 characters, at the same rate for a .docx as for plain text.
+# 500,000 is then about 75 seconds in the worst case. The code splits a file
+# longer than one page across as many pages as it needs. The ceiling only
+# limits the wait. The wait comes once per file, not once per Read, because
+# the code keeps the pages. A higher ceiling makes the first wait longer in
+# proportion.
 READ_MAX_BYTES = 500000
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".pdf",
                   ".ipynb")
 
-# The reader drop_and_draw() falls back to when common.actor_reader() cannot
-# name the reading agent's model. Never common.resolved_reader() or
-# common.UNKNOWN_READER, both the LEAD's own cached reader: a subagent's Read
-# is as often not the lead's model as it is.
+# The model that drop_and_draw() uses when common.actor_reader() cannot name
+# the model of the agent that reads. Never common.resolved_reader() or
+# common.UNKNOWN_READER, because the two are the cached model of the LEAD
+# agent. A Read by a subagent often runs on a model other than the model of
+# the lead agent.
 FALLBACK_READER = "sonnet"
 
-# One marker per session and file, so a retry can still reach the real
-# bytes before an Edit. Only reached now when
-# drop_and_draw() below could not draw an image at all.
+# One marker per session and file. A retry can then still reach the real
+# bytes before an Edit. The code uses it only when drop_and_draw() below
+# cannot make an image.
 MARKER = "densepack-dropread-%s-%s"
 
 MESSAGE = (
-    "DensePack tried to draw this file as an image automatically and could "
+    "DensePack tried to pack this file into an image automatically and could "
     "not. This file is %s bytes. Do not Read it raw. "
-    "Copy it into .claude/densepack-vault/to-draw/ instead, then "
-    "make any other tool call: the scan draws it fresh from the file's "
-    "current bytes, the image lands in .claude/densepack-vault/images/, and "
-    "the copy is deleted. Read that image, not this file. The drop never "
+    "Copy it into .claude/densepack-vault/to-pack/ instead, then "
+    "make any other tool call. The scan packs it fresh from the file's "
+    "current bytes, and the copy and its images move into "
+    ".claude/densepack-vault/to-pack/packed/. Read that image, not this "
+    "file. The drop never "
     "modifies this path. Edit it as normal once you have the "
     "information. Use the Read tool on this exact path only when you are "
-    "about to Edit it: repeat this exact Read and it will pass.\n\n"
+    "about to Edit it. Repeat this exact Read, and it passes.\n\n"
     "File: %s"
 )
 
@@ -124,16 +139,17 @@ def marker_path(session_id, file_path):
 
 
 def is_image(path):
-    """True only by the file's own suffix, never by a densepack- name
-    prefix: a plugin file can be text, the exact-text sidecar beside every
-    packed image, so a prefix answers a different question than this one."""
+    """True only by the suffix of the file, never by a densepack- name
+    prefix. A plugin file can be text, such as the exact-text sidecar beside
+    each packed image. A prefix does not show whether a file is an image."""
     return path.replace("\\", "/").lower().endswith(IMAGE_SUFFIXES)
 
 
 def is_plugin_own(path):
-    """True only for a densepack- named file that has NO image beside it:
-    the plugin's own bookkeeping, never a source-text sidecar that a drawn
-    image already covers. See sibling_redirect() for that other case."""
+    """True only for a densepack- named file that has NO image beside it.
+    This is the bookkeeping of the plugin, never a source-text sidecar that a
+    packed image already covers. See the sibling redirect in route() for that
+    other case."""
     name = path.replace("\\", "/").rsplit("/", 1)[-1].lower()
     if not name.startswith("densepack-"):
         return False
@@ -141,14 +157,14 @@ def is_plugin_own(path):
 
 
 def is_drop_folder(path):
-    """True inside the vault's drop and image folders, so the scan in
-    pointer.py can still read what it just copied or just drew."""
+    """True inside the drop and image folders of the vault. The scan in
+    pointer.py can then read what it copied or packed."""
     parts = [p.lower() for p in path.replace("\\", "/").split("/") if p]
-    # "drop", "drops" and "drop-gate" stay in the list so a file left in one
-    # of them still passes.
+    # "drop", "drops" and "drop-gate" stay in the list. A file in one of
+    # them still passes.
     return "densepack-vault" in parts and ("drop" in parts or "drops" in parts
                                            or "drop-gate" in parts
-                                           or "to-draw" in parts
+                                           or "to-pack" in parts
                                            or "images" in parts)
 
 
@@ -188,14 +204,16 @@ def _write_sidecar(src, digest, image, more_pages, first_lines=()):
     # first_lines[i] is the first source line image i holds.
     if len(first_lines) == len(names):
         rec["first_lines"] = list(first_lines)
-    # A new file of its own, then moved onto the name. os.replace replaces a
-    # committed link at the sidecar name instead of writing through it.
+    # The code writes a new file and then moves it onto the name. os.replace
+    # replaces a link that a project commits at the sidecar name and does
+    # not write through it.
     import os
     import tempfile
     from common import project_dir, through_link
     target = _sidecar_path(src)
-    # Every other writer in the images folder checks this. The write below
-    # replaces a link at the name, and this refuses a linked folder above it.
+    # All other writers in the images folder check this. The write below
+    # replaces a link at the name, and this check rejects a linked folder
+    # above it.
     if through_link(project_dir(), target.parent):
         return
     part = None
@@ -212,9 +230,9 @@ def _write_sidecar(src, digest, image, more_pages, first_lines=()):
 
 
 def _served_images(src):
-    """The (image, patch_tokens, tags, drawn) a fresh draw would return,
-    when the sidecar's digest matches this source and every image exists;
-    None otherwise."""
+    """The (image, patch_tokens, tags, drawn) that a new pack returns, when
+    the digest of the sidecar matches this source and all images exist. None
+    otherwise."""
     import json
     from pathlib import Path
     side = _sidecar_path(src)
@@ -227,12 +245,12 @@ def _served_images(src):
     if not digest or rec.get("digest") != digest or not rec.get("images"):
         return None
     folder = side.parent
-    # A cloned project can plant this sidecar. A name with a folder in it,
-    # or an absolute path, would send the Read outside the images folder.
+    # A cloned project can put a false sidecar here. A name with a folder in
+    # it, or an absolute path, sends the Read outside the images folder.
     if not _bare_names(rec["images"]):
         return None
-    # The digest alone is public arithmetic, so a planted sidecar can match
-    # it. The seal needs a key the project cannot read.
+    # The digest uses no secret key, and a false sidecar can match it. The
+    # seal needs a key that the project cannot read.
     if not _sealed(rec, src):
         return None
     paths = [str(folder / n) for n in rec["images"]]
@@ -250,12 +268,14 @@ def _served_images(src):
         return None
     tags = ""
     if len(paths) > 1:
-        tags = pointer.later_images_note(src.name, str(folder), rec["images"])
+        tags = pointer.later_images_note(src.name, str(folder), rec["images"],
+                                         firsts=rec.get("first_lines"),
+                                         last=_last_line(src))
     return paths[0], patch_tokens, tags, list(paths)
 
 
 def _bare_names(names):
-    """True when every entry is a plain file name the draw itself wrote:
+    """True when each entry is a plain file name that the pack wrote, with
     no folder part, no drive and no parent step."""
     import os
     return isinstance(names, list) and all(
@@ -266,8 +286,9 @@ def _bare_names(names):
 
 
 def _seal_key():
-    """32 random bytes kept in the plugin's data folder, outside the project,
-    made once per machine. None when the folder cannot be written."""
+    """32 random bytes in ~/.claude/densepack-state, outside the project,
+    made once for each home folder. None when the code cannot write the
+    folder."""
     import common
     return common.seal_key()
 
@@ -291,16 +312,115 @@ def _seal(digest, names, folder):
 
 
 def _sealed(rec, src):
-    """True when the sidecar carries the seal this machine would write."""
+    """True when the sidecar holds the seal that the local seal key gives."""
     import hmac
     want = _seal(_source_digest(src), rec.get("images"), _sidecar_path(src).parent)
     got = rec.get("seal")
     return bool(want) and isinstance(got, str) and hmac.compare_digest(want, got)
 
 
+# The line count that Read returns when a call names an offset and no limit.
+READ_DEFAULT_LIMIT = 2000
+
+
+def _slice_image(path, text, tool_input, event):
+    """The images of only the lines that a Read with offset or limit names,
+    packed with their real line numbers.
+
+    Each line before the first named line stays empty. The pack skips an
+    empty line but keeps the count, and the numbers match the file.
+    drop_and_draw() then packs the lines the same as the lines of a
+    whole-file Read. The result is one page, several pages joined into one
+    sheet when the sheet fits, or the image-1-of-N route with the note of a
+    whole-file Read. Returns (image path, note), "text" when the images cost
+    no less than the lines as text, or None when the pack fails. With None,
+    the whole-file route makes the decision. A page of the whole file holds
+    lines that the Read did not name, and it can miss named lines that are
+    on the next page."""
+    import densepack as dp
+    # A file that ends in a line break has no line after it. Without the
+    # pop, a range past the end names one line more than the file holds.
+    # The code also removes the carriage returns of a CRLF file. With them,
+    # each one meets the staged line break and renders as a second break,
+    # and the numbers count double.
+    ends_in_break = text.endswith("\n")
+    lines = [row[:-1] if row.endswith("\r") else row for row in text.split("\n")]
+    if ends_in_break:
+        lines.pop()
+    try:
+        first = max(1, int(tool_input.get("offset") or 1))
+        count = int(tool_input.get("limit") or READ_DEFAULT_LIMIT)
+    except (TypeError, ValueError):
+        return None
+    last = min(len(lines), first + count - 1)
+    if first > last:
+        return None
+    asked = lines[first - 1:last]
+    if not any(row.strip() for row in asked):
+        return None
+    staged = "\n" * (first - 1) + "\n".join(asked)
+    # The last named line keeps its line break when the file has one there.
+    # The key then does not show "no newline at end of file" for a line that
+    # is not the last line of the file.
+    if last < len(lines) or ends_in_break:
+        staged += "\n"
+    try:
+        image, patch_tokens, tags, drawn = drop_and_draw(
+            path, event, lines=(first, last, staged))
+    except Exception:  # noqa: BLE001
+        return None
+    if image is None or patch_tokens is None:
+        return None
+    # The same price test as a whole-file Read. The test compares the pages
+    # and the note against the named lines as text. Text wins a tie.
+    note_tokens = round(len(tags or "") / dp.CHARS_PER_TOKEN)
+    text_tokens = round(len("\n".join(asked).encode("utf-8")) / dp.CHARS_PER_TOKEN)
+    if patch_tokens + note_tokens >= text_tokens:
+        discard(drawn)
+        return "text"
+    return image, tags
+
+
+def _last_line(path):
+    """The number of the last line of `path`, for the image note, or None
+    when the count fails. The pack of a .doc or .docx uses its paragraphs,
+    not its bytes, and this function does not count its lines."""
+    from pathlib import Path
+    p = Path(path)
+    if p.suffix.lower() in (".doc", ".docx"):
+        return None
+    try:
+        return len(p.read_text(encoding="utf-8", errors="replace").splitlines())
+    except OSError:
+        return None
+
+
+def _once_note(tags, event):
+    """`tags` without the image note when this session and agent already
+    got it for the same images.
+
+    After the first send, the note stays in the conversation. The image
+    shows the file name and each line number. A second note bills tokens and
+    gives the model no new fact. The code claims the note here, where it
+    sends the note, and not where it builds the note. The code deletes a
+    pack that costs more than text and does not send its note."""
+    import pointer
+    last = pointer.LAST_NOTE
+    sid = str((event or {}).get("session_id") or "")
+    if not sid or not last or not tags or last[1] not in tags:
+        return tags
+    import hashlib
+    from common import claim_once
+    who = "%s|%s|%s" % (sid, (event or {}).get("agent_id") or "", last[0])
+    if claim_once("note-" + hashlib.sha256(who.encode("utf-8")).hexdigest()[:32]):
+        return tags
+    return tags.replace(last[1], "").strip()
+
+
 def _image_at_line(path, offset):
     """(image, note) for the image that holds source line `offset`, when
-    that is not image 1; None otherwise. Reads the sidecar the draw wrote."""
+    that is not image 1. None otherwise. Reads the sidecar that the pack
+    wrote."""
     import json
     from pathlib import Path
     import pointer
@@ -317,43 +437,51 @@ def _image_at_line(path, offset):
         return None
     if not _bare_names(names) or not all(isinstance(f, int) for f in firsts):
         return None
-    # The same seal _served_images() checks, so a planted sidecar is refused here too.
+    # The same seal that _served_images() checks. A false sidecar fails here too.
     if not _sealed(rec, Path(path)):
         return None
     k = sum(1 for first in firsts[1:] if first <= line)
     if k == 0:
         return None
     return (str(side.parent / names[k]),
-            pointer.later_images_note(Path(path).name, str(side.parent), names, at=k + 1))
+            pointer.later_images_note(Path(path).name, str(side.parent), names,
+                                      at=k + 1, firsts=firsts, last=_last_line(path)))
 
 
-def drop_and_draw(path, event):
-    """Copy `path`'s current bytes into a staging folder and draw them in
-    the SAME hook turn, through pointer.draw_drop_file(), the one place this
-    plugin turns a dropped file into an image. Returns (image path as a
-    string, its real patch cost, the note the reader receives, every file
-    the draw put on disk). The note holds the later-images note when the
-    file needed more than one image, and the legend's own "[#1] = <exact
-    text>" rows when anything was lifted; it is empty otherwise and never
-    holds the sidecar's path. Returns (None, None, None, None) when nothing
-    could be drawn: the file vanished, Pillow is missing, or the draw itself
-    failed; main() then falls back to the deny-and-instruct message, which
-    names the to-draw folder and lets the agent place the copy itself.
+def drop_and_draw(path, event, lines=None):
+    """Copy the current bytes of `path` into a staging folder and pack them
+    in the SAME hook call, through pointer.draw_drop_file(), the one function
+    in this plugin that packs a dropped file into an image. Returns (image
+    path as a string, its real patch cost, the note that the model gets, all
+    files that the pack put on disk). The note holds the later-images note
+    when the file needs more than one image, and the "[#1] = <exact text>"
+    rows of the legend when the pack lifted a value. Otherwise the note is
+    empty. It never holds the path of the sidecar. Returns (None, None, None,
+    None) when the pack fails, because the file is gone, Pillow is missing,
+    or the pack step failed. route() then uses the deny message, which names
+    the to-pack folder and lets the agent put the copy there.
 
-    The patch cost is read back off the drawn PNG's own pixels, through
-    densepack.image_cost(), the identical formula subagent_stop.py and
-    bash_pack.py price an image with. main() compares it against the raw
-    Read's text tokens, with no delivery fee added on this side: see the
-    "NO FLOOR, A LIVE COMPARISON INSTEAD" note above the imports.
+    The code reads the patch cost from the pixels of the packed PNG, through
+    densepack.image_cost(), the same formula that subagent_stop.py uses to
+    price an image. route() compares it against the text
+    tokens of the raw Read, with no delivery fee on this side. See the "NO
+    PRICE FLOOR. A LIVE COMPARISON." note above the imports.
 
-    The reader comes from common.actor_reader(), in one place for every
-    gate: this agent's own spawn record, then Claude Code's own
-    agent-<id>.meta.json, then this event's transcript when it is this
-    agent's own file. A Read fires from inside the reading agent's own
-    turn, so the event names that agent, never the lead's cached model.
-    FALLBACK_READER is tried LAST, never the lead's own cached reader and
-    never a skipped redirect: a gate that cannot decide a reader still
-    redirects.
+    The model comes from common.actor_reader(), in one place for all gates.
+    That function checks its sources in a fixed order and lists them in its
+    docstring. A Read fires inside the turn of the agent that reads, and
+    the event names that agent, never the cached model of the lead agent.
+    FALLBACK_READER comes LAST. The code never uses the cached model of the
+    lead agent and never skips the image. A gate that cannot name a model
+    still gives the image.
+
+    `lines` packs a Read of some lines in place of the whole file. It is
+    (first, last, staged text). The staged text holds the named lines, and
+    each line before them stays empty. The line numbers then match the file.
+    The code names the images <stem>-lines-<first>-<last>. The pages go into
+    one sheet or into the image-N-of-M route, the same as for a whole-file
+    Read, and the note ends at `last`. A slice does not serve or write the
+    sidecar of the whole file, because its images hold only the named lines.
     """
     import shutil
     from pathlib import Path
@@ -367,21 +495,26 @@ def drop_and_draw(path, event):
     except OSError:
         return None, None, None, None
 
-    # DRAWN ONCE, SERVED AGAIN. A sidecar beside the images,
+    # PACKED ONCE, SERVED AGAIN. A sidecar beside the images,
     # <folder>-<file>-images-DensePack.json, records the digest of the source
-    # bytes and the plugin version the images were drawn under. A Read of
-    # the same bytes serves those images and draws nothing, so a file read
-    # twice in one session draws once, and a folder that starts with its
-    # images copied in starts drawn. The plugin version is in the digest so
-    # a renderer change, which bumps the version, redraws.
-    served = _served_images(src)
+    # bytes and the plugin version of the images. A Read of the same bytes
+    # serves those images and packs nothing. A file read twice in one session
+    # packs once, and a folder that starts with its images copied in starts
+    # packed. The digest holds the plugin version. A renderer change raises
+    # the version, and the code packs the file again.
+    served = None if lines else _served_images(src)
     if served is not None:
         return served
+    stem = pointer.claimed_stem(path)
+    last_line = None
+    if lines:
+        stem = "%s-lines-%d-%d" % (stem, lines[0], lines[1])
+        last_line = lines[1]
 
-    # A wide burst draws one file a hook already, so the renderer's own
-    # child processes for the widening trials would only pile up: sixteen
-    # files times fifteen children. One file at a time keeps them, because
-    # that is where a person waits on one Read.
+    # A wide burst already packs one file per hook. The child processes of
+    # the renderer for the width trials then only add load, sixteen files
+    # times fifteen children. A turn of one or two Reads keeps them, because
+    # the model then waits for those Reads alone.
     try:
         batch, _turn = turn_reads(event)
         if len(batch) > 2:
@@ -390,50 +523,44 @@ def drop_and_draw(path, event):
     except Exception:  # noqa: BLE001
         pass
 
-    # A staging folder of this gate's own, never the scanned to-draw folder:
-    # pointer.py's PostToolUse scan, fired by a parallel tool call, would find
-    # a copy there, draw it a second time and send the reader a scan line
-    # about a file it never asked for. The scan does not walk drop-gate/, so
-    # a copy here is invisible to it.
-    from common import project_dir, through_link
-    drop_dir = vault_dir() / "drop-gate"
+    # A staging folder of this gate, never the to-pack folder that the scan
+    # reads. The PostToolUse scan of pointer.py, from a parallel tool call,
+    # can find a copy there, pack it a second time and send the model a scan
+    # line about a file it did not name.
+    #
+    # The folder is outside the project, in the system temp folder. A copy
+    # in the project, even under the vault, is in the Grep and Glob results
+    # of the model for as long as the pack runs, and each match comes twice,
+    # from the file and from its copy. A folder prefetch packs for a minute
+    # while the model searches the same files. A .gitignore does not hide
+    # the copy outside a git repository, and Glob reads no ignore file.
+    #
+    # mkdtemp makes a new folder with a random name for each pack. a/x.py
+    # and b/x.py read in one turn never share a copy, and two agents that
+    # read one file never delete the copy of the other. No project link can
+    # sit at the folder or above it. The file keeps its name.
+    import tempfile
     try:
-        drop_dir.mkdir(parents=True, exist_ok=True)
-        # One subfolder per source path, so a/x.py and b/x.py read in one turn
-        # never share a copy and never mix pages. The file keeps its own name.
-        import os
-        # The process id too: two agents reading one file at once each delete
-        # their copy when done, and a shared copy was deleted mid-conversion.
-        dest = drop_dir / (hashlib.sha256(
-            os.path.normcase(os.path.abspath(str(src))).encode("utf-8")).hexdigest()[:12]
-            + "-%d" % os.getpid()) / src.name
-        # A link at drop-gate, at the per-path folder, or at any folder above
-        # would carry the copy to a file outside the project. through_link()
-        # walks every folder from the per-path one up to the project, so the
-        # check runs before mkdir can follow a planted link and again after.
-        if through_link(project_dir(), dest.parent):
-            return None, None, None, None
-        dest.parent.mkdir(exist_ok=True)
-        if through_link(project_dir(), dest.parent):
-            return None, None, None, None
-        # Any link at the name itself, not a symlink alone: a second hard
-        # link is a real directory entry and takes the copy into the file it
-        # shares. The folder name is a hash of the source path, which a
-        # project can work out, so the name is guessable.
-        from common import clear_link
-        clear_link(dest)
-        shutil.copyfile(str(src), str(dest))
+        dest = Path(tempfile.mkdtemp(prefix="densepack-stage-")) / src.name
     except OSError:
         return None, None, None, None
 
-    # actor_key(event) names the agent that will read this picture, or is
-    # None for the lead. It only reaches the manifest row; the size is
-    # already this agent's own, through the model resolved above.
-    # The staging copy and its per-path folder go whatever the draw does:
-    # a draw that raises or returns nothing leaves nothing behind.
+    # actor_key(event) names the agent that reads this picture, or is None
+    # for the lead agent. It goes only into the manifest row. The size is
+    # already the size of this agent, through the model found above.
+    # The code deletes the staging copy and its folder after any result of
+    # the pack. A pack that raises an error or returns nothing leaves no
+    # file.
     try:
+        try:
+            if lines:
+                dest.write_text(lines[2], encoding="utf-8")
+            else:
+                shutil.copyfile(str(src), str(dest))
+        except OSError:
+            return None, None, None, None
         line, image = pointer.draw_drop_file(model, str(dest), actor_key(event),
-                                             pointer.claimed_stem(path))
+                                             stem, source=path)
     finally:
         try:
             dest.unlink()
@@ -446,25 +573,26 @@ def drop_and_draw(path, event):
     if image is None:
         return None, None, None, None
 
-    # draw_drop_file() appends extra rows to line after the scan sentence:
-    # "Tags: <full path>" when it wrote a legend sidecar, "Pages: <p2> ,
-    # <p3>" when the file needed more than one page, and the legend's own
-    # "[#1] copied from the file = <text>" rows under one heading. The rows
-    # after the first are the note; the scan sentence is never charged to a
-    # reader that ran no scan.
+    # draw_drop_file() adds extra rows to line after the scan sentence.
+    # "Tags: <full path>" comes when it wrote a legend sidecar, "Pages: <p2> ,
+    # <p3>" when the file needed more than one page, and the
+    # "[#1] copied from the file = <text>" rows of the legend under one
+    # heading. The rows after the first are the note. The code never charges
+    # the scan sentence to a model that ran no scan.
     #
-    # The Tags row is read for its path and then THROWN AWAY, never put in
-    # note_rows. discard() below needs the path; the reader must not see it,
-    # because a model told a value sits in a file reads the file. The marker
-    # rows carry the same values in this same message, so there is nothing
-    # left to open, and note_tokens in main() charges every one of their
-    # characters against the picture before the picture is kept.
+    # The code reads the Tags row for its path and then DROPS it. The row
+    # never goes into note_rows. discard() below needs the path. The model
+    # must not see it, because a model that learns a value is in a file reads
+    # the file. The marker rows hold the same values in this same message,
+    # and the model has no file to open. note_tokens in route() charges each
+    # of their characters against the picture before the code keeps the
+    # picture.
     rows = line.split("\n")[1:] if line else []
     more_pages = []
-    page_lines = []  # the first source line of every page, from the Lines row
+    page_lines = []  # the first source line of each page, from the Lines row
     note_rows = []
     legend = None
-    priced = None   # the pages the price is read from, when it is not image
+    priced = None   # the pages that give the price, when they are not image
     for row in rows:
         if row.startswith("Pages: "):
             more_pages = [p.strip() for p in row[len("Pages: "):].split(" , ") if p.strip()]
@@ -474,22 +602,21 @@ def drop_and_draw(path, event):
             page_lines = [int(v) for v in row[len("Lines: "):].split(" , ") if v.strip().isdigit()]
         else:
             note_rows.append(row)
-    # Every file this draw put on disk. A discard below must take the whole
-    # set: page one alone would leave later pages and the legend sidecar,
-    # which hold the same words, sitting in the vault for a Read that was
-    # never redirected.
+    # All files that this pack put on disk. A discard below must delete the
+    # full set. With page one alone, the later pages and the legend sidecar,
+    # which hold the same words, stay in the vault for a Read that got no
+    # image.
     drawn = [str(image)] + more_pages + ([legend] if legend else [])
     sheeted = False
     if more_pages:
-        # Every page in the one Read. The stack ships only when the API would
-        # leave it at the size it was drawn; a shrunk image loses the text it
-        # carries.
+        # All pages in the one Read. The stack ships only when the API keeps
+        # it at its rendered size. A shrunk image loses its text.
         try:
             import densepack as dp
             all_png = str(Path(image).with_name(Path(image).stem + "-all.png"))
-            # Side by side first: a 392 px page grid holds eight pages in one
-            # PNG, where the vertical stack holds two and a PDF bills about
-            # 1,577 tokens a page flat.
+            # Side by side first. A 392 px page grid holds eight pages in one
+            # PNG. The vertical stack holds two, and a PDF bills a flat fee of
+            # about 1,577 tokens a page.
             stack = dp.composite_grid([str(image)] + more_pages, all_png)
             if stack is None:
                 stack = dp.composite([str(image)] + more_pages, all_png)
@@ -501,16 +628,16 @@ def drop_and_draw(path, event):
             more_pages = []
             page_lines = page_lines[:1]
         else:
-            # One sheet did not fit under page.edge, so the pages go into as
-            # many sheets as it takes, largest first. A 756 px page sits two
-            # to a row, so a sheet holds about four pages, and the note names
+            # One sheet does not fit under page.edge. The pages go into as
+            # many sheets as they need, largest first. A row holds two 756 px
+            # pages, and a sheet holds about four pages. The note names
             # sheets, not pages.
             try:
                 pages_left = [str(image)] + more_pages
-                # Each image's size comes from its file header, read once.
-                # The largest grid that fits is found from those sizes, and
-                # only that grid is built, so a file of 140 images opens each
-                # image once instead of once for every grid tried.
+                # The size of each image comes from its file header, read
+                # once. The code finds the largest grid that fits from those
+                # sizes and builds only that grid. A file of 140 images then
+                # opens each image once, not once for each grid it tests.
                 from PIL import Image as _Image
                 sizes = {}
                 for p in pages_left:
@@ -532,7 +659,7 @@ def drop_and_draw(path, event):
                             made = None
                         take -= 1
                     if made is None:
-                        # a page on its own always fits, the packer drew it to
+                        # A page alone always fits, because the packer made it fit.
                         opened.append(len(sizes) - len(pages_left))
                         sheets.append(pages_left[0])
                         pages_left = pages_left[1:]
@@ -549,38 +676,46 @@ def drop_and_draw(path, event):
             except Exception:  # noqa: BLE001
                 pass
     if more_pages:
-        # No PDF: a PDF page bills a flat fee that a PNG page does not, about
-        # 1,591 tokens against 1,244 for the same page as a PNG, and a Read
-        # asks for a pages argument on a PDF of more than ten pages. Pages
-        # past what the sheets hold ride as the note below and cost the
-        # reader its own Reads. bound stays None, so the branch below is not
-        # taken.
+        # No PDF. A PDF page bills a flat fee that a PNG page does not, about
+        # 1,591 tokens against 1,244 for the same page as a PNG. A Read also
+        # needs a pages argument on a PDF of more than ten pages. The note
+        # below names the pages past the sheets, and the model reads each of
+        # them with its own Read. bound stays None, and the branch below does
+        # not run.
         bound = None
         if bound is not None:
-            # The price is still read off the PNG pages, which is what the
-            # PDF carries; a PDF has no width and height of its own.
+            # The price still comes from the PNG pages, which the PDF holds.
+            # A PDF has no width and height of its own.
             priced = [str(image)] + more_pages
             image = bound
             drawn.append(bound)
             more_pages = []
-    # The reader facing names and the note: every delivered file is
-    # <folder>-<file>-image-N-of-M-DensePack.png, and the note names the
-    # plugin, the file, the folder once and every image, in literal words. A
-    # note that tells a reader to read more pages, or that lists paths to
-    # separate images, reads to some readers as a prompt injection and is
-    # not followed.
+    # The names and the note that the model sees. Each delivered file is
+    # <folder>-<file>-image-N-of-M-DensePack.png. The note names the plugin,
+    # the file, the folder once and each image, in literal words. Some models
+    # read a note that tells them to read more pages, or that lists paths to
+    # separate images, as a prompt injection, and they do not follow it.
+    # The images of a Word file take the name of its text copy, <stem>.txt,
+    # which draw_drop_file() wrote beside them. The text then has the name
+    # that the key row of the image shows. For a line range, stem ends in
+    # -lines-<first>-<last>.
+    names_stem = stem
+    if src.suffix.lower() in (".doc", ".docx"):
+        names_stem += ".txt"
     image, more_pages, drawn = pointer.deliver_names(
-        image, more_pages, drawn, pointer.claimed_stem(path), keep=priced or ())
-    digest = _source_digest(src)
+        image, more_pages, drawn, names_stem, keep=priced or ())
+    digest = None if lines else _source_digest(src)
     if digest:
         _write_sidecar(src, digest, image, more_pages, page_lines)
-        # A draw thrown away below for costing more than text takes its
-        # sidecar with it, or the next Read serves images that are gone.
+        # When the code deletes a pack below because it costs more than
+        # text, it deletes the sidecar too. Otherwise the next Read serves
+        # images that are gone.
         drawn.append(str(_sidecar_path(src)))
     if more_pages:
         names = [Path(image).name] + [Path(p).name for p in more_pages]
         note_rows.append(pointer.later_images_note(
-            Path(path).name, str(Path(image).parent), names))
+            Path(path).name, str(Path(image).parent), names, firsts=page_lines,
+            last=last_line or _last_line(path)))
 
     try:
         import densepack as dp
@@ -591,10 +726,10 @@ def drop_and_draw(path, event):
                 width, height = im.size
             patch_tokens += dp.image_cost(width, height)
     except Exception:
-        # A page is on disk but its own price could not be read back.
-        # main() cannot compare what it cannot price, so this counts as a
-        # draw failure and falls through to the same deny-and-instruct
-        # message a Pillow-missing or vanished-file failure already uses.
+        # A page is on disk, but the code cannot read its price. route()
+        # cannot compare a pack without a price. This counts as a pack
+        # failure and leads to the same deny message as a missing Pillow or
+        # a missing file.
         discard(drawn)
         return None, None, None, None
 
@@ -603,11 +738,11 @@ def drop_and_draw(path, event):
 
 
 def discard(drawn):
-    """Delete every page and sidecar of a drawing nobody will read.
+    """Delete each page and sidecar of a pack that no model reads.
 
     common.vault_trim() skips the drop and image folders, and
-    bootstrap.prune_old_files() clears them only after a day, so a page left
-    here holds the file's own words in the project folder until then.
+    bootstrap.prune_old_files() clears them only after a day. A page left
+    here holds the words of the file in the project folder until then.
     """
     from pathlib import Path
     for name in drawn or ():
@@ -618,8 +753,9 @@ def discard(drawn):
 
 
 def is_scratch_or_temp(path):
-    """True under a .claude folder or a sandbox or scratch named folder:
-    working files, never worth a gate. The OS temp root is not exempt."""
+    """True under a .claude folder or a folder with sandbox or scratch in its
+    name. These hold working files, and the gate skips them. The OS temp root
+    is not exempt."""
     parts = [p.lower() for p in path.replace("\\", "/").split("/") if p]
     if ".claude" in parts:
         return True
@@ -627,19 +763,19 @@ def is_scratch_or_temp(path):
 
 
 def capped(event, model, cap):
-    """True when this turn's batch is too wide for this reader to be handed
-    pictures, so the Read goes through as text.
+    """True when the batch of this turn is too wide for this model to get
+    pictures. The Read then returns text.
 
-    The batch is not all on disk when the first hooks of it run. Claude Code
+    The full batch is not on disk when its first hooks run. Claude Code
     writes an assistant message one content block to a line as the reply
-    streams, and it starts read-only tools while it is still writing, so the
-    hooks that fire first see a short batch and only the later ones see the
-    whole one. A second look after the drawing sees the same short batch,
-    because a picture already on disk is returned at once, and waiting for
-    the file to stop growing fails on the gaps the note in common.py records.
-    So the cap holds every read that starts after its batch has landed,
-    which is most of a wide one, and up to `cap` pictures still reach the
-    turn.
+    streams, and it starts read-only tools while it still writes. The hooks
+    that fire first read a short batch, and only the later ones read the
+    full batch. A second check after the pack reads the same short batch,
+    because a picture already on disk returns at once. A wait until the file
+    stops growing fails on the gaps that the note in common.py records. For
+    this reason the cap holds each read that starts after its batch is on
+    disk, which is most of a wide batch, and up to `cap` pictures still
+    reach the turn.
     """
     if cap is None:
         return False
@@ -649,17 +785,17 @@ def capped(event, model, cap):
     if claim_once("%s-%s" % (event.get("session_id") or "", turn_id)):
         queue_cap_row(
             event, model,
-            "%d reads in one turn, past the %s cap of %d files or %s bytes, "
-            "all of them text"
+            "%d reads in one turn passed the %s cap of %d files or %s bytes, "
+            "and all of them stayed text"
             % (len(batch), model, cap, format(BURST_BYTES, ",")),
             sum(text_bytes(name) for name in batch))
     return True
 
 
 def text_bytes(path):
-    """The bytes a raw Read of `path` would return, 0 when it cannot be
-    measured. Only the receipt row uses it, so a missing file costs the row
-    a number and costs the read nothing."""
+    """The bytes that a raw Read of `path` returns, or 0 when the measure
+    fails. Only the receipt row uses it. A missing file costs the row a
+    number and costs the read nothing."""
     from pathlib import Path
     try:
         return Path(path).stat().st_size
@@ -667,11 +803,11 @@ def text_bytes(path):
         return 0
 
 
-# ONE DRAW PER FILE. prompt_card.py starts the files of a folder drawing in
-# the background, and the reader's own Reads of those files can arrive while
-# that is still running. A Read whose file is being drawn waits for that draw
-# and is served from it, rather than drawing the same file a second time.
-# A lock older than DRAW_LOCK_STALE seconds is left by a draw that died.
+# ONE PACK PER FILE. prompt_card.py starts a pack of the files of a folder in
+# the background, and the Reads of those files by the model can arrive while
+# that pack still runs. A Read of a file in a pack waits for that pack and
+# gets its images. It does not pack the same file a second time. A lock older
+# than DRAW_LOCK_STALE seconds comes from a pack that did not finish.
 DRAW_LOCK_STALE = 300
 
 
@@ -683,12 +819,12 @@ def _draw_lock(path):
         key = str(Path(path).resolve()).lower()
     except OSError:
         key = str(path).lower()
-    return tmp_dir() / ("densepack-drawing-%s" % hashlib.sha256(
+    return tmp_dir() / ("densepack-packing-%s" % hashlib.sha256(
         key.encode("utf-8")).hexdigest()[:16])
 
 
 def draw_once(path, event):
-    """drop_and_draw(), with one draw of a file at a time."""
+    """drop_and_draw(), with one pack of a file at a time."""
     import os
     import time
     lock = _draw_lock(path)
@@ -721,22 +857,24 @@ def draw_once(path, event):
 
 
 def prefetch_one(args):
-    """route() for one file ahead of its Read, so the Read finds its images
-    already drawn. One job of prefetch()."""
+    """route() for one file before its Read. The Read then finds its images
+    already packed. One job of prefetch()."""
     event, path, n = args
     ev = dict(event)
     ev.update({"hook_event_name": "PreToolUse", "tool_name": "Read",
                "tool_input": {"file_path": path},
-               "tool_use_id": "predraw-%d" % n})
+               "tool_use_id": "prepack-%d" % n})
     route(ev, prefetch=True)
 
 
 def prefetch(event, paths):
-    """Draw these files at once, split across processes, before the reader
-    asks for them. prompt_card.py calls this for the files of a folder the
-    message is about: each Read then serves images already on disk instead
-    of drawing its own file while the reader waits. A file the Read would
-    keep as text is left alone, and so is a batch past BURST_BYTES."""
+    """Pack these files at once, split across processes, before the model
+    names them in a Read. prompt_card.py calls this for the files of a folder
+    that the message names. Each Read then serves images already on disk and
+    does not pack its own file while the model waits. The function skips a
+    file under 1,000 bytes or over READ_MAX_BYTES, and it skips a batch past
+    BURST_BYTES. route() skips each other file that the Read keeps as
+    text."""
     import os
     from common import BURST_BYTES
     jobs = []
@@ -761,11 +899,120 @@ def prefetch(event, paths):
         list(pool.map(prefetch_one, jobs))
 
 
-def route(event, prefetch=False):
-    """What this gate answers a Read event with: the hook output to emit, or
-    None to let the Read run as written. prefetch is a draw ahead of the
-    Read, from glob_draw.py: it draws and seals the images the Read will be
-    handed, and never denies. Never raises."""
+# READ-BEFORE-EDIT. Claude Code lets Edit change a file only after a Read of
+# that same file. A Read that this gate sends to the image is a Read of the
+# PNG, and Claude Code then rejects an Edit of the source. For this reason a
+# Read that Claude Code can run on the real file runs on it. read_image.py
+# then replaces its result with the image, in the same result. The Read on
+# the real file costs nothing, because the API bills only what reaches the
+# model. This gate still redirects a .doc or .docx, because Read rejects a
+# Word file.
+def read_runs_on_source(path):
+    """True when the Read runs on the real file and read_image.py replaces
+    its result after the Read."""
+    from pathlib import Path
+    return Path(path).suffix.lower() not in (".doc", ".docx")
+
+
+def _drawable_text(path):
+    """(size, `drawn_text`, text) for a file whose words a whole-file Read
+    packs, or None when the Read keeps it as text. The Read keeps a file as
+    text when it is under 1 KB, over READ_MAX_BYTES, binary, in a script the
+    font cannot render, or holds the line marks of the renderer. The size of
+    a .doc or .docx comes from the words it holds, which are `drawn_text`.
+    route() and draws_on_read() call it, and a Read and a Grep get the same
+    answer."""
+    from pathlib import Path
+    try:
+        size = Path(path).stat().st_size
+    except OSError:
+        return None
+    # A .docx is a zip of XML. Its size and its bytes do not show what a
+    # Read delivers. The container is mostly styles and parts, and it holds
+    # the nulls that the check below rejects. The code first gets the
+    # paragraphs and measures them, the same text that pointer.py packs.
+    # A .docx that does not open as a zip is not a Word file. Most often it
+    # is a renamed text file. It goes to the plain text route below, because
+    # Read rejects the suffix in any case. Without this route, a readable
+    # file becomes unreadable.
+    drawn_text = None
+    suffix = Path(path).suffix.lower()
+    if suffix in (".docx", ".doc"):
+        import pointer
+        drawn_text = (pointer.docx_text(path) if suffix == ".docx"
+                      else pointer.doc_text(path)) or None
+        if drawn_text:
+            size = len(drawn_text.encode("utf-8"))
+    # A file under 1 KB passes as text. The pack of a 483 byte file took
+    # 2.5 s and 469 MB to save 10 tokens.
+    if size < 1000:
+        return None
+    if size > READ_MAX_BYTES:
+        return None
+    if drawn_text is None:
+        try:
+            raw = Path(path).read_bytes()
+        except OSError:
+            return None
+        if b"\x00" in raw:
+            return None
+    # A file that the font cannot render, such as Chinese, Japanese or Korean
+    # text, becomes empty boxes that no model can read. It stays text.
+    # freetype_glyph and style load in a fraction of the time of codepack and
+    # need no NumPy. A Read that the saved images serve does not pay the load
+    # time of codepack.
+    import freetype_glyph
+    import style
+    font = (style.load().get("font.regular") or [""])[0]
+    text = (drawn_text if drawn_text is not None
+            else raw.decode("utf-8", "replace"))
+    if not freetype_glyph.font_covers(text, font):
+        return None
+    # The line marks of the renderer are U+E000 to U+E003, and the renderer
+    # rejects a source that holds one. Such a file stays text and gets no
+    # deny.
+    if any(mark in text for mark in "\ue000\ue001\ue002\ue003"):
+        return None
+    return size, drawn_text, text
+
+
+def draws_on_read(path, event):
+    """True when a whole-file Read of `path` returns an image.
+
+    The same checks that route() makes before it packs, in the same order.
+    The file is not an image and not a file of the plugin, the model gets
+    images, the folder is not a to-pack, vault or scratch folder, and
+    _drawable_text() passes. The function skips the pack and its price test,
+    because a check must not pack. It also skips the burst cap, because the
+    cap counts the Reads of this turn, and a Grep is not a Read.
+    grep_gate.py calls it before it lets a Grep return a whole file as text.
+    A .doc or .docx returns False, because a Grep reads its zip bytes, never
+    its words, and the Grep does not bypass the image. Never raises."""
+    try:
+        from pathlib import Path
+        if is_image(path) or is_plugin_own(path):
+            return False
+        if Path(path).suffix.lower() in (".doc", ".docx"):
+            return False
+        if not gets_images(event):
+            return False
+        if is_drop_folder(path) or is_scratch_or_temp(path):
+            return False
+        if _drawable_text(path) is None:
+            return False
+        from common import ensure_pillow
+        return bool(ensure_pillow())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def route(event, prefetch=False, post=False):
+    """The answer of this gate to a Read event. Returns the hook output to
+    emit, or None to let the Read run as written. prefetch is a pack before
+    the Read, from prefetch(), which prompt_card.py starts. It packs and
+    seals the images that the Read gets, and it never rejects the Read. post
+    is the call from read_image.py after the Read ran. That call gets the
+    image that replaces the result. Never raises."""
     try:
         if disabled(event.get("session_id")):
             return None
@@ -779,9 +1026,9 @@ def route(event, prefetch=False):
         path = tool_input.get("file_path")
         if not isinstance(path, str) or not path:
             return None
-        # THE LINE PULL, common.line_pull(): a few lines by their green
-        # number pass before the sibling redirect below, so a pull from a
-        # sidecar comes back as text and never as the image again.
+        # THE LINE PULL, common.line_pull(). A Read of a few lines by their
+        # green number passes before the sibling redirect below. A pull from
+        # a sidecar then returns text and never the image again.
         if line_pull(tool_input):
             return None
 
@@ -789,165 +1036,144 @@ def route(event, prefetch=False):
             return None
         if is_plugin_own(path):
             return None
+        # Before the Read, let it run on the real file. Claude Code then
+        # allows a later Edit. read_image.py gives the image after the Read
+        # runs. A prefetch still packs ahead, and the image is ready when the
+        # Read ends. A .doc or .docx continues below, because Read cannot
+        # open a Word file.
+        if not post and not prefetch and read_runs_on_source(path):
+            return None
 
-        # IMAGES ONLY TO MEASURED READERS. Both routes below hand this
-        # actor a drawn image: the sibling redirect immediately after, and
-        # drop_and_draw() further down. An agent running a model that was
-        # never scored on a condensed image, or one that cannot be named
-        # at all, must get the raw text instead, which is what returning 0
-        # here does: an unscored reader misreads facts from an image.
+        # IMAGES ONLY TO MEASURED MODELS. The two routes below give this
+        # actor a packed image, the sibling redirect right after this check
+        # and drop_and_draw() further down. An agent on a model that no
+        # benchmark scored on a condensed image, or on a model with no name,
+        # must get the raw text. A return of None here does that. An unscored
+        # model misreads facts from an image.
         #
-        # This asks about the ACTOR, never the file. Sonnet gets images
-        # images, and a Haiku lead gets text.
+        # This check is about the ACTOR, never the file. Sonnet gets images,
+        # and a Haiku lead agent gets text.
         if not gets_images(event):
             return None
 
-        # Sealed: a redirect hands the reader the image in place of the text,
-        # so only a pair this machine's plugin wrote is swapped.
+        # Sealed. A redirect gives the model the image in place of the text.
+        # The code replaces only a pair that the local plugin sealed.
         from common import pack_images, sealed_sibling_image
         image = sealed_sibling_image(path)
         if image is not None:
             tool_input["file_path"] = image
             answer = {"hookEventName": "PreToolUse", "updatedInput": tool_input}
-            # A long output is several images, and image 1 alone would read
-            # as the whole of it.
+            # A long output is several images. Without the note, a model reads
+            # image 1 as the full output.
             names = pack_images(path)
             if len(names) > 1:
-                # _Path, because main() binds Path further down and a bare
-                # Path here is an unbound local: the branch raised, the
-                # catch-all swallowed it, and the Read went out as raw text.
+                # _Path, because route() binds Path further down, and a bare
+                # Path here is an unbound local. The branch then raises, the
+                # catch-all hides the error, and the Read returns raw text.
                 from pathlib import Path as _Path
                 import pointer
-                answer["additionalContext"] = pointer.later_images_note(
+                note = pointer.later_images_note(
                     _Path(path).name, str(_Path(image).parent),
                     [_Path(n).name for n in names])
+                answer["additionalContext"] = (note if prefetch
+                                               else _once_note(note, event))
             return {"hookSpecificOutput": answer}
         if is_drop_folder(path):
             return None
         if is_scratch_or_temp(path):
             return None
         # A Read of more than LINE_PULL_MAX lines is a whole read and is not
-        # exempt, or a reader could read a file as text in a few wide slices.
-        # The pull of a few lines passes at the top of main(), through
-        # common.line_pull().
+        # exempt. Otherwise a model can read a file as text in a few wide
+        # slices. The pull of a few lines passes at the top of route(),
+        # through common.line_pull().
 
-        # THE PICTURE CAP. A reader whose profile carries a measured cap,
-        # common.BURST_CAPS and common.BURST_BYTES, draws pictures only for
-        # a turn inside that cap and reads a wider turn as text whole. The
-        # test is on the whole batch the assistant message asked for, not on
-        # this Read alone, so every hook in the batch reads the same answer
-        # off the same transcript and no counter file is needed. A very wide
-        # Sonnet turn of pictures saves input tokens and costs more in output
-        # than it saves, so only sonnet has a cap.
+        # THE PICTURE CAP. A model whose profile holds a measured cap,
+        # common.BURST_CAPS and common.BURST_BYTES, gets pictures only for a
+        # turn inside that cap and reads a wider turn fully as text. The test
+        # uses the full batch of the assistant message, not this Read alone.
+        # Each hook in the batch then reads the same answer from the same
+        # transcript, and the code needs no counter file. A very wide Sonnet
+        # turn of pictures saves input tokens but costs more in output than
+        # it saves. For this reason only sonnet has a cap.
         model = actor_reader(event) or FALLBACK_READER
         cap = burst_cap(model)
         if capped(event, model, cap):
             return None
 
         from pathlib import Path
-        try:
-            size = Path(path).stat().st_size
-        except OSError:
+        drawable = _drawable_text(path)
+        if drawable is None:
             return None
-        # A .docx is a zip of XML, so neither its size nor its bytes say what
-        # a Read delivers: the container is mostly styles and parts, and it
-        # carries the nulls the check below refuses. Pull the paragraphs out
-        # first and weigh those, the same text pointer.py draws.
-        # A .docx that will not open as a zip is not a Word file at all, most
-        # often a text file somebody renamed. It falls through to the plain
-        # text route below, because Read refuses the suffix either way and
-        # leaving it would make a readable file unreadable.
-        drawn_text = None
-        suffix = Path(path).suffix.lower()
-        if suffix in (".docx", ".doc"):
-            import pointer
-            drawn_text = (pointer.docx_text(path) if suffix == ".docx"
-                          else pointer.doc_text(path)) or None
-            if drawn_text:
-                size = len(drawn_text.encode("utf-8"))
-        # A file under 1 KB passes as text: converting a 483 byte file took
-        # 2.5 s and 469 MB to save 10 tokens.
-        if size < 1000:
-            return None
-        if size > READ_MAX_BYTES:
-            return None
-        if drawn_text is None:
-            try:
-                raw = Path(path).read_bytes()
-            except OSError:
-                return None
-            if b"\x00" in raw:
-                return None
-        # A file the font cannot draw, such as Chinese, Japanese or Korean
-        # text, converts to empty boxes nobody can read, so it stays text.
-        # freetype_glyph and style load in a fraction of codepack's time and
-        # need no NumPy, so a Read the saved images serve does not pay for them.
-        import freetype_glyph
-        import style
-        font = (style.load().get("font.regular") or [""])[0]
-        text = (drawn_text if drawn_text is not None
-                else raw.decode("utf-8", "replace"))
-        if not freetype_glyph.font_covers(text, font):
-            return None
-        # The renderer's own line marks are U+E000 to U+E003 and it refuses a
-        # source holding one, so such a file stays text rather than a deny.
-        if any(mark in text for mark in "\ue000\ue001\ue002\ue003"):
-            return None
+        size, drawn_text, text = drawable
 
-        # NO FLOOR HERE. See the module note above the imports: this route
-        # pays no delivery fee, so there is no fixed character count below
-        # which packing loses, and stub_chars() answered a question priced
-        # for the other routes. drop_and_draw() always attempts the draw;
-        # the comparison right below it is what decides, on this file's own
-        # measured price, the same way subagent_stop.py decides with no
-        # floor of its own.
-        # Without freetype-py or NumPy the renderer falls back to Pillow and
-        # draws a different, harder image, so the file stays text instead.
+        # NO PRICE FLOOR HERE. See the module note above the imports. This
+        # route pays no delivery fee, and no fixed character count marks
+        # where the pack loses. drop_and_draw() always tries the pack, and
+        # the comparison right below it sets the result from the measured
+        # price of this file. ensure_pillow() also checks freetype-py and
+        # NumPy. Without them, the renderer uses Pillow alone and makes a
+        # different image that is harder to read. The file then stays text.
         from common import ensure_pillow
         if not ensure_pillow():
             return None
+        # A Read of some lines gets a picture of those lines alone, or the
+        # lines as text when that costs less. See _slice_image().
+        if drawn_text is None and (tool_input.get("offset") or tool_input.get("limit")):
+            sliced = _slice_image(path, text, tool_input, event)
+            if sliced == "text":
+                return None
+            if sliced is not None:
+                tool_input["file_path"], tags = sliced
+                answer = {"hookEventName": "PreToolUse",
+                          "updatedInput": tool_input}
+                if tags and not prefetch:
+                    tags = _once_note(tags, event)
+                    if tags:
+                        answer["additionalContext"] = tags
+                return {"hookSpecificOutput": answer}
         image, patch_tokens, tags, drawn = draw_once(path, event)
         if image is not None:
             import densepack as dp
             text_tokens = round(size / dp.CHARS_PER_TOKEN)
-            # The note ships in the same message as the picture, so it is
-            # part of what the picture costs. A file whose note costs more
-            # than the file's own text loses the comparison and is read as
-            # text, which is the whole guarantee, per file, on that file's own
-            # measurement. No floor and no cap: the count decides.
+            # The note ships in the same message as the picture, and it is
+            # part of the cost of the picture. A file whose note costs more
+            # than its text loses the comparison, and the model reads it as
+            # text. The comparison runs for each file, on the measure of that
+            # file, and the count sets the result.
             note_tokens = round(len(tags or "") / dp.CHARS_PER_TOKEN)
             if patch_tokens is not None and patch_tokens + note_tokens >= text_tokens:
-                # Measured cheaper as text. This route's own fee is zero,
-                # so the comparison is the image's real patches against the
-                # text tokens the raw Read would have cost, nothing added
-                # either side. The picture nobody should read is deleted
-                # and the Read proceeds exactly as written.
-                # Every page and the legend sidecar go with it, not page
-                # one alone: they hold the same words.
+                # Measured cheaper as text. The fee of this route is zero.
+                # The comparison is the real patches of the image against the
+                # text tokens of the raw Read, with nothing added on either
+                # side. The code deletes the picture, and the Read runs
+                # exactly as written. The code deletes all pages and the
+                # legend sidecar, not page one only, because they hold the
+                # same words.
                 discard(drawn)
                 return None
             # A Read that starts past image 1 gets the image that holds its
-            # first line, so a Read of lines 400 to 460 does not get lines 1
-            # to 318 again.
+            # first line. A Read of lines 400 to 460 then does not get lines
+            # 1 to 318 again.
             at = _image_at_line(path, tool_input.get("offset"))
             if at is not None:
                 image, tags = at
             tool_input["file_path"] = image
-            # tags carries the exact text of every id, hash and long number
-            # draw_drop_file() lifted, in this same message, so a reader
-            # quotes a value instead of reading it off pixels and without
-            # opening anything. Empty when the file held nothing to lift and
-            # fitted one image.
+            # tags holds the exact text of each id, hash and long number that
+            # draw_drop_file() lifted, in this same message. A model then
+            # quotes a value and does not read it from pixels or open a file.
+            # Empty when the file held nothing to lift and fitted one image.
             answer = {
                 "hookEventName": "PreToolUse",
                 "updatedInput": tool_input,
             }
-            # One line saying what arrived, and nothing telling the reader
-            # what to do about it. A line that tells the reader to answer from
-            # the picture, or that a doubtful value is one Read away, makes
-            # the reader check values it read right, and each check costs a
-            # turn. The redirect carries the marker rows and the image note,
-            # when there are any, and no path to any file.
+            # One line that states what arrived, and no instruction to the
+            # model. A line that tells the model to answer from the picture,
+            # or that a doubtful value is one Read away, makes the model check
+            # values it read correctly, and each check costs a turn. The
+            # redirect holds the marker rows and the image note, when there
+            # are any, and no path to any file.
+            if tags and not prefetch:
+                tags = _once_note(tags, event)
             if tags:
                 answer["additionalContext"] = tags
             return {"hookSpecificOutput": answer}
@@ -959,11 +1185,12 @@ def route(event, prefetch=False):
         marker = marker_path(sid, path)
         if marker.exists():
             return None
-        # Written before the deny goes out: a fault after this line lets
-        # the Read through with the marker already down, which only means
-        # this one file was never deflected. The reverse order could deny
-        # the same file forever.
-        # Moved onto the name, so a link planted at it takes no write.
+        # The code writes the marker before it sends the deny. A fault after
+        # this line lets the Read run with the marker already on disk.
+        # The only effect is that this file gets no redirect. The reverse
+        # order can deny the same file forever.
+        # The code moves the marker onto the name, and a false link at the
+        # name gets no write.
         from common import write_text_atomic
         if not write_text_atomic(marker, "1"):
             return None
@@ -972,9 +1199,9 @@ def route(event, prefetch=False):
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
-                # The project names its own files, so nothing that acts inside
-                # a double-quoted word reaches this message, and a path
-                # holding brackets or spaces still names the real file.
+                # The project names its own files. No character that acts
+                # inside a double-quoted word reaches this message, and a path
+                # with brackets or spaces still names the real file.
                 "permissionDecisionReason": MESSAGE % (
                     format(size, ","), quoted_path(path)),
             }
@@ -984,7 +1211,7 @@ def route(event, prefetch=False):
 
 
 def main():
-    # NEVER CRASH A CALLER. This runs before every Read in every session.
+    # NEVER CRASH A CALLER. This runs before each Read in each session.
     try:
         out = route(read_event())
         if out:

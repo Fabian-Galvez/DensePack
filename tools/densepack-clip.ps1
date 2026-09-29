@@ -1,20 +1,20 @@
-# Pack whatever text is on the clipboard into an image and put that image back on
-# the clipboard, so the next paste puts the image in place of the text.
+# Pack the text on the clipboard into an image and put that image on the
+# clipboard. The next paste puts the image in place of the text.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File densepack-clip.ps1
 #
-# -Size N sets the glyph size in px for one run. Without it the packer draws
-# the plugin's one page: common.CODE_PX, 17 px unless DENSEPACK_CODE_PX names
-# another number.
+# -Size N sets the glyph size in px for one run. Without it, the packer makes
+# the plugin's one page at common.CODE_PX. That size is 17 px unless
+# DENSEPACK_CODE_PX names another number.
 #
-# -Vault NAME saves the text and every image in a new folder under
+# -Vault NAME saves the text and all images in a new folder under
 # tools\NAME. The folder name is the first three words of the text.
 # DensePack.ahk passes ctrl-shift-vault for the hotkeys and
 # ctrl-right_click-vault for the menu. Without -Vault the files go to a
 # folder under %TEMP%.
 #
 # -SetImage PATH puts that one image on the clipboard and does nothing else.
-# DensePack.ahk uses it to paste image 2 and every image after it.
+# DensePack.ahk uses it to paste image 2 and each image after it.
 
 param(
     [int]$Size = 0,
@@ -28,7 +28,8 @@ Add-Type -AssemblyName System.Drawing
 
 function Get-ClipText {
     $text = $null
-    # The clipboard is single threaded apartment only, so it is read on an STA thread.
+    # The clipboard works only in a single threaded apartment. This function
+    # reads it on an STA thread.
     $runspace = [runspacefactory]::CreateRunspace()
     $runspace.ApartmentState = 'STA'
     $runspace.ThreadOptions = 'ReuseThread'
@@ -74,13 +75,13 @@ if ($SetImage) {
     exit 0
 }
 
-# The folder name for one pack: the first three words of the text, with only
+# The folder name for one pack is the first three words of the text, with only
 # letters, digits and hyphens, and 40 characters at most.
 function Get-PackName($text) {
     $words = @($text -split '\s+' | Where-Object { $_ } | Select-Object -First 3)
     $name = (($words -join '-') -replace '[^\p{L}\p{Nd}\-]', '').Trim('-')
     if ($name.Length -gt 40) { $name = $name.Substring(0, 40).Trim('-') }
-    # Windows refuses these names for a folder.
+    # Windows rejects these names for a folder.
     if (-not $name -or $name -match '^(con|prn|aux|nul|com\d|lpt\d)$') { $name = "text-$name".Trim('-') }
     return $name
 }
@@ -105,10 +106,10 @@ if (-not $text -or -not $text.Trim()) {
     exit 1
 }
 
-# Never call bare "python": from AutoHotkey's environment that name can resolve to
-# the Windows Store alias stub, which opens the Microsoft Store instead of running.
-# A candidate has to print its own version, so a python.bat that ignores its
-# arguments and exits 0 never becomes the interpreter.
+# The script does not call bare "python". In the AutoHotkey environment, that
+# name can resolve to the Windows Store alias stub. The stub opens the Microsoft
+# Store and does not run Python. A candidate must print its own version. A
+# python.bat that ignores its arguments and exits 0 does not pass this check.
 function Test-RealPython($c) {
     if ($c -notmatch '\.exe$') { return $false }
     $out = (& $c -c "import sys; print('DENSEPACKPY', sys.version_info[0], sys.version_info[1])" 2>$null |
@@ -120,8 +121,8 @@ function Test-RealPython($c) {
 }
 
 function Resolve-Python {
-    # python3 and py as well, the same list the installer searches: a machine
-    # the installer accepted must not be told here that it has no Python.
+    # The search includes python3 and py, the same list as the installer. A
+    # machine that passes the installer check also passes this check.
     $candidates = @(Get-Command python, python3, py -All -ErrorAction SilentlyContinue |
                     ForEach-Object { $_.Source })
     $candidates += "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe"
@@ -168,7 +169,7 @@ if ($code -ne 0 -or -not $out) {
 
 $images = @($out | Where-Object { $_ -match '\.png$' } | ForEach-Object { Join-Path $work $_ })
 
-# DensePack.ahk reads this file to find the folder and every image of this
+# DensePack.ahk reads this file to find the folder and all images of this
 # pack. Line 1 is the folder. Each later line is one image, in order.
 $state = Join-Path $env:LOCALAPPDATA 'DensePack'
 New-Item -ItemType Directory -Path $state -Force | Out-Null
@@ -177,7 +178,7 @@ New-Item -ItemType Directory -Path $state -Force | Out-Null
 
 if ($images.Count -gt 1 -and -not $Quiet) {
     [System.Windows.Forms.MessageBox]::Show(
-        "That text needed $($images.Count) images. Image 1 is on the clipboard. The text and every image are in:`n$work",
+        "That text needed $($images.Count) images. Image 1 is on the clipboard. The text and all images are in:`n$work",
         "DensePack") | Out-Null
 }
 
@@ -186,13 +187,13 @@ Set-ClipImage $images[0]
 if (-not $Quiet) {
     $chars = $text.Length
     $img = [System.Drawing.Image]::FromFile($images[0])
-    # The real charge: one token per 28 by 28 patch, partial patches rounded up.
+    # The image costs one token per 28 by 28 patch. The count rounds a partial
+    # patch up.
     $imgTokens = [math]::Ceiling($img.Width / 28) * [math]::Ceiling($img.Height / 28)
     $img.Dispose()
-    # Characters per token. PowerShell cannot import the Python constant, so
-    # this line carries the number. plugin/scripts/densepack.py holds
-    # CHARS_PER_TOKEN, and tests/test_divisor_agreement.py fails if this copy
-    # stops matching it.
+    # Characters per token. PowerShell cannot import the Python constant. This
+    # line holds a copy of the number. plugin/scripts/densepack.py holds
+    # CHARS_PER_TOKEN, and this copy must match it.
     $txtTokens = [math]::Round($chars / 2.40)
     Write-Output "$chars chars, $txtTokens tokens as text, $imgTokens tokens as image"
 }

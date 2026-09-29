@@ -1,50 +1,46 @@
-"""Runs right after the assistant collects a helper's answer. The bill.
+"""PostToolUse hook. It gives the lead model the images and the receipt.
 
-HOW THIS FILE FITS, in plain words: subagent_stop.py left pictures on the
-queue. This script tells the assistant where those pictures are and to read
-them instead of the text, and it prints the receipt: how many characters, how
-big the picture, what each cost, what was saved. It also keeps the running
-total that session_end.py turns into the final bill.
+Claude Code runs this hook after each tool call. subagent_stop.py puts images
+on the queue. This hook tells the lead model where the images are and tells it
+to read them in place of the text. It prints the receipt: the number of
+characters, the image size, the cost of each, and the saving. It also keeps
+the running total. session_end.py makes the final bill from that total.
 
-PostToolUse hook. Hand the lead the images and the receipt.
+The settings file stores one of four receipt modes:
 
-Four receipt modes, stored in the settings file:
-
-  default  One 6 column table per batch of agents, one row per agent that
-           returned images, plus a label row and a BATCH TOTALS row for this
-           batch at the bottom of that same table. That row is part of the
-           table always, in default and verbose alike; the totals setting
-           does not gate it. A second label row and a CONVERSATION TOTALS row,
-           the whole conversation's own sums, follow it when the totals
-           setting is on; with the setting off that second row is held back
-           for the wrap-up only. The running total also prints as its own "Conversation so
-           far" line under the table either way. BATCH TOTALS reads BATCH
-           TOTALS, not CONVERSATION TOTALS, because the numbers under it are
-           this batch's own; CONVERSATION TOTALS carries the whole
-           conversation's sums, the same figures the "Conversation so far"
-           line already states.
-  verbose  The same batch with the arithmetic split into its own columns and a
-           Dimensions column, plus a per image table for any agent that
-           returned more than one image. BATCH TOTALS prints in every
-           response, the same as default. CONVERSATION TOTALS follows it
-           when the totals setting is on, and prints by default in this mode
-           when the totals setting has never been touched (auto follows verbose). Both
-           totals rows spell the model name out in full, Haiku 4.5, Sonnet 5,
-           Opus 5, Fable 5, rather than the single letter default uses.
-  light    The compact 6 column table with no totals row at all, whatever
-           the totals setting says. The "Conversation so far" line still prints
-           under it.
+  default  One 4 column table for each batch of agents, with one row for each
+           agent that returned images. A label row and a BATCH TOTALS row for
+           the batch close the same table. The table always has this row, in
+           default and in verbose. The totals setting does not control it.
+           When the totals setting is on, a second label row and a
+           CONVERSATION TOTALS row follow it. That row holds the sums for the
+           whole conversation. When the setting is off, the hook keeps that
+           second row for the wrap-up only. In the two cases, the running
+           total also prints as a separate "Conversation so far" line under
+           the table. The BATCH TOTALS row holds the numbers for this batch
+           only. The CONVERSATION TOTALS row holds the sums for the whole
+           conversation, the same figures as the "Conversation so far" line.
+  verbose  The same batch table with the arithmetic in separate columns and a
+           Dimensions column. It adds a table of the images for each agent
+           that returned more than one image. BATCH TOTALS prints in each
+           response, the same as in default. CONVERSATION TOTALS follows it
+           when the totals setting is on. In this mode it also prints while
+           the totals setting is at its default, auto, which follows verbose.
+           The two totals rows give the full model name, such as Haiku 4.5,
+           Sonnet 5, Opus 5 or Fable 5. The default mode uses a single letter.
+  light    The compact 4 column table with no totals row, whatever the totals
+           setting is. The "Conversation so far" line still prints under it.
   quiet    No table in the response. The hook writes the table to
-           .claude/tmp/densepack-receipt-last.md and tells the lead in one
-           line to show it only when the user's prompt asked for a report.
-           The numbers are still measured and the manifest still gains a row
-           for every finished agent; only the printed table is withheld.
+           .claude/tmp/densepack-receipt-last.md. It tells the lead model in
+           one line to show the table only when the prompt asked for a report.
+           The hook still measures the numbers, and the manifest still gets a
+           row for each finished agent. Only the printed table stays out.
 
-The character U+2248, almost equal to, replaces = in the default and light
-tables' column names, because a token count taken from characters or pixels
-is an estimate.
-This hook's output is JSON, so json.dumps writes the character as an ASCII
-escape and Claude Code decodes it. Nothing here prints raw UTF-8 to a console.
+The character U+2248 (almost equal to) replaces = in the column names of the
+default and light tables, because a token count from characters or pixels is
+an estimate. The output of this hook is JSON. json.dumps writes the character
+as an ASCII escape, and Claude Code decodes it. This hook prints no raw UTF-8
+to a console.
 """
 
 import os
@@ -52,11 +48,10 @@ import sys
 
 
 def _nothing_queued():
-    """The cheap exit, taken before anything else is imported. True when there
-    is certainly no queue to drain, which is the case after nearly every tool
-    call. os.path is used rather than pathlib because importing pathlib costs
-    about 15 ms on its own, and this runs after every
-    tool call."""
+    """The first exit. The hook calls this before it imports anything else.
+    Return True when no queue exists. That is the case after most tool calls.
+    This check uses os.path and not pathlib, because the pathlib import alone
+    costs about 15 ms and this check runs after each tool call."""
     root = os.environ.get("CLAUDE_PROJECT_DIR")
     if not root:
         return False
@@ -64,43 +59,50 @@ def _nothing_queued():
         root, ".claude", "tmp", "densepack-queue.jsonl"))
 
 
-# The drop scan below imports nothing from common.py, so an empty scan costs
-# nothing: common.py is not loaded until a report is actually queued or a
-# drop file is actually found, the same reason _nothing_queued() above uses
-# os.path rather than pathlib.
+# The drop scan below imports nothing from common.py. An empty scan adds no
+# import time. The hook loads common.py only when a report is on the queue or
+# the scan finds a drop file. _nothing_queued() above uses os.path in place of
+# pathlib for the same reason.
 
 
-# A scan claims a to-draw file by renaming it in place to
-# CLAIM_PREFIX<epoch seconds>-<8 hex>-<name>. The file never leaves to-draw,
-# where no prune deletes anything. A claim older than CLAIM_STALE_SECONDS was
-# left by a scan that was killed, and gets its name back. A file that could
-# neither be converted nor set aside keeps its bytes under FAILED_PREFIX<name>,
-# which the scan skips.
+# A scan claims a to-pack file. It renames the file in place to
+# CLAIM_PREFIX<epoch seconds>-<8 hex>-<name>. The file stays in to-pack, and
+# no prune deletes anything there. A claim older than CLAIM_STALE_SECONDS
+# comes from a scan that stopped before it finished. The next scan gives that
+# file its old name back. A file that the hook cannot pack, and that
+# _set_aside() cannot move, keeps its bytes under FAILED_PREFIX<name>. The
+# scan skips that file.
 CLAIM_PREFIX = ".densepack-claim-"
 FAILED_PREFIX = ".densepack-failed-"
 CLAIM_STALE_SECONDS = 1800
+# The folder in to-pack that holds each packed file next to its images.
+PACKED_FOLDER = "packed"
 
 
 def _find_drop_file():
-    """Every file waiting in the to-draw folder or the drop folder, as
-    (None, [paths]), or None when both are empty, which is true after nearly
-    every tool call. Cheap on purpose: os.walk on two folders, nothing else,
-    no watcher and no hook on Read. Every file is offered, so one file held
-    open by another program does not block the files after it."""
+    """Return each file in the to-pack folder or the drop folder as
+    (None, [paths]). Return None when the two folders are empty. That is the
+    result after most tool calls. The scan uses os.walk on the two folders
+    and nothing more. It has no watcher and no hook on Read. The scan returns
+    each file. A file that another program holds open does not stop the files
+    after it."""
     root = os.environ.get("CLAUDE_PROJECT_DIR")
     if not root:
         return None
-    # The folder a person copies a file into to have it drawn is "to-draw".
-    # The walk also reaches a file left in the "drop" folder or in one of its
-    # subfolders. The reader name is resolved by draw_drop_file(), because
-    # this scan runs before common is imported.
-    bases = [os.path.join(root, ".claude", "densepack-vault", "to-draw"),
+    # The scan packs each file in the "to-pack" folder.
+    # A packed file moves into to-pack/packed/. The walk skips that folder
+    # and packs each file one time only.
+    # The walk also finds a file in the "drop" folder of an older version, or
+    # in one of its subfolders. draw_drop_file() gets the model name, because
+    # this scan runs before the hook imports common.
+    bases = [os.path.join(root, ".claude", "densepack-vault", "to-pack"),
              os.path.join(root, ".claude", "densepack-vault", "drop")]
-    # A link is never followed and never offered: the draw refuses it, so it
-    # would sit here and slow every later tool call.
-    # common.is_junction, inline: this scan runs before common is imported.
-    # os.path.isjunction is 3.12 and the hooks run on 3.10, where a junction
-    # reads as a plain folder unless the reparse tag is read.
+    # The scan does not follow or return a link. The pack step rejects a
+    # link. A link left in the list slows each later tool call.
+    # This is common.is_junction, inline, because this scan runs before the
+    # hook imports common. os.path.isjunction is new in Python 3.12, and the
+    # hooks run on 3.10. On 3.10, os.path reports a junction as a plain folder
+    # unless the code reads the reparse tag.
     import stat as _stat
 
     def isjunction(p):
@@ -116,7 +118,8 @@ def _find_drop_file():
     for base in bases:
         for folder, dirs, names in os.walk(base):
             dirs[:] = [d for d in dirs if not (os.path.islink(os.path.join(folder, d))
-                                               or isjunction(os.path.join(folder, d)))]
+                                               or isjunction(os.path.join(folder, d)))
+                       and not (folder == base and d == PACKED_FOLDER)]
             for name in sorted(names):
                 path = os.path.join(folder, name)
                 if not os.path.isfile(path) or os.path.islink(path):
@@ -141,27 +144,25 @@ def _find_drop_file():
 
 
 if __name__ == "__main__":
-    # Read stdin once, here, before anything decides whether to exit. A
-    # TaskStop tool call carries no report to drain, so the queue-and-drop
-    # check just below would otherwise see nothing queued and exit before
-    # main() ever learns a stop happened, and nothing on disk would record it.
-    # _RAW_STDIN is handed to read_event() inside main() instead of letting
-    # it read stdin a second time, which would find the pipe already
-    # drained. Reconfigured to utf-8 first, the same fix read_event() itself
-    # applies before reading: Windows pipes hook stdin as cp1252 otherwise,
-    # which turns every UTF-8 quote into mojibake with no error raised.
+    # Read stdin one time, here, before any exit check. A TaskStop tool call
+    # has no report to drain. Without this read, the queue-and-drop check
+    # below finds an empty queue and exits before main() gets the stop. Then
+    # no file on disk records the stop.
+    # main() passes _RAW_STDIN to read_event(). A second read of stdin finds
+    # an empty pipe. The code sets stdin to utf-8 first. read_event() does the
+    # same before it reads. Without it, Windows gives hook stdin as cp1252,
+    # and each UTF-8 quote becomes mojibake with no error.
     try:
         sys.stdin.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
         pass
     _RAW_STDIN = sys.stdin.read()
     _DROP_HIT = _find_drop_file()
-    # A cheap substring check, not a json.loads: this runs before json is
-    # even imported below, the same reason _nothing_queued() uses os.path
-    # instead of pathlib. A false positive costs one ordinary run through
-    # main(), the same cost every batch with something queued already
-    # pays; it must never skip a real TaskStop call, which is the one
-    # failure that matters here.
+    # A substring check, not json.loads. This line runs before the json
+    # import below. _nothing_queued() uses os.path in place of pathlib for
+    # the same reason. A false positive costs one regular run of main(). Each
+    # batch with a queue already pays that cost. The check must not skip a
+    # real TaskStop call. That is the one failure that matters here.
     _TASK_STOP = '"TaskStop"' in _RAW_STDIN
     if _DROP_HIT is None and _nothing_queued() and not _TASK_STOP:
         raise SystemExit(0)
@@ -169,62 +170,64 @@ else:
     _DROP_HIT = None
     _RAW_STDIN = None
 
-import json  # noqa: E402  imported below the cheap exit, not above it
+import json  # noqa: E402  this import comes after the first exit
 import re  # noqa: E402
 import time  # noqa: E402
 try:
     import densepack as _dp  # noqa: E402
 except ImportError:
-    # Pillow is missing. Nothing can be drawn or priced, and a hook that
-    # raised here would fail on every tool call; bootstrap.py already tells
-    # the user Pillow is missing.
+    # Pillow is missing. The hook cannot pack or price anything. A hook that
+    # raises here fails on each tool call. bootstrap.py already shows on
+    # screen that Pillow is missing.
     raise SystemExit(0)
 
-# The divisor as it prints inside a receipt's "Characters / N = text tokens"
-# column. Built from the constant, never typed as a literal: the receipt has
-# to name the same number the receipt's own arithmetic used.
+# The divisor as it prints in the "Characters / N = text tokens" column of a
+# receipt. The code builds it from the constant and never types it as a
+# literal. The receipt must show the same number that its arithmetic used.
 DIV = "%.2f" % _dp.CHARS_PER_TOKEN
 
 from common import (append_lifecycle, code_size, disabled, drain_queue, emit,  # noqa: E402
-                    read_event, read_leads,
+                    read_event, read_leads, swap_applies,
                     read_totals, receipts_mode, status_shown,
                     tmp_dir, MEASURED_MODELS, vault_dir,
                     resolved_reader, UNKNOWN_READER,
                     totals_shown, write_totals, report_pointer, stub_pointer,
                     STALE_AFTER, DEAD_AFTER, jsonl_rows)
 
-# The one non-ASCII character in the output, written as an escape so this
-# source file stays plain ASCII.
+# The one non-ASCII character in the output. The code writes it as an escape
+# to keep this source file plain ASCII.
 APPROX = "\u2248"
 PATCH = 28
 RECEIPT_FILE = "densepack-receipt-last.md"
 
-# The one row that introduces the inlined legend. It says where the rows came
-# from and nothing else. It names no file, because a model told a value sits
+# The one row before the inline legend. It says where the rows came from and
+# nothing else. It names no file, because a model that reads that a value is
 # in a file opens that file. It gives no order, because an order not to
-# verify, arriving beside a tool result, is the shape of a prompt injection.
-# It is one line, because its characters are charged against the picture's
-# saving in drop_read_gate.main().
+# verify, next to a tool result, looks like a prompt injection. It is one
+# line, because drop_read_gate.main() subtracts its characters from the
+# saving of the image.
 MARKER_HEADING = ("DensePack copied the rows below out of the file before it "
-                  "drew the picture. Each row is the exact text behind one "
+                  "packed the file into an image. Each row is the exact text behind one "
                   "[#N] tag:")
 
-# The label every marker row carries about its own text. A claim read once in
-# a heading loses to a reader's own habit of verifying numbers, so the claim
-# sits in the row, beside the value. It states the provenance only: a label
-# that warned against the picture reads as an order to trust the row.
+# The label that each marker row has about its own text. A model has a habit
+# of checking numbers. A claim that the model reads one time in a heading does
+# not stop that habit. The label is in the row, next to the value, for that
+# reason. It states only where the text came from. A model reads a label with
+# a warning against the image as an order to trust the row.
 MARKER_SOURCE = "copied from the file"
 
 
 def marker_rows(rows):
-    """The sidecar's rows as the message delivers them: every "[#1] = value"
-    row says in the row itself that the text is the file's own bytes.
+    """Return the sidecar rows in the form the message gives them. Each
+    "[#1] = value" row states in the row that the text is the exact bytes of
+    the file.
 
-    The value is never touched, so the row still holds the sidecar's exact
-    characters. A row with no " = " in it, the escalated-tag header
-    legend_sidecar() writes for a {#n} or <#n> report, passes through
-    unchanged. Splitting on the FIRST " = " is what keeps a value that
-    contains " = " whole, because a tag never contains one.
+    The code does not change the value. The row still holds the exact
+    characters of the sidecar. A row with no " = " passes through unchanged.
+    legend_sidecar() writes such a row as the escalated-tag header for a {#n}
+    or <#n> report. The split on the FIRST " = " keeps a value that contains
+    " = " whole, because a tag never contains one.
     """
     out = []
     for row in rows.split("\n"):
@@ -243,51 +246,52 @@ def _drop_only_payload(drop_line):
     }
 
 
-# WORD FILES THE AGENT FINDS ON ITS OWN, midway through a task.
+# WORD FILES THAT THE AGENT FINDS IN THE MIDDLE OF A TASK.
 #
-# prompt_card.py catches a .doc or .docx named in the message the user typed.
-# That hook fires once, when the user presses enter, and never again, so it
-# cannot see a file the agent discovers later by running Glob, Grep or a shell
-# command. Before this scan those files had no route at all: Claude Code's
-# Read rejects a binary file before any PreToolUse hook runs, so
-# drop_read_gate.py never gets the call, and the agent was left spending an
-# extra tool call packing the file by hand.
+# prompt_card.py finds a .doc or .docx that a typed message names. That
+# hook runs one time, when the prompt arrives. It cannot find a file that
+# the agent finds later with Glob, Grep or a shell command. The Read tool of
+# Claude Code rejects a binary file before any PreToolUse hook runs, and
+# drop_read_gate.py does not get that call. Without this scan, the agent
+# spends an extra tool call to pack the file by hand.
 #
-# This hook already runs after EVERY tool call and is handed that tool's
-# output, which is the one place a mid-task discovery is visible. A path found
-# here is drawn immediately, so the image is waiting before the agent asks for
-# it, and the read costs the same single turn every other file type costs.
+# This hook runs after EACH tool call and gets the output of that tool. That
+# output is the one place where the name of such a file shows. The hook packs
+# a path that it finds here at once. The image is ready before the agent asks
+# for it, and the read costs one turn, the same as each other file type.
 #
-# The agent was going to run that Glob anyway. Drawing inside the same call
-# adds no tool call of its own.
+# The agent runs that Glob in any case. The pack step inside the same call
+# adds no tool call.
 WORD_IN_OUTPUT = re.compile(
     r"""((?:[A-Za-z]:[\\/]|[\\/])[^"'<>|\r\n*?]*?\.docx?)\b""",
     re.IGNORECASE)
-# Tools whose output can name a file on disk. A Read is not here: a Read of a
-# Word file never reaches this hook, and a Read of anything else names no new
-# path worth scanning.
+# Tools with output that can name a file on disk. Read is not in the list. A
+# Read of a Word file does not reach this hook. A Read of any other file names
+# no new path to scan.
 WORD_SCAN_TOOLS = ("Glob", "Grep", "Bash", "LS")
-# How much of one tool result is searched. Shell output runs to megabytes and
-# a path worth finding sits in a listing, not in the tail of a build log.
+# The number of characters of one tool result that the scan searches. Shell
+# output can be megabytes long. A useful path is in a file listing, not at the
+# end of a build log.
 WORD_SCAN_CHARS = 100_000
-# Ceiling per tool call, so one listing of a documents folder cannot turn a
-# single Glob into a long render. The rest keep their old behaviour.
+# The limit for each tool call. It prevents a long render after one Glob of a
+# documents folder. A file past the limit stays unpacked, and the agent can
+# still pack it by hand.
 WORD_SCAN_MAX = 6
 
 
 def word_pages_from_tool(event):
-    """Draw every .doc and .docx this tool call just revealed, and return the
-    pointer sentence for them, or "" when it revealed none.
+    """Pack each .doc and .docx that this tool call shows. Return the pointer
+    sentence for them, or "" when the call shows none.
 
-    Never raises. Every fault leaves the file alone, which is the same
-    failure mode the rest of this file chooses: the agent still gets Claude
-    Code's own refusal and can still pack the file by hand.
+    This function does not raise. On each fault it leaves the file alone. The
+    rest of this file uses the same failure mode. The agent still gets the
+    rejection from Claude Code and can still pack the file by hand.
     """
     try:
         if str(event.get("tool_name") or "") not in WORD_SCAN_TOOLS:
             return ""
         text = str(event.get("tool_response") or "")[:WORD_SCAN_CHARS]
-        # The cheap pre-filter, ahead of the regex and every stat call.
+        # The first filter, before the regex and each stat call.
         if ".doc" not in text.lower():
             return ""
         from pathlib import Path
@@ -303,14 +307,14 @@ def word_pages_from_tool(event):
         return _word_rows(text, event, Path, prompt_card, dp, gate,
                           pack_images)
     except Exception:  # noqa: BLE001
-        # One try around the whole walk, not just the file calls. A fault
-        # here must never reach the tool call that fired this hook.
+        # One try around the whole walk, not only the file calls. A fault
+        # here must not reach the tool call that started this hook.
         return ""
 
 
 def _word_rows(text, event, Path, prompt_card, dp, gate, pack_images):
-    """The drawing walk behind word_pages_from_tool(), split out so one try
-    in the caller covers all of it."""
+    """The pack walk for word_pages_from_tool(). It is a separate function
+    because one try in the caller then covers all of it."""
     rows, seen = [], set()
     for match in WORD_IN_OUTPUT.finditer(text):
         if len(rows) >= WORD_SCAN_MAX:
@@ -326,9 +330,9 @@ def _word_rows(text, event, Path, prompt_card, dp, gate, pack_images):
             continue
         seen.add(key)
         try:
-            # This file IS the pointer module _word_file_sentence() wants.
-            # prompt_card imports it lazily inside its own function, so
-            # prompt_card.pointer does not exist to hand over.
+            # This file IS the pointer module that _word_file_sentence()
+            # takes. prompt_card imports it only inside its own function.
+            # prompt_card.pointer does not exist to pass.
             sentence = prompt_card._word_file_sentence(
                 path, event, dp, gate, sys.modules[__name__], pack_images)
         except Exception:  # noqa: BLE001
@@ -339,23 +343,23 @@ def _word_rows(text, event, Path, prompt_card, dp, gate, pack_images):
 
 
 def image_stem(path):
-    """The name part every image of `path` starts with: the file's folder
-    inside the project, each separator a dash, then the file's name with its
-    extension.
+    """Return the first part of the name of each image of `path`. It is the
+    folder of the file in the project, with a dash for each separator, then
+    the file name with its extension.
 
     README.md at the project root gives README.md, and src/README.md gives
-    src-README.md. The extension stays, so same.py and same.md in one folder
-    never share an image name or a sidecar; without it, a turn that read both
-    could hand the first Read the second file's image. A file outside the
-    project keeps only its own folder's name. The folder part keeps its last
-    80 characters and the name its first 48, so a deep path still fits a
-    Windows path.
+    src-README.md. The extension stays. same.py and same.md in one folder
+    then never share an image name or a sidecar. Without the extension, a
+    turn that reads the two files can give the first Read the image of the
+    second file. A file outside the project keeps only the name of its own
+    folder. The folder part keeps its last 80 characters and the name keeps
+    its first 48. A deep path then still fits in a Windows path.
     """
     from pathlib import Path
     from common import project_dir
 
     def safe(part):
-        # A hyphen joins the folders to the name, so a hyphen inside a part
+        # A hyphen joins the folders to the name. A hyphen inside a part
         # becomes _. a-b/c.py and a/b-c.py then get two names, not one.
         return re.sub(r"[^A-Za-z0-9_.]", "_", part)
 
@@ -367,37 +371,39 @@ def image_stem(path):
     try:
         folders = parent.relative_to(Path(project_dir()).resolve()).parts
     except (ValueError, OSError):
-        # A file outside the project keeps only its own folder's name, so an
-        # image name never carries the user name or the machine's folder layout.
+        # A file outside the project keeps only the name of its own folder.
+        # An image name then never holds the account name or the folder
+        # layout of the machine.
         folders = parent.parts[-1:]
     head = "-".join(safe(p) for p in folders if p)[-80:].lstrip("-")
-    # The cut keeps the extension, so two long names that differ only there
-    # still get two image names.
+    # The cut keeps the extension. Two long names that differ only in the
+    # extension still get two image names.
     stem = safe(src.stem)[:40] + safe(src.suffix)[:8]
     return "%s-%s" % (head, stem) if head else stem
 
 
 def claimed_stem(path, base=None):
-    """image_stem(path), made unique to this one source file.
+    """Return image_stem(path), unique to this one source file.
 
-    image_stem() is readable, not unique: a-b/c.py and a_b/c.py, two files
-    outside the project with the same folder name, and two long names that
-    match in their first 40 characters all give one stem, and the second draw
-    would overwrite the first file's images. A claim file beside the images,
-    created in one step with O_EXCL, holds the source's real path. The first
-    file keeps the plain stem; another file with the same stem gets ~2, ~3.
-    No hash reaches the name.
+    image_stem() gives a readable name, not a unique one. Three cases give
+    one stem: a-b/c.py and a_b/c.py, two files outside the project with the
+    same folder name, and two long names that match in their first 40
+    characters. The second pack then overwrites the images of the first
+    file. A claim file next to the images holds the real path of the source.
+    The code makes it in one step with O_EXCL. The first file keeps the plain
+    stem. Another file with the same stem gets ~2, ~3, up to ~50. After 50
+    names, the name gets ~ and 8 hex characters of a sha256 of the path.
     """
     from pathlib import Path
     from common import project_dir, through_link, vault_dir
-    # base is image_stem(path) on the Read route, and the file's own name on
-    # the to-draw route.
+    # base is image_stem(path) on the Read route and the file name on the
+    # to-pack route.
     if base is None:
         base = image_stem(path)
     images = vault_dir() / "images"
     try:
-        # A committed link at images/ would carry the claim, which holds the
-        # source's full path, to a folder outside the project.
+        # A committed link at images/ sends the claim to a folder outside
+        # the project. The claim holds the full path of the source.
         if through_link(project_dir(), images):
             return base
         images.mkdir(parents=True, exist_ok=True)
@@ -406,18 +412,19 @@ def claimed_stem(path, base=None):
         me = os.path.normcase(os.path.realpath(str(path)))
     except OSError:
         return base
-    # 50 names, not more: a project can commit claim files for every name,
-    # and reading thousands of them made each Read take half a minute. Past
-    # 50 the name carries 8 hex characters of the path, which no committed
-    # claim can take in advance.
+    # 50 names, not more. A project can commit claim files for each name. A
+    # read of thousands of them makes each Read take half a minute. After 50,
+    # the name holds 8 hex characters of the path. No committed claim can
+    # take that name in advance.
     for n in range(1, 51):
         stem = base if n == 1 else "%s~%d" % (base, n)
         claim = images / ("%s-claim-DensePack.txt" % stem)
         try:
             fd = os.open(str(claim), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         except FileExistsError:
-            # Only a regular file is read, and only as far as the path's own
-            # length: a committed claim can be huge, or a FIFO that blocks.
+            # The code reads only a regular file, and only up to the length
+            # of the path. A committed claim can be very large, or a FIFO
+            # that blocks.
             try:
                 if Path(claim).is_file():
                     with open(claim, encoding="utf-8", errors="replace") as fh:
@@ -436,15 +443,16 @@ def claimed_stem(path, base=None):
 
 
 def deliver_names(image, more, drawn, stem, keep=()):
-    """Name what a reader gets <stem>-image-N-of-M-DensePack.<suffix>, N
-    from 1, where stem comes from image_stem() on the Read route.
+    """Rename each file that the model gets to
+    <stem>-image-N-of-M-DensePack.<suffix>, with N from 1. On the Read route,
+    stem comes from image_stem().
 
-    image is the first file, more the rest, drawn every file the draw put on
-    disk. A page that went into a sheet is removed, because the sheet holds
-    it; a file named in keep stays, because the price is read off it. The
-    suffix stays, so a PDF keeps .pdf. Returns (image, more, drawn) with the
-    new names. A reader finds an image by its name, so the name says the
-    file and the count and nothing else.
+    image is the first file and more is the rest. `drawn` is each file that
+    the pack step wrote to disk. The code removes a page that went into a sheet,
+    because the sheet holds it. A file named in keep stays, because the code
+    reads the price from it. The suffix stays, and a PDF keeps .pdf. Return
+    `(image, more, drawn)` with the new names. A model finds an image by its
+    name. The name gives the file and the count and nothing else.
     """
     delivered = [str(image)] + [str(p) for p in more]
     folder = os.path.dirname(delivered[0])
@@ -470,44 +478,91 @@ def deliver_names(image, more, drawn, stem, keep=()):
     return named[0], named[1:], named + rest + kept
 
 
-def later_images_note(src_name, folder, names, at=1):
-    """The note beside image `at` of a file that became several images. It
-    names the plugin, the file, the folder once, and every image."""
+# The last note that later_images_note() built, as (images key, note). The
+# Read gate drops the note when this session already got it for the same
+# images.
+LAST_NOTE = None
+
+
+def later_images_note(src_name, folder, names, at=1, firsts=None, last=None):
+    """Return the note next to image `at` of a file that became several
+    images. It names the plugin, the file, the folder one time, and this
+    image. When `firsts` gives the first lines, it also gives the first and
+    last source lines of each image. `last` is the last line of the file.
+
+    A note that names each image in full costs about 1,150 tokens for a 61
+    image file, and the hook sends it again on each Read of the file. The names
+    differ only in the image number. This note names this image and gives the
+    lines of each image by number."""
+    global LAST_NOTE
     total = len(names)
-    # The project names its own files, and this sentence reaches the reader as
-    # the plugin's words, so nothing a shell or a line break acts on goes in.
+    # The project names its own files. The model reads this sentence as the
+    # words of the plugin. For that reason, no shell metacharacter and no
+    # line break goes in.
     from common import no_metacharacters
     # The file name only. The folder and the image names go through as they
-    # are, because the reader opens them: a project folder called
-    # "My Project (x86)" cleans to a path that does not exist, and an image
-    # name built from a bracketed file name cleans to a file that is not
-    # there. grep_gate.py follows the same rule for the same reason.
+    # are, because the model opens them. A clean of a project folder called
+    # "My Project (x86)" gives a path that does not exist. A clean of an image
+    # name built from a file name with brackets gives a file that is not
+    # there. grep_gate.py uses the same rule for the same reason.
     src_name = no_metacharacters(src_name)
+    firsts = list(firsts or [])
+    if len(firsts) != total or not all(isinstance(f, int) for f in firsts):
+        firsts = []
+    # The last line of each image. It is one less than the first line of the
+    # next image. For the last image, it is the last line of the file.
+    ends = [f - 1 for f in firsts[1:]] + [last if isinstance(last, int) else "end"]
+    span = ", lines %d to %s" % (firsts[at - 1], ends[at - 1]) if firsts else ""
     rows = ["DensePack plugin converted %s into %d png images in %s. This is "
-            "image %d of %d, %s." % (src_name, total, folder, at, total, names[at - 1])]
-    for n, name in enumerate(names, 1):
-        if n != at:
-            rows.append("Image %d of %d is %s." % (n, total, name))
-    return " ".join(rows)
+            "image %d of %d, %s%s." % (src_name, total, folder, at, total,
+                                       names[at - 1], span)]
+    # The names that deliver_names() writes differ only in the image number.
+    # The name above gives the model each other name. When any name does not
+    # match that pattern, the note gives the names in full. The full names
+    # prevent a model from opening a file that is not there.
+    tail = "-image-1-of-%d-DensePack.png" % total
+    stem = names[0][:-len(tail)] if names[0].endswith(tail) else None
+    one_pattern = stem and all(n == "%s-image-%d-of-%d-DensePack.png" % (stem, i, total)
+                               for i, n in enumerate(names, 1))
+    if firsts and one_pattern:
+        rows.append("The first and last lines of the images: %s." % ", ".join(
+            "#%d=%d-%s" % (i, f, e) for i, (f, e) in enumerate(zip(firsts, ends), 1)))
+    else:
+        for n, name in enumerate(names, 1):
+            if n != at:
+                rows.append("Image %d of %d is %s%s." % (
+                    n, total, name,
+                    ", lines %d to %s" % (firsts[n - 1], ends[n - 1]) if firsts else ""))
+    # A review read drop_read_gate.py one image per turn, 8 turns for one
+    # file, where a text Read gives the whole file in one call. The model
+    # still picks the images it needs, and it Reads them in one turn.
+    rows.append("Read all the other images that you need in one turn.")
+    full = " ".join(rows)
+    LAST_NOTE = ("%s|%s" % (folder, "|".join(names)), full)
+    return full
 
 
-# A .docx is a zip of XML, not text. read_text() hands back the container,
-# the null check in draw_drop_file drops it, and Claude Code's Read refuses
-# the suffix before a hook can offer anything, so a Word file never reaches a
-# model at all. Its paragraphs are the whole of what a reader wants from one,
-# so they are what the plugin draws. Stdlib only, because a format most
-# projects hold a few of is not worth an install.
+# A .docx is a zip of XML, not text. read_text() returns the container, and
+# the null check in draw_drop_file drops it. The Read tool of Claude Code
+# rejects the suffix before a hook can return anything. Without this code, a
+# Word file never reaches a model. The paragraphs are all the text a model
+# uses from a .docx, and the plugin packs them. The code uses the standard
+# library only. Most projects hold only a few files of this format. That is
+# too few to justify an extra install.
 DOCX_BODY = "word/document.xml"
 DOCX_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 def docx_text(src):
-    """The visible text of a .docx, or None when the file will not open.
+    """Return the visible text of a .docx, or None when the file does not
+    open.
 
-    One line per paragraph, with tabs and line breaks kept where they sit.
-    Styles, images and revision marks are dropped, because a reader wants the
-    words. Returns None rather than raising, so a caller treats an unopenable
-    file the same as any other source it could not draw."""
+    One line for each paragraph, with tabs and line breaks in place. A list
+    item is a paragraph and has its own line. A table row is one line, with
+    its cells joined by " | ". The text copy keeps the rows of the table. The
+    code drops styles, images and revision marks, because a model uses the
+    words. Return None and do not raise. A caller then treats a file that
+    does not open the same as any other source that it could not pack."""
     import xml.etree.ElementTree as ET
     import zipfile
     try:
@@ -519,8 +574,8 @@ def docx_text(src):
         root = ET.fromstring(body)
     except ET.ParseError:
         return None
-    lines = []
-    for para in root.iter(DOCX_NS + "p"):
+
+    def para_text(para):
         out = []
         for node in para.iter():
             if node.tag == DOCX_NS + "t":
@@ -529,23 +584,47 @@ def docx_text(src):
                 out.append("\t")
             elif node.tag == DOCX_NS + "br":
                 out.append("\n")
-        lines.append("".join(out))
+        return "".join(out)
+
+    def walk(element, lines):
+        # Document order. A paragraph is one line and a table row is one
+        # line. Each other element, such as a content control, holds only
+        # paragraphs and tables. The walk goes into it.
+        for child in element:
+            if child.tag == DOCX_NS + "p":
+                lines.append(para_text(child))
+            elif child.tag == DOCX_NS + "tbl":
+                for row in child.findall(DOCX_NS + "tr"):
+                    cells = []
+                    for cell in row.findall(DOCX_NS + "tc"):
+                        inner = []
+                        walk(cell, inner)
+                        cells.append(" ".join(part.replace("\n", " ")
+                                              for part in inner if part.strip()))
+                    lines.append(" | ".join(cells))
+            else:
+                walk(child, lines)
+
+    lines = []
+    body_node = root.find(DOCX_NS + "body")
+    walk(body_node if body_node is not None else root, lines)
     return "\n".join(lines)
 
 
 # The old binary .doc is an OLE2 container, a small filesystem of streams
-# inside one file. The words sit in the WordDocument stream, but not as one
-# run: a piece table in the Table stream says which byte range holds which
-# part of the document and whether that piece is 8-bit or UTF-16. Walking it
-# is the only way to get the text in reading order without Word's own
-# machinery mixed in. Scored 100% against four documents built from known
-# text, 17 September 2026. Standard library only, like the .docx route.
+# inside one file. The words are in the WordDocument stream, but not as one
+# run. A piece table in the Table stream gives the byte range of each part of
+# the document, and whether that part is 8-bit or UTF-16. A walk of that
+# table is the only way to get the text in reading order without the Word
+# program. The walk returns 100% of the text of four documents built from
+# known text. The code uses the standard library only, like the .docx route.
 DOC_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 _OLE_FREE, _OLE_END = 0xFFFFFFFE, 0xFFFFFFFF
 
 
 def _ole_streams(raw):
-    """{name: bytes} for every stream in an OLE2 file, {} when malformed."""
+    """Return {name: bytes} for each stream in an OLE2 file, or {} when the
+    file is malformed."""
     import struct
     if len(raw) < 512 or not raw.startswith(DOC_MAGIC):
         return {}
@@ -564,7 +643,7 @@ def _ole_streams(raw):
         off = 512 + n * ssz
         return raw[off:off + ssz]
 
-    # the sector list: 109 entries in the header, then a chain of sectors
+    # The sector list has 109 entries in the header, then a chain of sectors.
     fat_sectors = list(struct.unpack_from("<109I", raw, 0x4C))
     nxt, guard = difat_start, 0
     while nxt not in (_OLE_FREE, _OLE_END) and guard < 4096:
@@ -606,7 +685,7 @@ def _ole_streams(raw):
             struct.unpack_from("<I", dirdata, off + 0x74)[0],
             struct.unpack_from("<I", dirdata, off + 0x78)[0]))
 
-    # a stream under 4 KB lives in the mini stream the root entry points at
+    # A stream under 4 KB is in the mini stream that the root entry names.
     root = next((e for e in entries if e[1] == 5), None)
     minifat, ministream = [], b""
     if root:
@@ -630,10 +709,11 @@ def _ole_streams(raw):
 
 
 def doc_text(src):
-    """The visible text of an old binary .doc, or None when it will not open.
+    """Return the visible text of an old binary .doc, or None when the file
+    does not open.
 
-    Returns None rather than raising, so a caller treats an unopenable file
-    the same as any other source it could not draw."""
+    Return None and do not raise. A caller then treats a file that does not
+    open the same as any other source that it could not pack."""
     import struct
     from pathlib import Path
     try:
@@ -675,7 +755,7 @@ def doc_text(src):
                     break
                 else:
                     break
-        if not pieces:                 # Word 6 and 95 keep one plain run
+        if not pieces:                 # Word 6 and 95 use one plain run
             fc_min, fc_mac = struct.unpack_from("<II", wd, 0x18)
             if fc_mac > fc_min:
                 pieces = [(fc_min, fc_mac - fc_min, True)]
@@ -691,39 +771,47 @@ def doc_text(src):
     except (struct.error, IndexError, ValueError):
         return None
 
-    # Word's own marks: 0x07 ends a cell, 0x0C a page, 0x0D a row, 0x13 to
-    # 0x15 wrap a field, 0x01 stands in for a picture. None are words.
+    # The control marks of Word. 0x07 ends a cell, 0x0C a page, 0x0D a row.
+    # 0x13 to 0x15 wrap a field. 0x01 marks a picture. None of them are words.
     text = text.replace("\r", "\n").replace("\x07", "\n").replace("\x0c", "\n")
     text = "".join(c for c in text if c >= " " or c in "\n\t")
     return text or None
 
 
-def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
-    """Draw the file found in the to-draw folder, at the reader's pixel size,
-    into images/, then delete the copy. Returns (line, image_path): one
-    line naming the image, and the image's own Path, or (None, None) when
-    nothing was drawn: the model has no measured size, Pillow is missing, or
-    the draw itself failed. A failed draw deletes the copy.
+def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None, source=None,
+                   out_dir=None, keep_source=False):
+    """Pack the file from the to-pack folder into images/, at the pixel size
+    of the model, then delete the copy. With out_dir, the images go into that
+    folder in place of images/. With keep_source, the file stays in place.
+    The to-pack scan uses the two and then moves the file next to its images.
+    For a .doc or .docx, the code also writes the packed text next to the
+    images as <stem>.txt. The images use the name of that text file as their
+    stem and as the file= name in their key row. Return (line, image_path).
+    line names the image, and image_path is the Path of the image. Return
+    (None, None) when the code packed nothing, because the model has no
+    measured size, Pillow is missing, or the pack step failed. A failed pack
+    deletes nothing, and the caller handles the file.
 
-    When ident_legend holds identifiers, line carries the legend's OWN ROWS,
-    "[#1] copied from the file = <exact text>", under one heading row. This
-    function reads those rows back out of the sidecar file it has just
-    written, so the value in the message is the record's own characters and
-    no second format exists to be updated separately. marker_rows() adds the
-    label and nothing else. Both draw paths below leave ident_legend empty,
-    so no rows are written.
+    When ident_legend holds identifiers, line holds the rows of the legend
+    itself, "[#1] copied from the file = <exact text>", under one heading
+    row. This function reads those rows back from the sidecar file that it
+    wrote. The value in the message is then the exact characters of the
+    record, and no second format needs a separate update. marker_rows() adds
+    the label and nothing else. The two pack paths below leave ident_legend
+    empty, and the code writes no rows.
 
-    The "Tags: <full path>" row is still built, because discard() has to
-    delete the sidecar it names, but both callers strip it before the line
-    reaches a model: naming that file reads as an instruction to open it.
+    The code still builds the "Tags: <full path>" row, because discard()
+    must delete the sidecar that it names. The two callers remove the row
+    before the line reaches a model. A model reads the name of that file as
+    an instruction to open it.
 
-    The one place this plugin turns a dropped file into an image.
-    pointer.py's own scan below reaches it through _draw_drop_file, the
-    status line alone, the only thing that scan ever needed.
-    drop_read_gate.py calls this directly, so an ordinary file with no
-    sibling image is still redirected. Calling this in the SAME hook turn
-    means the Read is rewritten straight to the image, no agent action and
-    no retry turn, the same shape the sibling-image redirect already uses.
+    This is the one place where this plugin packs a dropped file into an
+    image. The scan in this file calls it through _draw_drop_file() and
+    uses only the status line. That scan needs nothing more.
+    drop_read_gate.py calls this function directly. A regular file with no
+    sibling image then still gets a redirect. A call in the SAME hook turn
+    rewrites the Read to go straight to the image, with no agent action and
+    no retry turn. The sibling-image redirect already works the same way.
     """
     import hashlib
     from pathlib import Path
@@ -732,26 +820,27 @@ def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
     px = MEASURED_MODELS.get(model)
     if px is None:
         return None, None
-    # A test override: DENSEPACK_PX_OVERRIDE set in the environment draws
-    # every drop at that size, so another size can be measured for cost and
-    # accuracy. Unset, which is every normal session, nothing changes. Never
-    # a settings key, never a default.
+    # A test override. When the environment sets DENSEPACK_PX_OVERRIDE, the
+    # code packs each drop at that size. A test can then measure another size
+    # for cost and accuracy. A normal session does not set the variable, and
+    # nothing changes. It is never a settings key and never a default.
     override = os.environ.get("DENSEPACK_PX_OVERRIDE", "").strip()
     if override.isdigit() and 6 <= int(override) <= 16:
         px = int(override)
     src = Path(src_path)
-    # The name the file had when a person put it in to-draw. The scan renames
-    # a file it claims, and that claim name must never reach an image.
+    # The name of the file as it arrived in to-pack. The scan renames a
+    # file that it claims. That claim name must never reach an image.
     shown = Path(name) if name else src
-    # This function deletes src. A path through a link or a junction may point
-    # outside the project, so it is never touched.
+    # This function deletes src. A path through a link or a junction can go
+    # outside the project. The code does not touch such a path.
     from common import project_dir, through_link
     if through_link(project_dir(), src):
         return None, None
-    # No age rule: a copied or moved file keeps an old time, and was deleted
-    # unseen. A file whose draw fails is left for the caller: the to-draw scan
-    # moves it to not-converted/, and the Read gate deletes its own staging
-    # copy. Nothing here deletes a file it could not draw.
+    # No age rule. A copied or moved file keeps an old time, and an age rule
+    # deletes it before a model sees it. When the pack step fails, the caller
+    # handles the file. The to-pack scan moves it to not-converted/, and the
+    # Read gate deletes its own staging copy. Nothing here deletes a file that
+    # it could not pack.
     try:
         mtime = src.stat().st_mtime
     except OSError:
@@ -760,131 +849,159 @@ def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
         suffix = src.suffix.lower()
         text = (docx_text(src) if suffix == ".docx"
                 else doc_text(src) if suffix == ".doc" else None)
-        # A Word file that will not open is usually a text file somebody
-        # renamed. Read it as text like anything else, because Read refuses
-        # both suffixes and would otherwise leave it unreadable. The null
-        # check below still turns it away if it really is binary.
+        # A Word file that does not open is usually a renamed text file. Read
+        # it as text like any other file, because Read rejects the two
+        # suffixes. Without this step, no tool can read it. The null check
+        # below still rejects it when it is binary.
         if text is None:
             text = src.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None, None
-    # The renderer refuses a source holding its own marks, U+E000 to U+E003.
-    # A null byte is binary. The length ceiling is the gate's one number, read
-    # from there rather than repeated here, so raising it in one place raises
-    # it everywhere.
+    # The renderer rejects a source that holds its own marks, U+E000 to
+    # U+E003. A null byte means binary. The length limit is the one number in
+    # the gate. The code reads it from there and does not repeat it here. A
+    # change in one place then changes it in all places.
     from drop_read_gate import READ_MAX_BYTES
     if (any(mark in text for mark in "\ue000\ue001\ue002\ue003")
             or "\x00" in text or len(text) > READ_MAX_BYTES):
         return None, None
     digest = hashlib.sha256(
         ("%s|%f" % (src, mtime)).encode("utf-8")).hexdigest()[:12]
-    images = vault_dir() / "images"
-    # A committed link at images/ would carry every image outside the project.
+    images = Path(out_dir) if out_dir else vault_dir() / "images"
+    # A committed link at images/ sends each image outside the project.
     if through_link(project_dir(), images):
         return None, None
     images.mkdir(parents=True, exist_ok=True)
     if through_link(project_dir(), images):
         return None, None
-    # The work name carries the digest so two draws of two files with one
-    # stem never write onto each other while they draw. deliver_names()
-    # renames what a reader gets to <stem>-image-N-of-M-DensePack.png, a name
-    # a reader can read, with no reader name and no hash in it.
-    # The extension stays in the name, so same.py and same.md dropped into
-    # to-draw never overwrite each other's images.
+    # The work name holds the digest. Two packs of two files with one stem
+    # then never overwrite each other while they run. deliver_names()
+    # renames the files that the model gets to
+    # <stem>-image-N-of-M-DensePack.png. That is a readable name with no model
+    # name and no hash in it.
+    # The extension stays in the name. same.py and same.md in to-pack then
+    # never overwrite the images of each other.
     safe_stem = (re.sub(r"[^A-Za-z0-9_.-]", "_", shown.stem)[:40]
                  + re.sub(r"[^A-Za-z0-9_.-]", "_", shown.suffix)[:8])
     stem = images / ("%s.%s" % (safe_stem, digest))
+    # THE ONE NAMING RULE. A text copy is in the same folder as its images.
+    # Its name is the image name without "-image-N-of-M-DensePack.png". The
+    # image stem then holds the full name of the text file. A Word file has
+    # no text that a model can open. The code writes its packed text next to
+    # the images as <stem>.txt, and the key row names that file. A to-pack
+    # file is its own text. The scan moves it next to the images under
+    # name_stem, and the key row names name_stem. On each other route, the
+    # key row names the source file.
+    word = suffix in (".doc", ".docx")
+    names_stem = name_stem or safe_stem
+    if word:
+        names_stem += ".txt"
+    title = names_stem if (word or out_dir) else shown.name
     code_image = False
     ident_legend = []
     try:
         import densepack as dp
-        # reader=model is a backstop: px above already comes from
-        # MEASURED_MODELS.get(model), so a caller that computes px some other
-        # way still cannot hand this model an image under its own scored
-        # floor.
-        # A code source is drawn by codepack, the banded code renderer: one
-        # light background block per source line, so a reader stops
-        # misreading identifiers where the stream wraps.
-        # Python is classified by tokenize and every other file by codepack's
-        # plain classifier. Every file gets the raw text: flatten() removed
-        # every indent and blank line, so a .tsx, .php, Dockerfile or any
-        # suffix outside codepack.CODE_SUFFIXES lost its indentation and its
-        # green line numbers stopped matching the file.
+        # reader=model is a second check. px above already comes from
+        # MEASURED_MODELS.get(model). A caller that computes px in another
+        # way still cannot give this model an image below its scored minimum
+        # size.
+        # codepack, the banded code renderer, packs a code source. It puts
+        # one light background block behind each source line. The model then
+        # does not misread identifiers where the stream wraps.
+        # tokenize classifies Python, and the plain classifier of codepack
+        # classifies each other file. Each file gets the raw text. flatten()
+        # removes each indent and blank line. With flatten(), a .tsx, .php,
+        # Dockerfile or any suffix outside codepack.CODE_SUFFIXES loses its
+        # indentation, and its green line numbers do not match the file.
         import codepack
         suffix = shown.suffix.lower()
-        # legend=None: the numbers stay in the picture. Marker references
-        # cost a reader far more output to resolve than the look-alike
-        # inks cost, so ident_legend stays empty here and no sidecar or
-        # marker row is written. Every file takes the code image for every
-        # reader, at code_size().
-        # Plan the pages with no glyph drawn, then draw once from the plan.
-        # The pages are byte for byte the ones pack_code() draws, in one
-        # process, with no width-search helpers and a fraction of their
-        # memory. A one page file takes pack_code() whole inside
-        # pack_planned(), because its fill pass reads pixels.
+        # legend=None. The numbers stay in the image. Marker references cost
+        # the model far more output to resolve than the look-alike inks
+        # cost. ident_legend stays empty here, and the code writes no
+        # sidecar and no marker row. Each file gets the code image for each
+        # model, at code_size().
+        # Plan the pages with no glyph rendered, then render one time from
+        # the plan. The pages are byte for byte the same as the pages from
+        # pack_code(), in one process, with no width-search helpers and a
+        # fraction of their memory. For a one page file, pack_planned() runs
+        # the whole pack_code(), because its fill pass reads pixels.
         size = code_size(px, model)
         plan = codepack.plan_pages(text, size, suffix == ".py", None, None,
-                                   model, shown.name)
+                                   model, title)
         written, _target, _lh = codepack.pack_planned(
             text, size, str(stem), plan, python=(suffix == ".py"),
-            legend=None, reader=model, title=shown.name)
+            legend=None, reader=model, title=title)
         code_image = True
     except Exception:
         written = None
     if not written:
         return None, None
-    # The pages take their reader facing names here, so the scan's own line
-    # and the Pages row below name what a reader will find. The gate names
-    # them once more after it composes sheets.
-    # The source line each image opens on. codepack counts drawn lines from
-    # 0, and a drawn line is a source line that is not blank: build_flow()
-    # skips an empty code line, and dp.flatten() drops a blank prose line.
+    # The pages get their final names here. The line of the scan and the
+    # Pages row below then name the files that the model finds. The gate
+    # renames them one more time after it builds sheets.
+    # The first source line of each image. codepack counts rendered lines
+    # from 0. A rendered line is a source line that is not blank.
+    # build_flow() skips an empty code line, and dp.flatten() drops a blank
+    # prose line.
     kept = [n for n, row in enumerate(text.split("\n"), 1)
             if (row != "" if code_image else row.strip())]
     opens = [codepack.PAGE_FIRST_LINE.get(str(p)) for p, _w, _h in written]
     first_lines = ([kept[k] for k in opens]
                    if all(isinstance(k, int) and k < len(kept) for k in opens) else [])
-    # name_stem is the Read route's image_stem() of the file really read.
-    # Two files named x.py in two folders, read in one turn, then never
-    # rename their pages onto one shared name.
+    # On the Read route, name_stem is image_stem() of the file that the
+    # model read. Two files named x.py in two folders, read in one turn,
+    # then never get one shared page name.
     first, rest, _all = deliver_names(written[0][0], [p for p, _w, _h in written[1:]],
-                                      [p for p, _w, _h in written], name_stem or safe_stem)
+                                      [p for p, _w, _h in written], names_stem)
     written = [(first,) + tuple(written[0][1:])] + [
         (r,) + tuple(w[1:]) for r, w in zip(rest, written[1:])]
     image = Path(first)
-    try:
-        src.unlink()
-    except OSError:
-        pass
-    # Who drew it and what it is, not the file operations behind it. A line
-    # that narrates a copy and a delete in a folder the reader never named
-    # reads to a reader as an attempt to redirect it.
-    # The image name is cleaned; the source name is whatever the project
-    # committed, so it never reaches the reader as words.
-    line = "DensePack converted a file from the to-draw folder into %s." % image
-    # Every page, not page one alone. A Read returns one file, so without this
-    # row a reader of a long file would see only its first page, and the
-    # price would compare one page against the whole text. The Pages row
-    # names the rest; drop_read_gate.py hands it to the reader as the note
-    # and prices every page.
+    if word:
+        # The text copy of the Word file. It holds the exact text in the
+        # images, and the green line numbers match the copy line for line.
+        # newline="" keeps each line ending a single \n on Windows too.
+        from common import clear_link
+        text_copy = images / names_stem
+        try:
+            clear_link(text_copy)
+            with open(str(text_copy), "w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+        except OSError:
+            pass
+    if not keep_source:
+        try:
+            src.unlink()
+        except OSError:
+            pass
+    # The line says what packed the file and what the file is. It does not
+    # list the file operations. A model reads a line about a copy and a
+    # delete in a folder that it did not name as an attempt to redirect it.
+    # The code cleans the image name. The source name is whatever the
+    # project committed, and it never reaches the model as words.
+    line = "DensePack converted a file from the to-pack folder into %s." % image
+    # Each page, not page one alone. A Read returns one file. Without this
+    # row, the model sees only the first page of a long file, and the price
+    # compares one page with the whole text. The Pages row names the other
+    # pages. drop_read_gate.py gives the row to the model as the note and
+    # prices each page.
     if len(written) > 1:
         line = line + "\nPages: " + " , ".join(str(p) for p, _w, _h in written[1:])
-    # The first source line of every page, so the gate can hand a Read that
+    # The first source line of each page. The gate can then give a Read that
     # starts at line N the image that holds line N.
     if len(first_lines) > 1:
         line = line + "\nLines: " + " , ".join(str(n) for n in first_lines)
 
-    # The sidecar lands beside the image, and the Tags row names it by its
-    # full path, because drop_read_gate.discard() deletes the file that row
-    # names when the price says the picture loses. Both callers strip the row
-    # before a model sees the line.
+    # The sidecar goes next to the image. The Tags row names it by its full
+    # path, because drop_read_gate.discard() deletes the file that the row
+    # names when the price shows that the image costs more than the text. The
+    # two callers remove the row before a model sees the line.
     #
-    # The marker rows follow, in the message itself. They are read back off
-    # the sidecar rather than rebuilt from ident_legend, so the escalated-tag
-    # header legend_sidecar() writes for a {#n} or <#n> report reaches the
-    # reader too, and one format serves the file and the message.
-    # marker_rows() then labels each row with MARKER_SOURCE; the value's own
-    # characters are untouched.
+    # The marker rows follow, in the message. The code reads them back from
+    # the sidecar and does not rebuild them from ident_legend. The
+    # escalated-tag header that legend_sidecar() writes for a {#n} or <#n>
+    # report then reaches the model too, and the file and the message use
+    # one format. marker_rows() then labels each row with MARKER_SOURCE. The
+    # characters of the value stay unchanged.
     try:
         legend_file = dp.legend_sidecar(ident_legend, stem)
     except OSError:
@@ -898,28 +1015,39 @@ def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
         if rows:
             line = line + "\n" + MARKER_HEADING + "\n" + marker_rows(rows)
 
-    # Every pack kind logs a manifest row so its saving counts toward the live
-    # dashboard's Without DensePack column. image_tokens here is the visual
-    # cost only, patch count times dp.image_cost, because a drop is
-    # redirected straight to the image with no separate pointer read to add
-    # in, unlike a bash, brief or report pack.
+    # Each pack kind logs a manifest row. Its saving then counts toward the
+    # Without DensePack column of the live dashboard. image_tokens here is
+    # the visual cost only, patch count times dp.image_cost. A drop goes
+    # straight to the image, with no separate pointer read to add. A bash,
+    # brief or report pack has that extra read.
     try:
         from subagent_stop import manifest_write
         here = (tmp_dir() / "densepack-lead-session").read_text(
             encoding="utf-8").strip()
+        # The file name and the lines of each page. Without them, a row names
+        # no file, and the text of a page packed from an uncommitted version
+        # of the file has no count.
+        # splitlines does not count the final newline of a file as a line.
+        last_line = len(text.splitlines())
+        starts = list(first_lines) if len(first_lines) == len(written) else [1]
+        page_lines = [[a, (starts[i + 1] - 1) if i + 1 < len(starts) else last_line]
+                      for i, a in enumerate(starts)]
         manifest_write({
             "packed": True,
             "spawned_by": here,
+            "file": shown.name,
+            "source": str(source or ""),
+            "page_lines": page_lines,
             "chars": len(text),
-            # A code image says so here, in the same field every
-            # other pack kind writes.
+            # A code image records its kind here, in the same field that
+            # each other pack kind writes.
             "kind": "code" if code_image else "drop",
-            # Who this picture was drawn for, and the model that set its
-            # size. spawned_by is the LEAD's session on every route, so
-            # without these a drop or code image drawn for a subagent and one
-            # drawn for the lead would be the same row in the records and no
-            # measurement could group by agent. px and model are the ones
-            # this draw actually used, taken above, never re-derived.
+            # The agent that gets this image, and the model that set its
+            # size. spawned_by is the session of the LEAD on each route.
+            # Without these fields, a drop or code image for a subagent and
+            # one for the lead are the same row in the records, and no
+            # measure can group by agent. px and model are the values that
+            # this pack used, taken above, never derived again.
             "font_px": px,
             "drawn_for": str(actor or ""),
             "drawn_model": model,
@@ -933,8 +1061,8 @@ def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None):
 
 
 def _name_stem(name):
-    """The image stem of a to-draw file: its own name, cleaned, with the
-    extension, the same rule draw_drop_file() uses for safe_stem."""
+    """Return the image stem of a to-pack file. It is the file name, cleaned,
+    with the extension. draw_drop_file() uses the same rule for safe_stem."""
     from pathlib import Path
     own = Path(name)
     return (re.sub(r"[^A-Za-z0-9_.-]", "_", own.stem)[:40]
@@ -942,10 +1070,10 @@ def _name_stem(name):
 
 
 def _claim_drop_file(src_path):
-    """Rename one to-draw file in place to CLAIM_PREFIX<epoch>-<8 hex>-<name>
-    and return the new path; None when another scan took it first, another
-    program holds it open, or a link sits on the way. The file stays inside
-    to-draw, where no prune deletes anything."""
+    """Rename one to-pack file in place to CLAIM_PREFIX<epoch>-<8 hex>-<name>
+    and return the new path. Return None when another scan took it first,
+    another program holds it open, or the path goes through a link. The file
+    stays in to-pack, where no prune deletes anything."""
     from pathlib import Path
     from common import project_dir, through_link
     src = Path(src_path)
@@ -961,10 +1089,10 @@ def _claim_drop_file(src_path):
 
 
 def _set_aside(src_path, name):
-    """Move a claimed to-draw file that could not be converted into
-    not-converted/ under its own name, so it is never tried again on every
-    tool call and never deleted. It is the person's own copy. Returns the one
-    line the reader receives, or None when it cannot be moved safely."""
+    """Move a claimed to-pack file that the hook could not pack into
+    not-converted/ under its own name. The scan then does not try it again
+    on each tool call, and the file stays on disk. Return the one line that
+    the model gets, or None when the move is not safe."""
     from pathlib import Path
     from common import project_dir, through_link
     src = Path(src_path)
@@ -986,24 +1114,105 @@ def _set_aside(src_path, name):
         os.replace(str(src), str(target))
     except OSError:
         return None
-    # The file's name is not in the line: the project chose that name.
-    return ("DensePack could not convert a file from the to-draw folder. It is in "
+    # The file name is not in the line, because the project chose that name.
+    return ("DensePack could not convert a file from the to-pack folder. It is in "
             ".claude/densepack-vault/not-converted/.")
 
 
+def _packed_target(src_path, name):
+    """Reserve the name of a to-pack file in to-pack/packed/, and return it
+    as a Path. Return None when no safe name is free. The file keeps its
+    subfolder. to-pack/sub1/x.py goes to to-pack/packed/sub1/x.py. A file
+    from the drop folder of an older version goes to to-pack/packed/ too.
+    The name is the cleaned name from _name_stem(), because the images use
+    the same name as their stem. A name in use, or a name with images still
+    there, gets ~2, ~3 before the extension. The code then never overwrites
+    a packed file or image. The empty file made with O_EXCL holds the name.
+    Two scans at the same time then never take the same name."""
+    import glob
+    import os
+    from pathlib import Path
+    from common import project_dir, through_link
+    vault = vault_dir()
+    parent = os.path.abspath(os.path.dirname(str(src_path)))
+    sub = None
+    for base in ("to-pack", "drop"):
+        rel = os.path.relpath(parent, os.path.abspath(str(vault / base)))
+        if rel == os.curdir:
+            sub = ""
+            break
+        if not rel.startswith(os.pardir) and not os.path.isabs(rel):
+            sub = rel
+            break
+    if sub is None:
+        return None
+    folder = vault / "to-pack" / PACKED_FOLDER
+    if sub:
+        folder = folder / sub
+    if through_link(project_dir(), folder):
+        return None
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    if through_link(project_dir(), folder):
+        return None
+    own = Path(_name_stem(name))
+    for n in range(1, 1000):
+        target = folder / (own.name if n == 1 else "%s~%d%s" % (own.stem, n, own.suffix))
+        if glob.glob(glob.escape(str(target)) + "-image-*"):
+            continue
+        try:
+            fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            continue
+        except OSError:
+            return None
+        os.close(fd)
+        return target
+    return None
+
+
+def _packed_line(line, target):
+    """Return the line of the scan with a first row that names the packed
+    paths. They are the image, the file now next to it, and the text copy of
+    a Word file. The code drops the Tags and Lines rows. The Pages row and
+    the marker rows stay."""
+    rows = [row for row in line.split("\n")
+            if not row.startswith(("Tags: ", "Lines: "))]
+    image = rows[0]
+    head = "DensePack converted a file from the to-pack folder into "
+    if image.startswith(head) and image.endswith("."):
+        image = image[len(head):-1]
+    first = ("DensePack converted a file from the to-pack folder into %s. "
+             "DensePack moved the file to %s, beside its images."
+             % (image, target))
+    if target.suffix.lower() in (".doc", ".docx"):
+        first += " The text of the Word file is in %s.txt." % target
+    rows[0] = first
+    return "\n".join(rows)
+
+
 def _draw_drop_file(model, src_paths):
-    """pointer.py's own scan only ever needed the status line; see
-    draw_drop_file() above for the (line, image_path) pair
-    drop_read_gate.py uses instead.
+    """The scan in pointer.py uses only the status line. drop_read_gate.py
+    uses the (line, image_path) pair from draw_drop_file() above.
 
-    The Tags row is dropped here. This scan has no file to delete, so the
-    sidecar's path serves it nothing, and a path in the text sends a reader
-    to open that file. The marker rows below the heading stay: they are
-    what the reader needs.
+    The scan first moves the claimed file into to-pack/packed/, under the
+    name that _packed_target() reserves. It then packs the file there, with
+    its images next to it. The scan never deletes the file and never walks
+    packed/. It then packs no file twice. A file that the scan cannot pack
+    goes to not-converted/.
 
-    One file is converted per tool call: the first of src_paths this scan
-    can claim. Parallel tool calls start several scans at once, and a scan
-    whose claim fails moves on, so no two scans work on one file."""
+    The code drops the Tags row here. This scan has no file to delete and no
+    use for the sidecar path. A path in the text sends a model to open that
+    file. The marker rows below the heading stay, because the model needs
+    them.
+
+    The scan packs one file for each tool call, the first of src_paths that
+    it can claim. Parallel tool calls start several scans at the same time.
+    A scan with a failed claim goes to the next file. No two scans then work
+    on one file."""
+    import os
     from pathlib import Path
     paths = [src_paths] if isinstance(src_paths, str) else list(src_paths or [])
     for src_path in paths:
@@ -1011,55 +1220,70 @@ def _draw_drop_file(model, src_paths):
         if claimed is None:
             continue
         name = Path(src_path).name
-        # to-draw/sub1/x.py and to-draw/sub2/x.py both have the name x.py; the
-        # claim gives the second x.py~2, so neither overwrites the other image.
-        stem = claimed_stem(src_path, base=_name_stem(name))
-        line, _image = draw_drop_file(model, str(claimed), name=name, name_stem=stem)
+        target = _packed_target(src_path, name)
+        if target is not None:
+            try:
+                os.replace(str(claimed), str(target))
+            except OSError:
+                try:
+                    os.remove(str(target))
+                except OSError:
+                    pass
+                target = None
+        if target is None:
+            aside = _set_aside(str(claimed), name)
+            if aside:
+                return aside
+            # The scan could not pack or move the file. The file keeps its
+            # bytes in to-pack under a name that the scan skips. The scan
+            # never loses the file and does not try it again on each tool
+            # call.
+            try:
+                os.replace(str(claimed), str(claimed.with_name(FAILED_PREFIX + name)))
+            except OSError:
+                pass
+            return None
+        line, _image = draw_drop_file(model, str(target), name=name,
+                                      name_stem=target.name,
+                                      out_dir=str(target.parent), keep_source=True)
         if line:
-            # Neither row is for a reader: Tags names the legend file, and
-            # Lines is the first source line of each image, which the gate's
-            # own sidecar carries.
-            return "\n".join(row for row in line.split("\n")
-                             if not row.startswith(("Tags: ", "Lines: ")))
-        aside = _set_aside(str(claimed), name)
+            return _packed_line(line, target)
+        # The pack step failed, and the file goes to not-converted/. When
+        # that move fails too, the file stays in packed/. There the scan
+        # never loses it and does not try it again on each tool call.
+        aside = _set_aside(str(target), name)
         if aside:
             return aside
-        # Neither converted nor set aside: the file keeps its bytes in
-        # to-draw under a name the scan skips, so it is never lost and never
-        # tried again on every tool call.
-        try:
-            os.replace(str(claimed), str(claimed.with_name(FAILED_PREFIX + name)))
-        except OSError:
-            pass
         return None
     return None
 
 
 def _rule_already_sent(name):
-    """True when this session has already been told the rule called `name`.
+    """Return True when this session already got the rule called `name`.
 
-    A rule the lead has read once does not need resending. Resending it does,
-    because every character sent sits in the prefix of every later turn.
-    In one measured lead transcript, 9 report blocks
-    carried 13,271 characters and 8 outbound brief blocks carried 8,877, and
-    the rule prose is most of both.
+    The lead does not need a rule again after it reads it one time. A second
+    copy costs tokens, because each character sent stays in the prefix of
+    each later turn. In one measured lead transcript, 9 report blocks held
+    13,271 characters and 8 outbound brief blocks held 8,877. The rule text
+    is most of the two.
 
-    The marker is a file, because every hook run is a fresh process. It is
-    written on the first call, so the first batch gets the whole rule and
-    every batch after it gets one line.
+    The marker is a file, because each hook run is a new process. The code
+    writes it on the first call. The first batch gets the whole rule, and
+    each later batch gets one line.
     """
     marker = tmp_dir() / ("densepack-rule-%s" % name)
     if marker.exists():
         return True
-    # Moved onto the name, so a link planted at it takes no write.
+    # write_text_atomic moves the file onto the name. A link at that name
+    # then gets no write.
     from common import write_text_atomic
     write_text_atomic(marker, "1")
     return False
 
-# Claude Code caps additionalContext, systemMessage and plain stdout at 10,000
-# characters and writes anything longer to a file, showing a preview and the
-# path instead, per the hooks reference. The receipt
-# stays under that with room to spare, so it is never turned into a preview.
+# Claude Code limits additionalContext, systemMessage and plain stdout to
+# 10,000 characters, per the hooks reference. It writes any longer text to a
+# file and shows a preview and the path in its place. The receipt stays well
+# under that limit. Claude Code then never makes it a preview.
 MESSAGE_CHARS = 9000
 
 
@@ -1068,9 +1292,10 @@ def group(number):
 
 
 def model_cell(item):
-    """The model, trimmed to the part a person reads. A full id such as
-    claude-opus-5 is shown as Opus 5. An unknown model is a dash rather than a
-    guess, because a wrong name on a receipt is worse than no name."""
+    """Return the model name, cut to its readable part. The cell shows
+    a full id such as claude-opus-5 as Opus 5. An unknown model gets a dash
+    and not a guess, because a wrong name on a receipt is worse than no
+    name."""
     raw = str(item.get("model") or "").strip()
     if not raw:
         return "-"
@@ -1082,8 +1307,8 @@ def model_cell(item):
             continue
         rest = low.split(key, 1)[1].strip("-_ ")
         # claude-haiku-4-5-20251001 -> Haiku 4.5. The version is the numeric
-        # parts joined with a dot, and an 8 digit part is a date rather than a
-        # version, so it is dropped.
+        # parts joined with a dot. An 8 digit part is a date, not a version,
+        # and the code drops it.
         parts = [p for p in rest.split("-")
                  if p.isdigit() and len(p) < 8]
         return (pretty + " " + ".".join(parts)).strip() if parts else pretty
@@ -1091,27 +1316,29 @@ def model_cell(item):
 
 
 def is_brief(item):
-    """A brief is the outbound half of the pipeline: an instruction packed for
-    a subagent before it started, not a report packed after one finished. It
-    belongs on the receipt, because the user paid for it and saved on it, and
-    it must never reach the lead as an image to read: the lead WROTE that
-    brief, and re-reading it would spend back the tokens the pack just saved.
+    """Return True for a brief. A brief is the outbound half of the pipeline.
+    It is an instruction packed for a subagent before the subagent started,
+    not a report packed after one finished. It goes on the receipt, because
+    its pack has a cost and a saving. It must never reach the lead as an
+    image to read. The lead WROTE that brief, and a second read costs back
+    the tokens that the pack saved.
     """
     return item.get("kind") == "brief"
 
 
 def label_with_model(item):
-    """The Packed reports cell for the default receipt: the agent, then the
-    model that wrote the report, in one cell. The default receipt is five
-    columns and the model does not get one of its own."""
+    """Return one cell with the agent, then the model that wrote the report.
+    No code in the plugin calls this function. The default receipt has four
+    columns, and the model has its own column, Model."""
     who = label(item)
     model = model_cell(item)
     return who if model == "-" else "%s, %s" % (who, model)
 
 
 def label(item):
-    """The agent type, with the asterisk that marks a report the lead already
-    read as text. The lead replaces this with the task it assigned."""
+    """Return the agent type, with the asterisk that marks a report that the
+    lead already read as text. The lead replaces this with the task that it
+    gave the agent."""
     if is_brief(item):
         return "brief to %s" % item["agent_type"]
     if not item.get("images"):
@@ -1122,9 +1349,9 @@ def label(item):
 REASON_SAID = {
     "under the saving threshold": "Under the saving threshold, text is cheaper",
     "no prose report": "No prose report, structured output only",
-    "mostly code": "Mostly code, code is never condensed",
-    "pack failed": "Pack failed, text delivered",
-    "Pillow missing": "Pillow missing, text delivered",
+    "mostly code": "Mostly code. DensePack does not pack code",
+    "pack failed": "The pack failed. DensePack sent the text",
+    "Pillow missing": "Pillow is missing. DensePack sent the text",
 }
 
 
@@ -1132,16 +1359,16 @@ def reason_said(item):
     return REASON_SAID.get(item.get("reason", ""), item.get("reason", "text"))
 
 
-# The two reasons that mean the plugin could not do its job. The other reasons
-# in REASON_SAID are decisions the plugin made on purpose: text measured
-# cheaper, there was no prose, the report was code. Only these two are worth
-# telling the user about on their own.
+# The two reasons that mean the plugin failed. The other reasons in
+# REASON_SAID come from a rule in the plugin. The text measured cheaper, the
+# report had no prose, or the report was code. Only these two get their own
+# line on screen.
 BROKEN = ("pack failed", "Pillow missing")
 
 
 def text_row_default(item):
-    """An agent whose reply stayed words. It has a raw text cost and no
-    DensePack cost, so the reason sits where the picture's price would."""
+    """Return the row for an agent with a text reply. It has a raw text cost
+    and no DensePack cost. The reason goes in the cell for the image price."""
     chars = ("%s %s %s" % (group(item["chars"]), APPROX, group(item["text_tokens"]))
              if item.get("chars") else "-")
     return r"| %s | %s | %s | - |" % (
@@ -1157,7 +1384,8 @@ def text_row_verbose(item):
 
 
 def dims_of(item):
-    """The per image sizes subagent_stop.py recorded, as (width, height)."""
+    """Return the size of each image that subagent_stop.py recorded, as
+    (width, height)."""
     out = []
     for text in item.get("dims", []):
         parts = str(text).lower().split("x")
@@ -1181,9 +1409,10 @@ def patch_cell(width, height):
 
 
 def packed_count(totals):
-    """How many packed entries the stored totals cover, reports and briefs
-    together. An older totals file has no "packed" key,
-    so the reports count stands in and an existing session keeps working."""
+    """Return the number of packed entries in the stored totals, reports and
+    briefs together. An older totals file has no "packed" key. The code then
+    adds the reports count and the briefs count, and an existing session
+    keeps working."""
     if "packed" in totals:
         return totals["packed"]
     return totals.get("reports", 0) + totals.get("briefs", 0)
@@ -1204,9 +1433,9 @@ def sums(entries):
     return out
 
 
-# The Model cell on every receipt row: the model family and a number, counted
-# per model within the batch, so two Sonnet agents read as Sonnet-01 and
-# Sonnet-02 rather than as two rows called Sonnet.
+# The Model cell on each receipt row. It holds the model family and a number,
+# counted for each model in the batch. Two Sonnet agents show as Sonnet-01
+# and Sonnet-02, not as two rows called Sonnet.
 def numbered_model(item, seen):
     family = model_cell(item)
     if family == "-":
@@ -1217,12 +1446,11 @@ def numbered_model(item, seen):
 
 
 def default_header(first="Model"):
-    """The four column names and the divider under them.
+    """Return the four column names and the divider under them.
 
-    Raw text cost is what the words would have cost. DensePack cost is what
-    the picture cost, delivery included. The Images count is on the verbose
-    receipt only, because a reader who wants the saving does not need the
-    file count to read it.
+    Raw text cost is the cost of the words as text. DensePack cost is the
+    cost of the image, with delivery. The Images count is on the verbose
+    receipt only, because the saving reads correctly without the file count.
     """
     return [r"| %s | Raw text cost | DensePack cost | Saved %% \| tokens |"
             % first,
@@ -1244,28 +1472,28 @@ def default_table(entries):
     return lines
 
 
-# The letters that name each model family. Order does not matter here, only
-# membership.
+# The letters that name each model family. Order does not matter here. Only
+# membership matters.
 MODEL_LETTERS = (("Haiku", "H"), ("Sonnet", "S"), ("Opus", "O"), ("Fable", "F"))
 
-# The order the totals rows' Model cell prints in, Fable then Opus then
-# Sonnet then Haiku, always all four, even for a model that ran zero agents
-# in this batch. A fixed order and all four every time means the row never
-# moves and never has to be read to find out which model is missing. One
-# line, never a <br> break, which the receipt's reader does not render as one.
+# The print order of the Model cell in the totals rows: Fable, Opus, Sonnet,
+# Haiku. The cell always shows all four, even for a model that ran zero
+# agents in this batch. With a fixed order and all four each time, the row
+# never moves, and a missing model shows as a zero in its fixed place. One
+# line, never a <br> break. The app that shows the receipt does not render
+# <br> as a line break.
 MODEL_TOTALS_ORDER = (("Fable", "F"), ("Opus", "O"), ("Sonnet", "S"), ("Haiku", "H"))
 
-# The full names printed on the verbose totals row's Model cell instead of the
-# letters, same order, same all-four-always rule.
+# The full names that the Model cell of the verbose totals row prints in
+# place of the letters. The order is the same, and all four always print.
 MODEL_FULL_NAMES = {"Haiku": "Haiku 4.5", "Sonnet": "Sonnet 5",
                     "Opus": "Opus 5", "Fable": "Fable 5"}
 
 
 def _model_family(item):
-    """Which of the four measured model names this row belongs to, Haiku,
-    Sonnet, Opus or Fable, or None when the model does not match any of
-    them, the same way model_cell shows a dash rather than a guess for an
-    unknown model."""
+    """Return the measured model name of this row: Haiku, Sonnet, Opus or
+    Fable. Return None when the model matches none of them. In the same way,
+    model_cell shows a dash, not a guess, for an unknown model."""
     pretty = model_cell(item)
     for name, _letter in MODEL_LETTERS:
         if pretty.startswith(name):
@@ -1274,8 +1502,8 @@ def _model_family(item):
 
 
 def model_counts(entries):
-    """How many of the given entries ran on each of the four measured
-    models, keyed by the plain family name, Fable, Opus, Sonnet, Haiku."""
+    """Return the number of entries that ran on each of the four measured
+    models, keyed by the plain family name: Fable, Opus, Sonnet, Haiku."""
     counts = {name: 0 for name, _letter in MODEL_TOTALS_ORDER}
     for item in entries:
         family = _model_family(item)
@@ -1285,15 +1513,15 @@ def model_counts(entries):
 
 
 def format_counts(counts, spelled_out):
-    """counts, whichever source built it, as one plain line, Fable then Opus
-    then Sonnet then Haiku, comma separated, all four printed every time.
+    """Return counts, from any source, as one plain line in the order Fable,
+    Opus, Sonnet, Haiku, with commas. All four print each time.
 
-    Not a <br> tag: a br tag does not render as a line break wherever this
-    user reads the receipt, so four lines joined by <br> read as one run of
-    joined letters. One line
-    with commas reads correctly everywhere. spelled_out=False prints the
-    count with the single letter, 0F; True prints the full model name, 0
-    Fable 5, for the verbose table.
+    Not a <br> tag. The app that shows the receipt does not render a br tag
+    as a line break. Four lines joined by <br> then show as one run of joined
+    letters. One line with commas shows correctly in all places.
+    spelled_out=False prints the count with the single letter, such as 0F.
+    spelled_out=True prints the full model name, such as 0 Fable 5, for the
+    verbose table.
     """
     if spelled_out:
         return ", ".join("%d %s" % (counts.get(name, 0), MODEL_FULL_NAMES[name])
@@ -1303,15 +1531,17 @@ def format_counts(counts, spelled_out):
 
 
 def model_breakdown(entries):
-    """This batch's per model counts, as one plain line, letters only."""
+    """Return the count for each model in this batch as one plain line, with
+    letters only."""
     return format_counts(model_counts(entries), spelled_out=False)
 
 
 def model_breakdown_spawns(spawns):
-    """The same per model line for the status table's totals row.
+    """Return the same line of model counts for the totals row of the status
+    table.
 
-    A spawn row carries the model under a different key from a receipt entry,
-    so model_counts cannot read it. The counting is the same and the output
+    A spawn row holds the model under a different key from a receipt entry,
+    and model_counts cannot read it. The count is the same, and the output
     is the same four letters in the same fixed order.
     """
     counts = {name: 0 for name, _letter in MODEL_TOTALS_ORDER}
@@ -1323,24 +1553,25 @@ def model_breakdown_spawns(spawns):
 
 
 def model_breakdown_full(entries):
-    """This batch's per model counts, as one plain line, names spelled out,
-    for the verbose table's totals rows."""
+    """Return the count for each model in this batch as one plain line, with
+    full names, for the totals rows of the verbose table."""
     return format_counts(model_counts(entries), spelled_out=True)
 
 
 def totals_rows_default(packed):
-    """The two rows added to the bottom of the default table: a label row,
-    then the sums, each column totalled the same way that column is already
-    formatted in an agent row. Scoped to the packed rows, the ones with real
+    """Return the two rows at the bottom of the default table: a label row,
+    then the sums. Each column sum has the same format as that column in an
+    agent row. The sums cover only the packed rows, the rows with real
     numbers in the Characters, Pixels and Saved columns.
 
-    Labeled BATCH TOTALS, not CONVERSATION TOTALS: the sums below are drawn
-    from `packed`, this batch's own rows, never the whole conversation. The
-    whole conversation's own sums are a separate row, CONVERSATION TOTALS,
-    added by conversation_totals_rows below when the totals setting calls for it, and
-    giving this row that other row's name would make the two look
-    interchangeable when they answer different questions. The totals setting
-    does not gate this row; it prints whenever the table itself does."""
+    The label is BATCH TOTALS, not CONVERSATION TOTALS. The sums below come
+    from `packed`, the rows of this batch only, never the whole
+    conversation. The sums for the whole conversation are a separate row,
+    CONVERSATION TOTALS. conversation_totals_rows below adds that row when
+    the totals setting allows it. The two rows answer different questions,
+    and one name on the two rows makes them look the same. The totals
+    setting does not control this row. It prints each time the table
+    prints."""
     run = sums(packed)
     return [
         "| **BATCH TOTALS** | | | |",
@@ -1353,10 +1584,10 @@ def totals_rows_default(packed):
 
 
 def totals_rows_verbose(packed):
-    """The same two rows, sized to the verbose table's nine columns.
-    Dimensions holds a dash, the same mark the per agent rows already use
-    for a value a totals row does not have. The Model cell spells out each
-    model's full name rather than the letter default uses."""
+    """Return the same two rows, sized to the nine columns of the verbose
+    table. Dimensions holds a dash. The agent rows use the same mark for a
+    value that a totals row does not have. The Model cell gives the full
+    name of each model, not the letter that default uses."""
     run = sums(packed)
     return [
         "| **BATCH TOTALS** | | | | | | | | |",
@@ -1372,16 +1603,16 @@ def totals_rows_verbose(packed):
 
 
 def run_totals_rows(packed, mode):
-    """The BATCH TOTALS block for this batch, packed rows only, or nothing
-    when none of this batch's rows packed. Built here, once, so the same two
-    rows go into the table wherever the receipt is rendered: filed to disk,
-    shown to the lead, or shown to the user.
+    """Return the BATCH TOTALS block for this batch, packed rows only. Return
+    nothing when no row of this batch packed. The code builds it here, one
+    time. The same two rows then go into the table wherever the receipt
+    goes: to a file on disk, to the lead, or to the screen.
 
-    The totals setting never gates it: BATCH TOTALS is part of the default and
-    verbose tables themselves, not an add-on the setting turns on. Only the
-    receipt mode decides whether it appears. light never gets a totals
-    block, whatever the totals setting says: that mode is the compact
-    table, and its whole point is to stay that shape."""
+    The totals setting never controls it. BATCH TOTALS is part of the
+    default and verbose tables, not an extra that the setting adds. Only the
+    receipt mode controls whether it shows. light never gets a totals block,
+    whatever the totals setting is. That mode is the compact table, and its
+    purpose is to keep that form."""
     if not packed or mode == "light":
         return []
     return (totals_rows_verbose(packed) if mode == "verbose"
@@ -1389,30 +1620,28 @@ def run_totals_rows(packed, mode):
 
 
 def format_stored_counts(stored, spelled_out):
-    """The same per model line format_counts prints, built from the counts
-    kept in the totals file rather than from a batch of entries. `stored` is
-    totals.get("models"), a plain dict of family name to count; an older
-    totals file carries no such key, and a
-    missing or partial dict reads as zero for whichever model it lacks
-    rather than raising, so an old totals file still prints a CONVERSATION
-    TOTALS row, just with counts that start from zero on the update that
-    adds the field."""
+    """Return the same line of model counts that format_counts prints, built
+    from the counts in the totals file and not from a batch of entries.
+    `stored` is totals.get("models"), a plain dict of family name to count.
+    An older totals file has no such key. A missing or partial dict gives
+    zero for each model that it lacks and does not raise. An old totals file
+    then still prints a CONVERSATION TOTALS row. Its counts start from zero
+    on the update that adds the field."""
     stored = stored or {}
     counts = {name: int(stored.get(name, 0)) for name, _letter in MODEL_TOTALS_ORDER}
     return format_counts(counts, spelled_out)
 
 
 def totals_rows_conversation_default(totals):
-    """The CONVERSATION TOTALS label row and numbers row, sized to the
-    default table's six columns, drawn from the same stored totals the
-    "Conversation so far" line reads, so the two can never disagree.
+    """Return the CONVERSATION TOTALS label row, the default header, and a
+    numbers row with six cells. The rows come from the same stored totals
+    that the "Conversation so far" line reads.
 
-    The Packed reports and Images columns read totals["reports"] and
-    totals["images"] rather than a fresh sum over packed entries, on
-    purpose: those are the exact fields the "Conversation so far" line
-    already prints, and a second count built a different way could drift
-    from it even when both are technically correct answers to slightly
-    different questions."""
+    The count cell reads packed_count(totals), the packed reports and briefs
+    together. The Images cell reads totals["images"]. Neither cell is a new
+    sum over packed entries. The count then covers the same entries as the
+    Images, Characters, Pixels and token cells next to it. The "Conversation
+    so far" line prints totals["reports"], which counts reports only."""
     text_tokens = totals.get("text_tokens", 0)
     image_tokens = totals.get("image_tokens", 0)
     return [
@@ -1429,13 +1658,13 @@ def totals_rows_conversation_default(totals):
 
 
 def totals_rows_conversation_verbose(totals):
-    """The same CONVERSATION TOTALS rows, sized to the verbose table's nine
-    columns, model names spelled out in full. Needs totals["patch_tokens"],
-    the running sum of every batch's patch cost, to split the Image tokens
-    column into patches plus the handover fee the way the per agent and
-    BATCH TOTALS rows do; an older totals file without that field reads
-    as zero patches, so the whole image cost prints as fee until the field
-    has accumulated something of its own."""
+    """Return the same CONVERSATION TOTALS rows, sized to the nine columns of
+    the verbose table, with full model names. The code needs
+    totals["patch_tokens"], the running sum of the patch cost of each batch.
+    It splits the Image tokens column into patches plus the handover fee,
+    the same as the agent rows and the BATCH TOTALS rows. An older totals
+    file without that field gives zero patches. The whole image cost then
+    prints as fee until the field holds a value of its own."""
     text_tokens = totals.get("text_tokens", 0)
     image_tokens = totals.get("image_tokens", 0)
     patch_tokens = totals.get("patch_tokens", 0)
@@ -1455,12 +1684,12 @@ def totals_rows_conversation_verbose(totals):
 
 
 def conversation_totals_rows(totals, mode, packed):
-    """The CONVERSATION TOTALS block, gated the way the totals setting governs it:
-    only when this batch already earned a BATCH TOTALS block (packed rows
-    exist and the mode is not light), and the caller has already checked
-    totals_shown(). Kept as its own function, mirroring run_totals_rows,
-    so the two blocks are built the same way wherever the receipt is
-    rendered."""
+    """Return the CONVERSATION TOTALS block under the rule of the totals
+    setting. It shows only when this batch already has a BATCH TOTALS block
+    (packed rows exist and the mode is not light), and the caller already
+    checked totals_shown(). It is a separate function, like run_totals_rows.
+    The code then builds the two blocks the same way wherever the receipt
+    goes."""
     if not packed or mode == "light":
         return []
     return (totals_rows_conversation_verbose(totals) if mode == "verbose"
@@ -1468,8 +1697,9 @@ def conversation_totals_rows(totals, mode, packed):
 
 
 def verbose_header(second="Model"):
-    """The nine column names and the divider under them. The second column
-    is Model on the batch table and Models on the conversation table."""
+    """Return the nine column names and the divider under them. The second
+    column is Model on the batch table and Models on the conversation
+    table."""
     return [(r"| Packed reports | %s | Images | Dimensions | Characters / " + DIV + r" = text tokens |"
              r" Patches, ceil(w/28) x ceil(h/28) | Text tokens |"
              r" Image tokens, patches plus the handover cost | Saved %% \| tokens |")
@@ -1505,17 +1735,17 @@ def verbose_table(entries):
 
 
 def image_detail_lines(entries):
-    """The per image dimension tables, one for each agent that returned more
-    than one image. Kept apart from verbose_table so the totals block can sit
-    between the agent rows and this detail."""
+    """Return the dimension table of the images for each agent that returned
+    more than one image. This is separate from verbose_table. The totals
+    block can then go between the agent rows and this detail."""
     lines = []
     for item in entries:
         dims = dims_of(item)
         if len(dims) < 2:
             continue
         lines.append("")
-        # No agent id here, on purpose: an internal identifier means nothing
-        # to a reader, so the row's own agent type names it instead.
+        # No agent id here, because an internal identifier carries no
+        # meaning. The agent type of the row names it in place of the id.
         lines.append("The %d images of the %s report above. The characters "
                      "and the saving belong to the whole report, in the row "
                      "above:" % (len(dims), item["agent_type"]))
@@ -1531,30 +1761,31 @@ def image_detail_lines(entries):
 
 
 def delegation_entries():
-    """Every spawn brief_pack.py has logged, across every session, in the
-    order the file holds them. Never drained: this table is pulled on
-    demand, not consumed once like the queue."""
+    """Return each spawn that brief_pack.py logged, across all sessions, in
+    file order. The code never drains this file, and each call reads the
+    whole file one time."""
     from common import sealed_rows
     return sealed_rows(tmp_dir() / "densepack-delegation.jsonl")
 
 
 def manifest_entries():
-    """Every row subagent_stop.py has written, in file order. Read fresh
-    every call rather than cached, because the delegation table can be
-    pulled at any point in a session and a stale copy would show a finished
-    agent as still running."""
+    """Return each row that subagent_stop.py wrote, in file order. The code
+    reads the file again on each call and keeps no cache. The delegation
+    table can print at any point in a session, and an old copy shows a
+    finished agent as still running."""
     from common import sealed_rows
     return sealed_rows(tmp_dir() / "densepack-manifest.jsonl")
 
 
 def _finished_by_type(session):
-    """This session's finished agents, one row per agent id, grouped by
-    agent type, oldest start first. subagent_stop.py can write a provisional
-    row for an agent that ignored the delivery rule and was blocked once
-    until it complied, followed by a final row once it did; the final row
-    wins when both exist. The provisional row stands alone when a harness
-    ignores the block and no final row ever comes, so that agent still
-    counts as one that ran."""
+    """Return the finished agents of this session, one row for each agent
+    id, grouped by agent type, oldest start first. subagent_stop.py can
+    write a provisional row for an agent that broke the delivery rule. The
+    hook blocked that agent one time until it followed the rule, and then
+    wrote a final row. When the two rows exist, the code uses the final row.
+    When a harness does not apply the block, no final row comes. The
+    provisional row is then the only row, and that agent still counts as one
+    that ran."""
     by_id = {}
     for row in manifest_entries():
         if str(row.get("spawned_by") or "") != str(session or ""):
@@ -1570,9 +1801,9 @@ def _finished_by_type(session):
     return grouped
 
 
-# The smallest sample a median is trusted from. Below this, one or two
-# outlier runs could swing the number, so the cell says how thin the sample
-# is instead of printing a number that reads as settled.
+# The smallest sample for a median that the table prints. Below this, one or
+# two outlier runs can move the number a lot. The cell then gives the sample
+# size in place of a number that looks final.
 MIN_MEDIAN_RUNS = 3
 
 
@@ -1588,11 +1819,11 @@ def _median(values):
 
 
 def _all_finished_rows():
-    """Every manifest row across every session, one per agent id, the final
-    row preferred over a provisional one when both exist for that id. Used
-    only for the median duration baseline: that estimate needs the widest
-    sample the manifest holds, not one session's handful of finished agents,
-    the way _finished_by_type is scoped."""
+    """Return each manifest row across all sessions, one for each agent id.
+    When a final row and a provisional row exist for an id, the code uses
+    the final row. Only the median duration baseline uses this function.
+    That estimate needs the largest sample in the manifest, not the few
+    finished agents of one session that _finished_by_type returns."""
     by_id = {}
     for row in manifest_entries():
         agent_id = row.get("agent_id") or ""
@@ -1604,9 +1835,10 @@ def _all_finished_rows():
 
 
 def duration_medians():
-    """Median finished duration in seconds, and the sample size it came
-    from, for each of the four measured models. {"Sonnet": (432.0, 68), ...}.
-    A model with no finished runs in the manifest maps to (None, 0)."""
+    """Return the median finished duration in seconds, and its sample size,
+    for each of the four measured models, such as
+    {"Sonnet": (432.0, 68), ...}. A model with no finished runs in the
+    manifest maps to (None, 0)."""
     by_family = {}
     for row in _all_finished_rows():
         duration = row.get("duration_s")
@@ -1621,11 +1853,12 @@ def duration_medians():
 
 
 def estimate_phrase(family, medians):
-    """The words a running agent's row shows in place of a real duration: a
-    median with its sample size when there is one, otherwise a plain
-    admission that there is not enough measured to say. Never a number built
-    from fewer than MIN_MEDIAN_RUNS finished runs, because one or two samples
-    are not a median, they are a guess wearing a median's decimal point."""
+    """Return the words that the row of a running agent shows in place of a
+    real duration. That is a median with its sample size when one exists.
+    Otherwise it is a plain statement that the sample is too small. The code
+    never builds a number from fewer than MIN_MEDIAN_RUNS finished runs. One
+    or two samples do not make a median. A number from them is a guess with
+    a decimal point."""
     if family is None:
         return "no estimate, model not measured"
     median, count = medians.get(family, (None, 0))
@@ -1635,7 +1868,8 @@ def estimate_phrase(family, medians):
 
 
 def _mmss(seconds):
-    """A duration as minutes and seconds, or seconds alone under a minute."""
+    """Return a duration as minutes and seconds, or as seconds alone under a
+    minute."""
     seconds = float(seconds)
     if seconds < 60:
         return "%.1fs" % seconds
@@ -1644,25 +1878,27 @@ def _mmss(seconds):
 
 
 def state_cell(duration, spawned_at=None, now=None, started=True):
-    """What the agent is doing right now, in one or two words.
+    """Return the state of the agent now, in a few words.
 
-    Never a bare number. One column that prints "done in 19m 04s" beside
-    "running, 6m so far" makes a reader decide which numbers were spent and
-    which were left. This cell says the state and the
-    Time left cell says the number, so neither can be read as the other.
+    The cell shows Done, Running, a state with minutes such as "Silent 12m",
+    or the minutes of the run so far, such as "6m". A column that prints
+    "done in 19m 04s" next to "running, 6m so far" mixes time spent with
+    time left. This cell gives the state or the minutes spent. The Finished
+    cell gives the time taken or the time left. The two kinds of time then
+    never share a cell.
     """
-    # Done, or the minutes it has been running. The State cell says Done or a
-    # number of minutes spent, and the Finished cell says the number of
-    # minutes it took or has left.
+    # Done, or the minutes of the run so far. The State cell shows Done or a
+    # number of minutes spent. The Finished cell shows the minutes that the
+    # agent took, or the minutes left.
     if duration is not None:
         return "Done"
     if spawned_at is None:
         return "Running"
     quiet = (now if now is not None else time.time()) - float(spawned_at)
     if quiet >= DEAD_AFTER and not started:
-        # No start marker and no finished run. SubagentStart never fired, so
-        # the agent never began: another PreToolUse hook denied the call after
-        # brief_pack.py had already written this row.
+        # No start marker and no finished run. SubagentStart did not run,
+        # and the agent never started. Another PreToolUse hook denied the
+        # call after brief_pack.py wrote this row.
         return "Spawn denied, never ran"
     if quiet >= DEAD_AFTER:
         return "No stop record %dm" % int(quiet // 60)
@@ -1673,18 +1909,19 @@ def state_cell(duration, spawned_at=None, now=None, started=True):
 
 def left_cell(duration, spawned_at=None, now=None, family=None,
               medians=None, started=True):
-    """How much longer, or how long it took.
+    """Return the time left, or the time that the agent took.
 
-    A finished agent shows what it really took, worded "took" so it cannot be
-    read as a countdown. A running agent shows the median for its model less
-    the time already spent, which is the only estimate available and is worth
-    printing only while it is still positive. Past the median the honest
-    answer is that the estimate is spent, not a larger number invented to
-    replace it.
+    A finished agent shows its real time in minutes, such as "12m" or
+    "under 1m". The State cell of the same row shows Done, and this time
+    then never reads as a countdown. A running agent shows the median for its
+    model minus the time already spent. That is the only estimate, and it is
+    useful only while it is positive. After the median, the correct answer
+    is that the estimate is over. The code does not create a larger number
+    in its place.
     """
-    # Minutes only. The column is named Finished, so a word such as "took"
-    # would say the same thing twice. A run under a minute reads
-    # as under 1m rather than as 0m, which would look like it never ran.
+    # Minutes only. The column name is Finished, and a word such as "took"
+    # says the same thing twice. A run under a minute shows as under 1m and
+    # not as 0m. 0m looks like the agent never ran.
     if duration is not None:
         minutes = int(float(duration) // 60)
         return "%dm" % minutes if minutes else "under 1m"
@@ -1694,7 +1931,7 @@ def left_cell(duration, spawned_at=None, now=None, family=None,
     if quiet >= DEAD_AFTER and not started:
         return "none"
     if quiet >= DEAD_AFTER:
-        return "may have died, check it"
+        return "no stop record, check the agent"
     if quiet >= STALE_AFTER:
         return "no report, check it"
     if family is None:
@@ -1711,9 +1948,10 @@ def left_cell(duration, spawned_at=None, now=None, family=None,
 
 
 def seconds_left(duration, spawned_at=None, now=None, family=None, medians=None):
-    """The seconds this agent still has to run, or None when it is finished or
-    cannot be estimated. The table's total uses the LARGEST of these, never
-    the sum, because agents run at the same time."""
+    """Return the seconds that this agent still has to run. Return None when
+    it is finished or when no estimate exists. The total of the table uses
+    the LARGEST of these, never the sum, because agents run at the same
+    time."""
     if duration is not None or spawned_at is None:
         return None
     quiet = (now if now is not None else time.time()) - float(spawned_at)
@@ -1726,30 +1964,28 @@ def seconds_left(duration, spawned_at=None, now=None, family=None, medians=None)
     return remaining if remaining > 0 else 0.0
 
 
-# How long after PreToolUse the matching SubagentStart is allowed to fire.
-# Measured over a batch of eight agents spawned in one
-# message: every gap fell between 1.8 and 2.4 seconds, and the order never
-# differed. 60 seconds is 25 times the widest gap seen and still far tighter
-# than a batch's own spread, which was 74 seconds. A spawn whose agent starts
-# later than this had no agent behind it, and the row stays unmatched rather
-# than taking the next agent's number.
+# The longest time after PreToolUse for the matching SubagentStart. In a
+# batch of eight agents spawned in one message, each gap was between 1.8 and
+# 2.4 seconds, and the order was always the same. 60 seconds is 25 times the
+# widest gap and still far less than the spread of that batch, 74 seconds.
+# When no agent starts within this time, the spawn had no agent. The row
+# stays unmatched and does not take the number of the next agent.
 START_WINDOW = 60.0
 
 
 def _session_agents(session):
-    """Every agent this session spawned, oldest start first, whether it
+    """Return each agent that this session spawned, oldest start first,
     finished or not.
 
     Each entry is (started, agent_id, manifest row or None). A row of None
-    means the agent has a start marker still on disk, so it never stopped.
+    means that the agent still has a start marker on disk. It never stopped.
 
-    This list exists so delegation_table() can pair spawn rows to agents by
-    ORDER OF START rather than by nearest time. Nearest time fails the
-    moment a batch spawns several agents inside the window: eight agents
-    spawned across 74 seconds against a 90 second window print every
-    duration against the wrong job. The order of
-    SubagentStart matches the order of PreToolUse exactly, so position is the
-    identity the spawn row itself does not carry.
+    With this list, delegation_table() pairs spawn rows with agents by ORDER
+    OF START and not by nearest time. Nearest time fails when a batch spawns
+    several agents inside the window. Eight agents spawned across 74 seconds
+    with the 60 second START_WINDOW print each duration next to the wrong
+    job. The order of SubagentStart matches the order of PreToolUse exactly.
+    The position is then the identity that the spawn row does not hold.
     """
     seen = {}
     for row in manifest_entries():
@@ -1770,24 +2006,25 @@ def _session_agents(session):
 
 
 def plural(count, word):
-    """One agent, two agents. A count and its word are written together here
-    so no table has to read "1 agents"."""
+    """Return "1 agent" or "2 agents". The code writes a count and its word
+    together here. No table then shows "1 agents"."""
     return "%d %s%s" % (count, word, "" if count == 1 else "s")
 
 
-# A marker's time and its spawn row's time come from the same tool call, so
-# they land within seconds of each other. The window is wide enough to absorb
+# The time of a marker and the time of its spawn row come from the same tool
+# call. They are within seconds of each other. The window is wide enough for
 # a slow start and far narrower than the gap between two batches.
 MARKER_WINDOW = 120.0
 
 
 def _unstopped_markers(session):
-    """Every start marker still on disk for this session, as (at, agent_id),
-    oldest first.
+    """Return each start marker still on disk for this session, as
+    (at, agent_id), oldest first.
 
-    A marker exists between SubagentStart and SubagentStop, so one still on
-    disk means that agent never stopped. Read failures are skipped rather
-    than raised: this table must never be the reason a receipt cannot print.
+    A marker exists between SubagentStart and SubagentStop. A marker still
+    on disk means that the agent never stopped. The code skips read failures
+    and does not raise them. This table must never stop a receipt from
+    printing.
     """
     out = []
     try:
@@ -1819,12 +2056,12 @@ def _unstopped_markers(session):
 
 
 def job_role(agent_type):
-    """The Job cell: the short role the agent was given.
+    """Return the Job cell, the short role of the agent.
 
-    A custom agent type IS the role, so it prints as it stands. The default
-    type, general-purpose, names no role, so the cell holds a dash and the
-    lead replaces it with the role it assigned. The lead is the only thing
-    that knows: this hook sees the type and the task, never the role.
+    A custom agent type IS the role, and it prints as it is. The default
+    type, general-purpose, names no role. The cell then holds a dash, and
+    the lead replaces it with the role that it gave the agent. Only the lead
+    has the role. This hook gets the type and the task, never the role.
     """
     if agent_type in ("general-purpose", "-", "agent", ""):
         return "-"
@@ -1832,45 +2069,51 @@ def job_role(agent_type):
 
 
 def job_cell(job, agent_type):
-    """The Job column's content: the task description alone for the default
-    agent type, general-purpose, or the task followed by the type in
-    brackets for anything else, because a custom agent type is worth seeing
-    and general-purpose repeated down the whole table tells a reader
-    nothing. Never the agent id: an internal identifier like
-    a1b2c3d4e5f6a7b8c means nothing to a reader, and the job description is
-    what actually says what happened."""
+    """Return a cell with the task and the agent type. No code in the plugin
+    calls this function. The Job column of delegation_table() uses
+    job_role(). For the default agent type, general-purpose, the cell is
+    the task description alone. For any other type, it is the task followed
+    by the type in brackets. A custom agent type is useful to see, and
+    general-purpose on each row of the table adds nothing. The cell never
+    holds the agent id. An internal identifier such as a1b2c3d4e5f6a7b8c
+    carries no meaning, and the job description says what happened."""
     if agent_type in ("general-purpose", "-"):
         return job
     return "%s (%s)" % (job, agent_type)
 
 
 def delegation_table(session):
-    """The Model, Job, State, Time left table: every agent this session has
-    spawned, oldest first, ending in a total row. Job is the description the
-    lead passed at spawn time, with the agent type appended in brackets only
-    when it is not general-purpose, the default every built-in spawn uses.
-    Runtime is matched against the manifest by agent type, in spawn order,
-    because the row brief_pack.py writes carries no agent id: the subagent
-    tool has not assigned one yet when PreToolUse fires, so an id cannot be
-    recorded at spawn time. No agent id ever prints here, or anywhere else
-    this table reaches, whether or not one was available to match with.
+    """Return the delegation table with the columns Model, Job, Report,
+    State and Finished. It lists each agent that this session spawned,
+    oldest first, and ends with two total rows. Model is the model family
+    with a number, such as Sonnet-01. Job is job_role() of the agent type.
+    Report is the description that the lead passed at spawn time. State is
+    state_cell(), and Finished is left_cell().
 
-    A finished row's Runtime is its real duration_s. A still-running row's
-    Runtime is the median duration_s of every OTHER finished agent measured
-    anywhere in the manifest on that same model, with the sample size stated
-    beside it, never a guess dressed as a number."""
+    The row from brief_pack.py has no agent id. The subagent tool assigns no
+    id before PreToolUse runs, and no id exists at spawn time. The code
+    pairs the index-th spawn with the index-th agent to start, from
+    _session_agents(). It accepts the pair only when the agent started
+    between 5 seconds before and START_WINDOW seconds after the spawn. No
+    agent id prints here, or in any other place that this table goes, even
+    when an id exists.
+
+    The Finished cell of a finished row is its real duration_s. The
+    Finished cell of a running row is the median duration_s of the other
+    finished agents on the same model in the manifest, minus the time
+    spent. Below MIN_MEDIAN_RUNS finished runs, it gives the sample size.
+    It is never a guess in the form of a number."""
     spawns = [row for row in delegation_entries()
              if str(row.get("session") or "") == str(session or "")]
     spawns.sort(key=lambda r: r.get("time") or 0)
     agents = _session_agents(session)
     medians = duration_medians()
-    # Counts a number per model family, so two Sonnet agents read Sonnet-01
-    # and Sonnet-02 rather than as two rows both called Sonnet.
+    # A count for each model family. Two Sonnet agents show as Sonnet-01 and
+    # Sonnet-02, not as two rows called Sonnet.
     numbering = {}
-    # Five columns. Job is the short
-    # role the lead gave the agent. Report is what the lead asked it to do.
-    # State says Done or how long it has been running. Finished says how long
-    # it took, or how long is left.
+    # Five columns. Job is the short role that the lead gave the agent.
+    # Report is the task that the lead gave it. State shows Done or the run
+    # time so far. Finished shows the time it took, or the time left.
     lines = ["| Model | Job | Report | State | Finished |",
              "| --- | --- | --- | --- | --- |"]
     running = 0
@@ -1880,10 +2123,10 @@ def delegation_table(session):
     total_seconds = 0.0
     for index, row in enumerate(spawns):
         agent_type = row.get("subagent_type") or "-"
-        # The index-th spawn belongs to the index-th agent to start. Accepted
-        # only when that agent started within START_WINDOW of this spawn, so
-        # a spawn row with no agent behind it leaves the row unmatched rather
-        # than taking a later agent's duration.
+        # The index-th spawn goes with the index-th agent to start. The code
+        # accepts the match only when that agent started within START_WINDOW
+        # of this spawn. A spawn row with no agent stays unmatched and does
+        # not take the duration of a later agent.
         started = None
         manifest_row = None
         if index < len(agents):
@@ -1892,9 +2135,9 @@ def delegation_table(session):
             if spawn_time is None or -5.0 <= at - float(spawn_time) <= START_WINDOW:
                 started = at
                 manifest_row = found
-        # A manifest row of None means the agent has a start marker still on
-        # disk, so it never stopped: running or dead, and it must not be given
-        # somebody else's finished duration.
+        # A manifest row of None means that the agent still has a start
+        # marker on disk. It never stopped. It is running or dead, and it
+        # must not get the finished duration of another agent.
         duration = manifest_row.get("duration_s") if manifest_row else None
         if duration is not None:
             total_seconds += float(duration)
@@ -1917,15 +2160,16 @@ def delegation_table(session):
             state_cell(duration, spawned, started=started is not None),
             left_cell(duration, spawned, family=family, medians=medians,
                       started=started is not None)))
-    # The total row has four cells too, so the count of spawns and the agent
-    # minutes spent, this run's cost figure, sit in the State cell, and the
-    # LARGEST remaining time, never the sum, sits in Time left: agents run
-    # at the same time, so the run ends when its slowest one does.
-    # An agent with no stop record is not running and must not be counted as
-    # though the run is waiting on it. It is reported separately so the count
-    # of live agents stays true. A dead agent is not something the run is
-    # waiting on, so it is kept out of the running count above; its own row
-    # already says it has no stop record.
+    # The total row has five cells, the same as the agent rows. The Job cell
+    # holds the count of spawns. The State cell holds the agent minutes
+    # spent, the cost figure of this run. The Finished cell holds the
+    # LARGEST remaining time, never the sum. Agents run at the same time,
+    # and the run ends when the slowest agent ends.
+    # An agent with no stop record is not running. The count must not treat
+    # the run as waiting on it. The code counts it separately, and the count
+    # of live agents stays true. The run does not wait on a dead agent, and
+    # the running count above leaves it out. Its own row already says that
+    # it has no stop record.
     if running == 0:
         time_left = ("none, run complete" if not no_record
                      else "check the ones with no record")
@@ -1933,10 +2177,10 @@ def delegation_table(session):
         time_left = "%s still running, unknown" % plural(running, "agent")
     else:
         base = longest_left if longest_left is not None else 0.0
-        # Every running agent is already past the median for its model, so
-        # there is no measured number left to quote. Elapsed time is never
-        # reported as time remaining, and "about 0s to all done" beside an
-        # agent 15 minutes past its median would say exactly that.
+        # Each running agent is already past the median for its model. No
+        # measured number is left to quote. The table never reports elapsed
+        # time as time left. "about 0s to all done" next to an agent 15
+        # minutes past its median says exactly that.
         if base <= 0:
             left_phrase = "past the median for its model, finish unknown"
         elif base < 60:
@@ -1946,10 +2190,10 @@ def delegation_table(session):
         if unknown_left:
             left_phrase += ", one not measured"
         time_left = "%s still running, %s" % (plural(running, "agent"), left_phrase)
-    # Two rows, matching the receipt's BATCH TOTALS shape: a label row, then
-    # the counts. The Job cell holds the agent count, State holds the agent
-    # minutes spent, Finished holds the longest remaining time and never a
-    # sum, because agents run at the same time.
+    # Two rows, in the same form as BATCH TOTALS on the receipt: a label row,
+    # then the counts. The Job cell holds the agent count. State holds the
+    # agent minutes spent. Finished holds the longest remaining time and
+    # never a sum, because agents run at the same time.
     lines.append("| **STATUS TOTALS** | | | | |")
     lines.append("| %s | %s | | %s agent minutes | %s |" % (
         model_breakdown_spawns(spawns), len(spawns),
@@ -1957,21 +2201,23 @@ def delegation_table(session):
     return lines
 
 
-# The words used when nothing in the delegation log is close enough to
-# trust. Never the agent id: an id means nothing to a reader, and a plain
-# admission that the task was not logged is more honest than a guess.
-NO_LOGGED_JOB = "an agent whose task was not logged"
+# The words for the case where no row in the delegation log is close enough
+# in time. The words never hold the agent id, because an id carries no
+# meaning. A plain statement that the task has no log row is more accurate
+# than a guess.
+NO_LOGGED_JOB = "an agent whose task is not in the log"
 
 
 def job_for_marker(session, marker_at, window=MARKER_WINDOW):
-    """The task description behind a still-unstopped agent's start marker,
-    found by matching the marker's own timestamp against the delegation
-    log, the same way delegation_table pairs a spawn to its marker.
+    """Return the task description for the start marker of an agent that
+    did not stop. The code matches the timestamp of the marker against the
+    delegation log, the same way delegation_table pairs a spawn with its
+    marker.
 
-    Used so a stall or a no-stop-record message names the
-    work the agent was given, not the internal agent id: a string like
-    a1b2c3d4e5f6a7b8c means nothing to a reader. Falls back to NO_LOGGED_JOB,
-    never the id, when nothing in the log is close enough to trust."""
+    A stall message or a no-stop-record message then names the task of the
+    agent, not the internal agent id. A string such as a1b2c3d4e5f6a7b8c
+    carries no meaning. When no row in the log is close enough in time,
+    return NO_LOGGED_JOB, never the id."""
     if marker_at is None:
         return NO_LOGGED_JOB
     best, best_gap = None, None
@@ -1990,11 +2236,12 @@ def job_for_marker(session, marker_at, window=MARKER_WINDOW):
 
 
 def totals_table(totals, mode):
-    """The whole conversation's totals, as their own small table. Used only by
-    session_end.py, for the wrap-up summary a next session opens with, where
-    there is no per-agent table for the numbers to sit inside. pointer.py's
-    own per-batch receipt does not call this: its batch totals live inside
-    the same six (or nine) column table, built by run_totals_rows."""
+    """Return the totals of the whole conversation as a separate small
+    table. Only session_end.py uses it, for the wrap-up summary at the start
+    of the next session. That summary has no agent table to hold the
+    numbers. The batch receipt in pointer.py does not call this. Its batch
+    totals are in the same four (or nine) column table, from
+    run_totals_rows."""
     text_tokens = totals.get("text_tokens", 0)
     image_tokens = totals.get("image_tokens", 0)
     row = r"| %s %s %s | %s %s %s | %s |" % (
@@ -2013,15 +2260,17 @@ def totals_table(totals, mode):
 
 
 def record_stop_by_lead(event):
-    """Append the lifecycle record's "stopped-by-lead" row for the agent
-    named on a TaskStop tool call, or do nothing when the call names none.
+    """Append the "stopped-by-lead" row of the lifecycle record for the
+    agent that a TaskStop tool call names. Do nothing when the call names no
+    agent.
 
-    task_id is the field the TaskStop tool itself takes; shell_id is its
-    deprecated alias, read the same way. Either one is the same agent id
-    the start marker and subagent_stop.py already key their own rows on.
-    The lane tag comes from that agent's own start marker when it is still
-    on disk, which it is here: a lead-ordered stop never reaches
-    subagent_stop.py, so nothing has deleted the marker yet.
+    task_id is the field that the TaskStop tool takes. shell_id is its
+    deprecated alias, and the code reads it the same way. Each one is the
+    same agent id that the start marker and subagent_stop.py use as the key
+    of their rows. The lane tag comes from the start marker of that agent
+    when the marker is still on disk. Here it is still on disk, because a
+    stop from the lead never reaches subagent_stop.py, and nothing deleted
+    the marker.
     """
     tool_input = event.get("tool_input")
     if not isinstance(tool_input, dict):
@@ -2040,48 +2289,76 @@ def record_stop_by_lead(event):
     append_lifecycle(agent_id, "stopped-by-lead", lane)
 
 
+def swap_missed_as_net(item, event):
+    """Return the queue row as a net row when this event is the Agent result
+    of its agent and report_swap.py does not swap it. Return the row
+    unchanged otherwise.
+
+    subagent_stop.py queues a report of the swap route as a stub, with the
+    hash of the agent's final message in swap_digest. report_swap.py runs on
+    the same event at the same time and puts the marker line in the result
+    only when common.swap_applies() is True. When it is False, the lead has
+    the report as text. A stub row then gives the receipt "The stubs above
+    are summaries only", which is false, and sends the lead to Read an image
+    of text that it already has. As a net row, the receipt names the image
+    and says that its saving applies to re-reads.
+
+    A row that drains at another event keeps its mode. This hook cannot see
+    that agent's result there. report_swap.py still sends its note at that
+    agent's own result."""
+    if item.get("mode") != "stub" or not item.get("swap_digest"):
+        return item
+    if event.get("tool_name") not in ("Agent", "Task"):
+        return item
+    resp = event.get("tool_response")
+    if not isinstance(resp, dict) or str(resp.get("agentId") or "") != str(item.get("agent_id") or ""):
+        return item
+    if swap_applies(resp, item["swap_digest"]):
+        return item
+    return dict(item, mode="net")
+
+
 def main():
-    # The event is read before the switch is checked, because the off
-    # switch is per session and the id that names
-    # the session is on the event. _RAW_STDIN is the same text the cheap
-    # exit above already read; read_event() parses it instead of reading
-    # stdin a second time.
+    # Read the event before the switch check, because the off switch is for
+    # each session and the session id is on the event. _RAW_STDIN is the
+    # text that the first exit above already read. read_event() parses it
+    # and does not read stdin a second time.
     event = read_event(_RAW_STDIN)
     if disabled(event.get("session_id")):
         return 0
 
-    # The one thing a TaskStop tool call needs from this hook: a lifecycle
-    # row saying the lead, not silence, ended this agent. Runs before the
-    # queue and lead-ownership checks below, because a TaskStop call
-    # carries no report to drain and must not depend on either being true.
-    # See common.py's LIFECYCLE_FILE note for the fault this closes.
+    # A TaskStop tool call needs one thing from this hook: a lifecycle row
+    # that says the lead ended this agent, not a silent stop. This runs
+    # before the queue and lead-ownership checks below. A TaskStop call has
+    # no report to drain and must not depend on those checks. The
+    # LIFECYCLE_FILE note in common.py names the fault that this fixes.
     if event.get("tool_name") == "TaskStop":
         record_stop_by_lead(event)
 
-    # The drop scan runs for every session, lead or subagent, before the
-    # lead-only queue logic below: a subagent can copy a file into its own
-    # drop folder too. drop_line is emitted at whichever return point this
-    # call reaches first.
+    # The drop scan runs for each session, lead or subagent, before the
+    # lead-only queue logic below. A subagent can copy a file into its own
+    # drop folder too. The hook emits drop_line at the first return point
+    # that this call reaches.
     drop_line = _draw_drop_file(*_DROP_HIT) if _DROP_HIT else None
 
-    # A Word file this tool call just revealed is drawn here, beside the drop
-    # scan, and rides the same drop_line out. Folding it in rather than
-    # emitting it separately means it reaches the agent at whichever return
-    # point this call takes, including the early ones a subagent hits.
+    # The hook packs a Word file that this tool call shows here, next to the
+    # drop scan. The hook adds its line to the same drop_line. With one line,
+    # it reaches the agent at each return point of this call, including the
+    # early return points of a subagent.
     _word_line = word_pages_from_tool(event)
     if _word_line:
         drop_line = "\n\n".join(p for p in (drop_line, _word_line) if p)
 
-    # Only a lead session drains the queue. This hook fires in every session,
-    # subagents included, and a subagent draining the queue steals the lead's
-    # pointers and receipts. bootstrap.py records every session that started as
-    # a lead. With no lead on record every session drains, so the plugin
-    # still works on a harness that omits the field. Once any lead is on
-    # record this fails closed: an event carrying NO session id must not slip
-    # through, or a subagent is handed the lead's receipt and delegation
-    # table for agents it never ran. bootstrap.py runs at SessionStart and a
-    # subagent is not a session, so a missing id while leads exist means
-    # this is not a lead.
+    # Only a lead session drains the queue. This hook runs in each session,
+    # subagents included. A subagent that drains the queue takes the
+    # pointers and receipts of the lead. bootstrap.py records each session
+    # that started as a lead. With no lead on record, each session drains,
+    # and the plugin still works on a harness that omits the field. When any
+    # lead is on record, this check fails closed. An event with NO session
+    # id must not pass. Otherwise a subagent gets the receipt and the
+    # delegation table of the lead for agents that it never ran.
+    # bootstrap.py runs at SessionStart, and a subagent is not a session. A
+    # missing id while leads exist means that this is not a lead.
     sid = event.get("session_id")
     leads = read_leads()
     if leads and (not sid or str(sid) not in leads):
@@ -2094,15 +2371,18 @@ def main():
         if drop_line:
             emit(_drop_only_payload(drop_line))
         return 0
+    # A report of the swap route whose swap missed on this Agent result
+    # reached the lead as text. See swap_missed_as_net().
+    entries = [swap_missed_as_net(item, event) for item in entries]
 
-    # A subagent can spawn subagents of its own. Such a report is delivered to
-    # that subagent, never to the lead, but the queue is one shared file, so
-    # without this filter the lead would drain the row, charge itself a saving
-    # for text it never read, and hold a row it cannot label.
+    # A subagent can spawn its own subagents. Such a report goes to that
+    # subagent, never to the lead. The queue is one shared file. Without
+    # this filter, the lead drains the row, counts a saving for text that it
+    # never read, and holds a row that it cannot label.
     #
-    # spawned_by is the session that spawned the agent, recorded in its start
-    # marker. A row with no spawned_by comes from a harness that omits
-    # session_id, so it is treated as the lead's.
+    # spawned_by is the session that spawned the agent, as its start marker
+    # records it. A row with no spawned_by comes from a harness that omits
+    # session_id. The code treats that row as a row of the lead.
     nested = [item for item in entries
               if item.get("spawned_by") and str(item["spawned_by"]) != str(sid or "")]
     entries = [item for item in entries if item not in nested]
@@ -2111,38 +2391,37 @@ def main():
             emit(_drop_only_payload(drop_line))
         return 0
 
-    # Briefs are on the same queue as reports so the user sees one receipt for
-    # the whole pipeline, but everything below that hands the lead an image to
-    # READ has to skip them. The lead wrote each brief; pointing it back at
-    # its own words as a picture would spend the saving straight back.
+    # Briefs are on the same queue as reports. One receipt then covers the
+    # whole pipeline. Each step below that gives the lead an image to
+    # READ must skip them. The lead wrote each brief. A second read of its
+    # own words as an image costs back the whole saving.
     brief_entries = [item for item in entries if is_brief(item)]
     report_entries = [item for item in entries if not is_brief(item)]
 
     packed_entries = [item for item in entries if item.get("images")]
     packed_reports = [item for item in report_entries if item.get("images")]
-    # run covers the whole batch, briefs included, because that is what the
-    # receipt table adds up. report_run covers reports only, because that is
-    # what the pointer lines above the table are about.
+    # run covers the whole batch, briefs included, because the receipt table
+    # adds up the whole batch. report_run covers reports only, because the
+    # pointer lines above the table are about reports only.
     run = sums(packed_entries)
     report_run = sums(packed_reports)
     totals = read_totals()
     totals["reports"] = totals.get("reports", 0) + len(packed_reports)
     totals["briefs"] = totals.get("briefs", 0) + len(brief_entries)
-    # Every packed entry, reports and briefs alike. The CONVERSATION TOTALS
-    # count column reads this, because the Images, Characters, Pixels and both
-    # token columns beside it are summed over the same population. Counting
-    # reports there while summing briefs beside it printed 1 next to 2.
+    # Each packed entry, reports and briefs the same. The CONVERSATION TOTALS
+    # count column reads this, because the Images, Characters, Pixels and two
+    # token columns next to it are sums over the same entries. A count of
+    # reports only, next to sums that include briefs, prints 1 next to 2.
     totals["packed"] = totals.get("packed", 0) + len(packed_entries)
     totals["text_reports"] = (totals.get("text_reports", 0)
                               + len(report_entries) - len(packed_reports))
     for key in ("images", "chars", "pixels", "text_tokens", "image_tokens",
                 "patch_tokens"):
         totals[key] = totals.get(key, 0) + run[key]
-    # Per model counts for the CONVERSATION TOTALS row.
-    # An older totals file has no "models" key;
-    # setdefault starts it at zero for every model and this batch's own
-    # counts are the first added to it, so an old totals file keeps working
-    # and simply starts counting models from the update forward.
+    # The count for each model for the CONVERSATION TOTALS row. An older
+    # totals file has no "models" key. setdefault starts it at zero for each
+    # model, and the counts of this batch are the first to go in. An old
+    # totals file keeps working and starts to count models from the update.
     stored_models = totals.setdefault("models", {})
     for name, count in model_counts(packed_entries).items():
         stored_models[name] = stored_models.get(name, 0) + count
@@ -2150,22 +2429,22 @@ def main():
 
     mode = receipts_mode()
 
-    # Name the folder and the naming pattern once, list agent ids, and stop
-    # repeating full paths on every delivery.
+    # Name the folder and the naming pattern one time, and do not repeat full
+    # paths on each delivery.
     all_stub = all(item["mode"] == "stub" for item in packed_reports)
     if all_stub:
-        # Built in common.py for the same reason as the line below it:
-        # subagent_stop.py charges the receipt for this exact text, and a
-        # second copy here would drift away from the one being charged.
+        # common.py builds this for the same reason as the line below it.
+        # subagent_stop.py charges the receipt for this exact text. A second
+        # copy here can differ from the charged text after an edit.
         head = stub_pointer(report_run["images"], tmp_dir())
     else:
         # One sentence, built in common.py, because subagent_stop.py charges
-        # the receipt for exactly this text. Two copies would drift and the
-        # receipt would price a line the lead never received.
+        # the receipt for exactly this text. Two copies can differ after an
+        # edit, and the receipt then prices a line that the lead never got.
         head = report_pointer(report_run["images"], tmp_dir())
     if not packed_reports:
-        head = ("DensePack: %d agent report(s) came back as text (%s), no image "
-                "was made and nothing was billed to DensePack."
+        head = ("DensePack: %d agent report(s) returned as text (%s). DensePack "
+                "made no image and billed nothing to DensePack."
                 % (len(report_entries),
                    "; ".join(sorted({reason_said(i) for i in report_entries}))))
     if not report_entries:
@@ -2174,65 +2453,67 @@ def main():
     if not entries and nested:
         head = ("DensePack: nothing in this batch was yours. Every report in "
                 "it came from an agent one of your subagents spawned. "
-                "There is no receipt and nothing was charged to you.")
+                "There is no receipt and DensePack charged nothing to you.")
     lines = [head]
     if drop_line:
         lines.append("")
         lines.append(drop_line)
-    # A report from an agent one of your subagents spawned is named but not
-    # charged. The lead never received that text, so counting its saving would
-    # overstate the total, and the lead cannot label a task it never assigned.
-    # Naming it still matters: it tells the lead that findings exist which
-    # reached a subagent and will be lost unless that subagent folds them into
-    # its own report.
+    # A report from an agent that a subagent of the lead spawned gets a name
+    # but no charge. The lead never got that text. A count of its saving
+    # overstates the total, and the lead cannot label a task that it never
+    # gave. The name still matters. It tells the lead that findings reached
+    # a subagent. The lead never gets those findings unless that subagent
+    # adds them to its own report.
     if nested:
-        # Numbered, never by agent id: an internal identifier means nothing
-        # to a reader, and the count here is only to tell two same-type
-        # agents apart, not to look either one up.
+        # Numbered, never by agent id, because an internal identifier
+        # carries no meaning. The number here only separates two agents of
+        # the same type. It is not a key to find either one.
         lines.append(
             "  %d report(s) came from agents your subagents spawned. Their "
-            "text was delivered to those subagents, not to you. They are "
-            "not counted below. Tell each subagent to fold its own subagents' "
-            "findings into its report, or those findings are lost: %s"
+            "text went to those subagents, not to you. The counts below "
+            "leave them out. Tell each subagent to add its own subagents' "
+            "findings to its report, or you lose those findings: %s"
             % (len(nested),
                ", ".join("%s #%d" % (i.get("agent_type", "agent"), n)
                          for n, i in enumerate(nested, 1))))
     if brief_entries:
         lines.append(
-            "  %d brief(s) packed at each reader's own size."
+            "  %d brief(s) packed at each model's own size."
             % len(brief_entries))
     for item in report_entries:
         if not item.get("images"):
             lines.append("  %s: text, %s" % (
                 item["agent_type"], reason_said(item)))
             continue
-        # No "captured by the net" note. The stop hook files EVERY report
-        # itself from the agent's final message, so the note would print on
-        # every stub row, and its "no summary heading" claim is usually false:
-        # the filed message opens with whatever the agent's message opened
-        # with, most often the five line summary the delivery rule asks for.
-        # The manifest still records captured per agent for the audit trail.
+        # No "captured by the net" note. The stop hook files EACH report from
+        # the final message of the agent. A note here prints on each stub
+        # row, and its "no summary heading" claim is usually false. The filed
+        # message starts with the same text as the message of the agent,
+        # most often the five line summary that the delivery rule requires.
+        # The manifest still records captured for each agent for the audit
+        # trail.
         lines.append("  %s: %d image(s)" % (
             item["agent_type"], len(item["images"])))
         if item.get("code"):
-            lines.append("  Code blocks came out of that image: each #=N=# "
-                         "marker in it stands where block N belongs. The "
-                         "python blocks are drawn banded, in order, in: "
+            lines.append("  DensePack took the code blocks out of that image. Each #=N=# "
+                         "marker in it stands where block N belongs. DensePack "
+                         "packed the python blocks into banded images, in order, in: "
                          + (", ".join(item.get("code_images") or [])
                             or "no page")
                          + ". Every block at full fidelity here: "
                          + item["code"])
-        # Every identifier the packer took out of the image lives in a
-        # sidecar file, not in this text: the lead sees [#3] in the image and
-        # this one line naming the file that resolves it, and opens that file
-        # only when it needs the value, the same sed -n rule shared.txt
-        # teaches for the exact text file. The lift is off by default.
+        # Each identifier that the packer took from the image is in a
+        # sidecar file, not in this text. The lead sees [#3] in the image
+        # and this one line with the name of the file that resolves it. It
+        # opens that file only when it needs the value. shared.txt gives the
+        # same sed -n rule for the exact text file. The lift is off by
+        # default.
         if item.get("legend_file"):
             # Full path, never the bare name.
             lines.append("  Tags: " + str(tmp_dir() / item["legend_file"]))
 
-    # The table is built in every mode, because quiet files it rather than
-    # printing it, and that file is what the lead shows when the user asks.
+    # The code builds the table in each mode. Quiet mode writes it to a file
+    # and does not print it. The lead shows that file on request.
     with_images = packed_reports
     table = []
     detail = []
@@ -2241,16 +2522,16 @@ def main():
                  else default_table(entries))
         if mode == "verbose":
             detail = image_detail_lines(entries)
-    # BATCH TOTALS is part of the table itself, not an add-on the totals
-    # setting gates: it goes straight onto the end of `table` here, so every
-    # place that prints `table` below prints it too, unconditionally, whenever
-    # this batch packed at least one report or brief. Empty when nothing
-    # packed, so there is nothing yet to total.
+    # BATCH TOTALS is part of the table, not an extra that the totals
+    # setting controls. It goes straight onto the end of `table` here. Each
+    # place below that prints `table` prints it too, with no condition, when
+    # this batch packed at least one report or brief. It is empty when
+    # nothing packed, because there is nothing to total.
     table = table + run_totals_rows(packed_entries, mode)
-    # CONVERSATION TOTALS is the row the totals setting governs: the whole
-    # conversation's own sums, the same figures the "Conversation so far"
-    # line below states. totals_shown() gates this row only, never BATCH
-    # TOTALS above.
+    # CONVERSATION TOTALS is the row that the totals setting controls. It
+    # holds the sums of the whole conversation, the same figures as the
+    # "Conversation so far" line below. totals_shown() controls this row
+    # only, never BATCH TOTALS above.
     conversation_block = (conversation_totals_rows(totals, mode, packed_entries)
                           if totals_shown() else [])
     net_seen = any(item["mode"] != "stub" for item in with_images)
@@ -2268,38 +2549,37 @@ def main():
     receipt_file.write_text("\n".join(filed) + "\n", encoding="utf-8")
 
     if mode == "quiet":
-        # This one line stays a judgement call for the lead, and that is the
-        # right answer here. Quiet is the user's own order to print no
-        # receipt, so a hook field that printed one would be the defect.
-        # Nothing is lost when the lead ignores this line, because the table
-        # is on disk and the user only ever wanted it after asking for it,
-        # which is a question answered like any other question in the
-        # conversation.
+        # The lead chooses what to do with this one line, and that is correct
+        # here. Quiet mode is the setting that prints no receipt, and a hook
+        # field that prints one breaks that setting. The lead loses nothing
+        # when it ignores this line, because the table is on disk. The table
+        # shows only on request, and the lead answers that request like any
+        # other question in the conversation.
         lines.append("")
         lines.append("DensePack receipts are quiet. This batch's table is in %s . "
-                     "Show that table only if the user asked for a report in "
-                     "their prompt." % receipt_file)
+                     "Show that table only when the prompt asks for a "
+                     "report." % receipt_file)
     elif table:
         lines.append("")
-        # The long form goes out ONCE per session and every batch after it
-        # gets one line. In one measured lead transcript, resending it with
-        # every batch put 9 report blocks at 13,271 characters and 8 outbound
-        # brief blocks at 8,877, and every one of those characters then sat in
-        # the prefix of every later turn. The lead has already been told what
-        # to do with the table, so repeating it buys nothing.
+        # The hook sends the long form ONCE in each session, and each later
+        # batch gets one line. In one measured lead transcript, a copy with each
+        # batch put 9 report blocks at 13,271 characters and 8 outbound brief
+        # blocks at 8,877. Each of those characters then stayed in the prefix
+        # of each later turn. The lead already has the rule for the table,
+        # and a second copy adds nothing.
         if _rule_already_sent("receipt"):
             lines.append("Print this table with the rows labeled, the same way "
                          "as the earlier one:")
         else:
-            lines.append("The hook has already shown the user this table. The user has "
+            lines.append("The hook already showed this table on screen. The screen has "
                          "the numbers whatever you do. Show it again with the rows labeled, "
-                         "which is the one thing this hook cannot do. The numbers are measured by "
-                         "the hook from the source text and the PNG on disk, both kept next "
+                         "which is the one thing this hook cannot do. The hook measures the "
+                         "numbers from the source text and the PNG on disk, the two kept next "
                          "to the image for checking. Keep the rows in this order, and label "
-                         "each row with the task you assigned that agent, which you know "
-                         "and this hook does not, the hook only knows the agent type. Rows "
-                         "that say No images are agents whose reply stayed text. They are "
-                         "listed to show the user every agent, and they are not in the "
+                         "each row with the task you assigned that agent. This hook has "
+                         "only the agent type, not the task. Rows "
+                         "that say No images are agents whose reply stayed text. The table "
+                         "lists them to show every agent, and they are not in the "
                          "run totals or the savings:")
         lines += table
         lines += detail
@@ -2308,19 +2588,18 @@ def main():
             lines.append(footnote)
         if conversation_block:
             lines.append("")
-            lines.append("Print these two rows as their OWN table, separate from the one above, the whole conversation's own totals so far, the same "
-                         "figures the line below states:")
+            lines.append("Print these two rows as their OWN table, separate from the one above. They are the totals of the whole conversation so far. "
+                         "They are the same figures as the line below:")
             lines.append("")
             lines += conversation_block
         lines.append("")
         lines.append("Conversation so far: %s reports, %s images, %s tokens saved."
                      % (totals["reports"], totals["images"],
                         group(totals["text_tokens"] - totals["image_tokens"])))
-    # OUTSIDE the receipt branch, on purpose. Inside it, the table would
-    # appear only when a finished agent's report arrived, so a lead that
-    # spawned four agents and answered before any of them finished would
-    # print nothing, at the exact moment the user most needs to see which
-    # models are running.
+    # OUTSIDE the receipt branch. Inside it, the table shows only when the
+    # report of a finished agent arrives. A lead that spawned four agents
+    # and answered before any of them finished then prints nothing, at the
+    # exact moment when the list of running models matters most.
     delegation = delegation_table(sid)
     if len(delegation) > 3 and status_shown():
         lines.append("")
@@ -2328,13 +2607,22 @@ def main():
             lines.append("Print the delegation table below too, as before:")
         else:
             lines.append("Print the delegation table below too, exactly as given: every "
-                         "agent you have spawned this session, oldest first. Print it "
-                         "whether or not any of them has finished. The Model column is "
+                         "agent you spawned this session, oldest first. Print it "
+                         "whether or not any of them finished. The Model column is "
                          "the point of it. It is the only place that shows which model "
-                         "actually ran each agent. A subagent that should only "
+                         "ran each agent. A subagent that should only "
                          "diagnose, plan or critique but did heavy building work instead "
-                         "is visible here, not found later. Every spawn is recorded:")
+                         "shows here, not later. The table lists every spawn:")
         lines += delegation
+
+    # Nothing packed and nothing for the lead to open. A sentence that says
+    # so adds its tokens to each later turn and tells the lead nothing. In
+    # one session, 26 such sentences cost 3,878 tokens. The table is on disk
+    # in any case.
+    if not packed_entries and not nested and not (len(delegation) > 3 and status_shown()):
+        if drop_line:
+            emit(_drop_only_payload(drop_line))
+        return 0
 
     payload = {
         "hookSpecificOutput": {
@@ -2342,36 +2630,37 @@ def main():
             "additionalContext": "\n".join(lines),
         }
     }
-    # systemMessage is the one hook field Claude Code shows to the user
-    # directly (hooks reference, JSON output table). A rule the lead must
-    # obey is not a guarantee and a hook field the user sees is, so the WHOLE
-    # table goes here. The lead still gets its own copy in additionalContext,
-    # because only the lead knows which task each agent was given and can
-    # label the rows; if it prints that, the user gets a labeled table, and if
-    # it does not, the user still gets this one.
+    # systemMessage is the one hook field that Claude Code shows on screen
+    # directly (hooks reference, JSON output table). A rule for the lead is
+    # not a guarantee, and a hook field on screen is. The WHOLE table goes
+    # here for that reason. The lead still gets its own copy in
+    # additionalContext, because only the lead has the task of each agent
+    # and can label the rows. When the lead prints that copy, the screen
+    # shows a labeled table. When it does not, the screen still shows this
+    # one.
     code_files = [item["code"] for item in entries if item.get("code")]
-    # The python blocks are drawn, not lifted out.
-    # The pages are named here in the order the blocks stood in, and the .txt
-    # is still named beside them, so a reader that needs an exact byte opens
-    # the file and a reader that only needs to read the code opens the page.
+    # The code packs the python blocks into images. It does not extract them
+    # as text. The line names the pages here in the order of the blocks, and
+    # it still names the .txt next to them. A model that needs an exact byte
+    # opens the file. A model that only needs to read the code opens the
+    # page.
     code_pages = [page for item in entries
                   for page in (item.get("code_images") or [])]
     code_drawn = sum(item.get("code_drawn") or 0 for item in entries)
     code_text = sum(item.get("code_text") or 0 for item in entries)
 
-    # Record that a receipt is owed for this turn, so a stop hook can hold a
-    # reply that lacks one. A reminder does not make the lead relay the one
-    # column no hook can fill in, the task each agent was given; a gate does.
-    # Quiet mode owes nothing: the user asked for no table.
+    # Record that this turn owes a receipt. A stop hook can then hold a reply
+    # that lacks one. A reminder does not make the lead relay the one column
+    # that no hook can fill, the task of each agent. A gate does. Quiet mode
+    # owes nothing, because that setting asks for no table.
     if table and mode != "quiet" and packed_entries:
         try:
             (tmp_dir() / "densepack-receipt-owed.json").write_text(
                 json.dumps({
                     "session": str(event.get("session_id") or ""),
-                    # The turn this debt belongs to. Without it a debt left
-                    # behind by an interrupted turn blocks the NEXT reply,
-                    # which owes nothing, and costs the user a turn for no
-                    # reason.
+                    # The turn of this debt. Without it, a debt from an
+                    # interrupted turn blocks the NEXT reply, which owes
+                    # nothing, and wastes a turn.
                     "prompt_id": str(event.get("prompt_id") or ""),
                     "written": time.time(),
                     "agents": [item.get("agent_type", "agent")
@@ -2384,8 +2673,8 @@ def main():
         run_saved = run["text_tokens"] - run["image_tokens"]
         run_pct = (round(run_saved / run["text_tokens"] * 100)
                    if run["text_tokens"] else 0)
-        opening = ("DensePack receipt. Measured by the hook from the source "
-                   "text and the PNG on disk, both kept beside the image.")
+        opening = ("DensePack receipt. The hook measured it from the source "
+                   "text and the PNG on disk, the two kept beside the image.")
         plural = lambda n, word: "%s %s%s" % (group(n), word, "" if n == 1 else "s")
         closing = ("This batch: %s packed, %d%% saved, %s tokens, delivery "
                    "fee included. Conversation so far: %s, %s, %s tokens saved."
@@ -2393,11 +2682,11 @@ def main():
                       plural(totals["reports"], "report"),
                       plural(totals["images"], "image"),
                       group(totals["text_tokens"] - totals["image_tokens"])))
-        # Code lifted out of an image lives in a file the lead is told about.
-        # The user was told only if the lead passed the path on, so the path
-        # is named here as well: the code is the part of the report that
-        # cannot be read off the image.
-        code_line = ("Code blocks came out of %s. %s drew banded in: %s. "
+        # Code that the packer removed from an image is in a file, and the
+        # lead gets its path. The screen shows that path only when the lead
+        # prints it. This line names the path too, because the code is the
+        # part of the report that the image does not hold.
+        code_line = ("DensePack took the code blocks out of %s. %s packed into banded images: %s. "
                      "%s stayed text. Every block is at full fidelity "
                      "in: %s"
                      % (plural(len(code_files), "report"),
@@ -2415,11 +2704,12 @@ def main():
         note += ["", closing]
         shown = "\n".join(note)
         if len(shown) > MESSAGE_CHARS:
-            # Claude Code caps a hook string at 10,000 characters and replaces
-            # anything longer with a preview and a file path, which would
-            # break the guarantee on a long run. A receipt over the limit is
-            # cut here to the numbers plus the path of the table the hook
-            # already filed, so the user still gets both.
+            # Claude Code limits a hook string to 10,000 characters. It
+            # replaces any longer string with a preview and a file path. On
+            # a long run, that breaks the guarantee. The code cuts a receipt
+            # over the limit to the numbers plus the path of the table that
+            # the hook already wrote to a file. The screen still shows the
+            # numbers and the path.
             short = [opening, "", closing, "",
                      "The full table for this batch is in %s ." % receipt_file]
             if code_files:
@@ -2427,12 +2717,12 @@ def main():
             shown = "\n".join(short)
         payload["systemMessage"] = shown
     elif mode != "quiet" and [i for i in entries if i.get("reason") in BROKEN]:
-        # A batch where nothing packed carries no saving, so there is no table
-        # to show and in most cases nothing to say: text measuring cheaper is
-        # the plugin working, not failing. A batch that failed is different.
-        # Silence here would let a user watch a whole session pack nothing
-        # and never learn that Pillow was missing or the packer threw.
-        # One line, only on a failure.
+        # A batch where nothing packed has no saving. It has no table to
+        # show and in most cases nothing to say. Text that measures cheaper
+        # means that the plugin works. It does not mean a failure. A batch
+        # that failed is different. With no message here, a whole session can
+        # pack nothing, and the screen never shows that Pillow was missing or
+        # that the packer raised an error. One line, only on a failure.
         broken = sorted({reason_said(i) for i in entries if i.get("reason") in BROKEN})
         payload["systemMessage"] = (
             "DensePack packed nothing from this batch of %d agent report(s) "
@@ -2443,11 +2733,11 @@ def main():
 
 
 def guarded_main():
-    """Never let an exception out of this hook.
+    """Never let an exception leave this hook.
 
-    main() outside any try would let a fault change the outcome of the tool
-    call that fired the hook. The error is written to stderr so the fault is
-    still visible. The exit code stays 0, which lets the call through.
+    With main() outside a try, a fault can change the result of the tool
+    call that started the hook. The code writes the error to stderr, and
+    the fault still shows. The exit code stays 0, and the call goes through.
     """
     try:
         return main()

@@ -24,6 +24,16 @@
         ]
       }
     ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/subagent_start.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/subagent_start.py\" ; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ],
     "SubagentStop": [
       {
         "hooks": [
@@ -35,6 +45,44 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/read_image.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/read_image.py\" ; exit $LASTEXITCODE",
+            "timeout": 1800
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/bash_image.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/bash_image.py\" ; exit $LASTEXITCODE",
+            "timeout": 600
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/report_swap.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/report_swap.py\" ; exit $LASTEXITCODE"
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/report_swap.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/report_swap.py\" ; exit $LASTEXITCODE"
+          }
+        ]
+      },
       {
         "hooks": [
           {
@@ -80,10 +128,6 @@
           {
             "type": "command",
             "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/source_gate.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/source_gate.py\" ; exit $LASTEXITCODE"
-          },
-          {
-            "type": "command",
-            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/bash_gate.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/bash_gate.py\" ; exit $LASTEXITCODE"
           }
         ]
       },
@@ -125,6 +169,18 @@
           {
             "type": "command",
             "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/edit_gate.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/edit_gate.py\" ; exit $LASTEXITCODE"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/read_image.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/read_image.py\" ; exit $LASTEXITCODE",
+            "timeout": 1800
           }
         ]
       }

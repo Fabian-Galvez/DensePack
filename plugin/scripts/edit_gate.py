@@ -1,35 +1,33 @@
-"""Hands an Edit the exact line when its own text would not match.
+"""Gives an Edit the exact file line when its old_string does not match.
 
-HOW THIS FILE FITS, in plain words: a reader finds a file by reading
-DensePack's images. An image draws every character, and it cannot draw a
-trailing space. A reader that copies a line out of an image and sends it as
-Edit's old_string can lose that space, and Edit refuses the call. The reader
-then spends a turn asking what the line really says.
+The model reads a file from DensePack images. An image shows each character,
+but it cannot show a trailing space. When the model copies a line from an
+image and sends it as the old_string of an Edit, the model can lose that
+space. Edit then rejects the call, and the model uses a turn to find the
+exact text of the line.
 
-This gate spends that turn for it, before the Edit runs. It counts the
-reader's own old_string in the file. One match and the call goes straight
-through, which is every call that was already correct. No match, and the
-denial carries the file's own line, character for character, in quotes that
-show a space, a tab and a no-break space. The reader sends the Edit again
-with that text and it matches.
+This gate does that step before the Edit runs. It counts the old_string in
+the file. With one match, the call runs unchanged, as each correct call
+does. With no match, the denial holds the line from the file, character for
+character, in quotes that show a space, a tab and a no-break space. The
+model sends the Edit again with that text, and the text matches.
 
-WHAT IT BLOCKS. An Edit whose old_string is in the named file no times, and
-an Edit whose old_string is there more than once without replace_all. Both
-are calls Edit itself refuses. The gate refuses them one step earlier and
-says what the file holds.
+What the gate blocks. The gate blocks an Edit whose old_string is not in the
+named file, and an Edit whose old_string is in the file more than once
+without replace_all. Edit rejects the two kinds of call, and the gate
+rejects them one step earlier and shows what the file contains.
 
-WHAT IT LETS THROUGH. Every Edit that would have worked. A missing file, an
-unreadable file and an empty old_string all pass, because the answer belongs
-to Edit and not to this gate. Packing stays off with /dense-off, the same
-escape every gate here shares.
+What the gate allows. The gate allows each Edit that can work. A missing
+file, an unreadable file and an empty old_string all pass, because Edit
+gives the answer for them. /dense-off stops this gate and each other gate
+here.
 
-WHY A DENY, NOT A REWRITE. A rewrite would put words in the reader's mouth.
-The reader asked to change one exact piece of text, and a gate that quietly
-edited that text could change a line the reader never looked at. The denial
-names the line and lets the reader decide.
+Why a denial and not a rewrite. The model asked to change one exact piece of
+text. A gate that changes that text itself can change a line that the model
+did not read. The denial names the line, and the model chooses the next step.
 
-NEVER CRASH A CALLER. One try around everything. Any fault allows the call,
-the same failure mode every gate in this folder chooses.
+A fault never blocks the call. One try covers all of main(), and a fault
+allows the call. Each other gate in this folder does the same.
 """
 
 import difflib
@@ -39,13 +37,13 @@ import sys
 
 from common import disabled, emit, read_event
 
-# How many near lines a denial names. Three is enough to recognise the right
-# one and short enough that the message never grows into a file listing.
+# The number of near lines that a denial names. Three is enough to find the
+# right line. The message stays short and does not become a file listing.
 CANDIDATES = 3
 
-# How many lines of the file a denial quotes when the first line matched and
-# a later one did not. The reader needs the whole block to see which line
-# drifted, and a block longer than this is a sign the reader wants a Read.
+# The number of file lines that a denial quotes when the first line matched
+# and a later line did not. The model needs the whole block to find the line
+# that differs. A block longer than this needs a Read.
 BLOCK = 12
 
 NOT_FOUND = ("DensePack: that text is not in %s. The file contains this, "
@@ -61,7 +59,7 @@ MANY = ("DensePack: that text is in %s %d times. Each copy starts on one of "
 
 
 def quote(text):
-    """The line as Python text, which draws a space and a tab you can see."""
+    """Return the line as Python text that shows each space and tab."""
     shown = repr(text)
     if shown.startswith("u"):
         shown = shown[1:]
@@ -69,7 +67,7 @@ def quote(text):
 
 
 def lines_of(path):
-    """The file's lines without their endings, or None when it cannot open."""
+    """Return the lines without line endings, or None when the read fails."""
     try:
         with io.open(path, encoding="utf-8", newline="") as handle:
             return handle.read().splitlines()
@@ -86,15 +84,15 @@ def text_of(path):
 
 
 def match_lines(lines, first):
-    """Every line number, counting from one, whose line equals `first`."""
+    """Return each line number, counting from one, whose line equals `first`."""
     return [number for number, line in enumerate(lines, 1) if line == first]
 
 
 def copy_lines(whole, old):
-    """The line number each copy of `old` starts on, counting from one.
+    """Return the line number where each copy of `old` starts, from one.
 
-    Counted from the character offset rather than from whole lines, because
-    a reader's text often starts in the middle of a line.
+    The count uses the character offset and not whole lines, because the
+    text from the model often starts in the middle of a line.
     """
     numbers, at = [], whole.find(old)
     while at != -1 and len(numbers) <= CANDIDATES:
@@ -108,13 +106,13 @@ def row(lines, number):
 
 
 def block_from(lines, start, count):
-    """`count` lines from `start`, each with its number and its exact text."""
+    """Return `count` lines from `start`, each with its number and exact text."""
     last = min(start + min(count, BLOCK), len(lines) + 1)
     return "\n".join(row(lines, number) for number in range(start, last))
 
 
 def near_numbers(lines, first):
-    """The line numbers of the closest lines to `first`, best first."""
+    """Return the numbers of the lines closest to `first`, closest first."""
     close = difflib.get_close_matches(first, lines, n=CANDIDATES, cutoff=0.6)
     numbers, used = [], set()
     for line in close:
@@ -127,21 +125,21 @@ def near_numbers(lines, first):
 
 
 def report(path, lines, old):
-    """The words a denial carries when old_string is not in the file."""
+    """Return the denial text for an old_string that is not in the file."""
     shown = os.path.basename(path)
     wanted = old.splitlines() or [old]
 
-    # Where the reader's first line sits, or where it nearly sits.
+    # Find the first line of the model's text, or the lines closest to it.
     starts = match_lines(lines, wanted[0]) or near_numbers(lines, wanted[0])
     if not starts:
         return NO_MATCH % shown
 
-    # One place to look. Quote the whole block the reader asked for, because
-    # the drift is inside it and the reader needs every line to send again.
+    # One match. Quote the whole block that the model sent. The difference
+    # is inside it, and the model needs each line to send the Edit again.
     if len(starts) == 1:
         return NOT_FOUND % (shown, block_from(lines, starts[0], max(len(wanted), 1)))
 
-    # Several places. Name each one by its first line and let the reader pick.
+    # Several matches. Name each one by its first line. The model chooses one.
     rows = "\n".join(row(lines, number) for number in starts[:CANDIDATES])
     return NOT_FOUND % (shown, rows)
 
@@ -168,6 +166,12 @@ def main():
         whole = text_of(path)
         if whole is None:
             return 0
+        # Claude Code's Edit matches a file with CRLF line ends as if they
+        # were LF, and the model sends old_string with LF. Without the same
+        # step, the gate denied every multi-line Edit on a CRLF file that Edit
+        # then made.
+        whole = whole.replace("\r\n", "\n")
+        old = old.replace("\r\n", "\n")
 
         found = whole.count(old)
         if found == 1:

@@ -1,44 +1,45 @@
 #!/bin/sh
-# Tell the user how to get Python on Linux and macOS when the machine has none,
-# so the plugin's hooks can run. SessionStart only.
+# Tells you how to get Python on Linux and macOS when the machine has none.
+# The plugin hooks need Python to run. SessionStart only.
 #
-# Every other script in this folder is Python, so none of them can speak on a
-# machine with no Python: the hook would never start. /bin/sh is on every Linux
-# and macOS, so this one runs where they cannot.
+# Each other script in this folder is Python. On a machine with no Python,
+# none of them can print a message, because the hook never starts. /bin/sh is
+# on each Linux and macOS machine, and this script runs where they cannot.
 #
-# It installs nothing. Session start waits for this hook, and every install
-# route takes minutes: brew builds, and apt, dnf and pacman need sudo, which
-# cannot ask for a password inside a hook. So the script names the command
-# for this machine instead of failing silently.
+# It installs nothing. Session start waits for this hook, and each install
+# route takes minutes. brew builds, and apt, dnf and pacman need sudo, which
+# cannot ask for a password inside a hook. The script names the install
+# command for the system and never fails without a message.
 #
-# On macOS the plain "is python3 there" test is wrong. /usr/bin/python3 is a
-# stub that belongs to the Xcode Command Line Tools, and running it with those
-# tools absent opens a window asking to install them. usable_python() below
-# tests for the tools with xcode-select -p, which opens nothing, and looks in
-# both Homebrew prefixes by path because a hook's PATH holds neither.
+# On macOS, the plain "is python3 there" test is wrong. /usr/bin/python3 is a
+# stub that belongs to the Xcode Command Line Tools. A run of it without those
+# tools opens a window that asks to install them. usable_python() below tests
+# for the tools with xcode-select -p, which opens nothing. It looks in the two
+# Homebrew prefixes by path, because the PATH of a hook holds neither.
 #
-# It writes nothing except one marker file, changes no setting and blocks
-# nothing. On a machine that already has Python it prints nothing at all.
+# It writes only one marker file and the saved Python path, changes no
+# setting and blocks nothing. On a machine that already has Python, it prints
+# nothing.
 #
-# Claude Code reads a hook's stdout as JSON, so the only output here is one
-# JSON object carrying systemMessage, the field Claude Code shows the user.
+# Claude Code reads the stdout of a hook as JSON. The only output here is one
+# JSON object with systemMessage, the field that Claude Code shows on screen.
 
 say() {
-    # printf, not echo, because echo mangles a backslash on some shells and the
-    # output has to stay valid JSON.
+    # printf, not echo, because echo changes a backslash on some shells, and
+    # the output must stay valid JSON.
     printf '{"systemMessage":"%s"}' "$1"
 }
 
 OS=$(uname -s 2>/dev/null || echo unknown)
 
 probe() {
-    # Bounded, like run_hook.sh's own: a python3 that never returns would
-    # hold session start until Claude Code's hook timeout. macOS ships no
-    # timeout(1), so a background job and a watchdog do the work.
+    # A time limit, the same as in run_hook.sh. A python3 that never returns
+    # holds session start until the Claude Code hook timeout. macOS ships no
+    # timeout(1). A background job and a watchdog do the work.
     "$@" >/dev/null 2>&1 &
     probe_pid=$!
-    # The kill waits on the sleep SUCCEEDING, so a PATH with no sleep on it
-    # leaves the probe unbounded rather than killing every candidate.
+    # The kill runs only when the sleep SUCCEEDS. A PATH with no sleep leaves
+    # the probe with no time limit and does not kill each candidate.
     ( sleep 10 || /bin/sleep 10 ) >/dev/null 2>&1 \
         && kill -9 "$probe_pid" >/dev/null 2>&1 &
     probe_watch=$!
@@ -51,15 +52,16 @@ probe() {
 
 
 find_python() {
-    # The one Python search every hook uses. run_hook.sh in find mode walks
-    # the same PATH folders a hook walks, refuses a relative entry, skips the
-    # macOS placeholder at /usr/bin/python3 without the Xcode tools, prefers
-    # a Homebrew Python over it, and prints the first Python 3.10 or newer.
-    # command -v is not used: under bash it turns a relative PATH entry into
-    # an absolute path, so a python3 planted in the project folder would run.
+    # The one Python search that each hook uses. run_hook.sh in find mode
+    # walks the same PATH folders as a hook. It rejects a relative entry,
+    # skips the macOS placeholder at /usr/bin/python3 without the Xcode
+    # tools, prefers a Homebrew Python over it, and prints the first Python
+    # 3.10 or newer. The script does not use command -v. Under bash, command
+    # -v changes a relative PATH entry to an absolute path, and a python3 file
+    # in the project folder can then run.
     sh_bin=/bin/sh
     [ -x "$sh_bin" ] || sh_bin=sh
-    # This script's folder, from a path with / or, under Git Bash, \.
+    # The folder of this script, from a path with / or, under Git Bash, \.
     here=${0%/*}
     [ "$here" != "$0" ] || here=${0%\\*}
     [ "$here" != "$0" ] || here=.
@@ -67,19 +69,19 @@ find_python() {
 }
 
 usable_python() {
-    # True when the search finds a Python 3.10 or newer. Pillow 12, which the
-    # plugin installs, has no wheel for an older one, and the Xcode tools'
-    # Python is 3.9. The path is saved under the home folder, where a project
-    # cannot write, and every hook starts that Python first, so an old Python
-    # earlier on PATH never runs a hook.
+    # True when the search finds a Python 3.10 or newer. The plugin installs
+    # Pillow 12, which has no wheel for an older one, and the Python of the
+    # Xcode tools is 3.9. The function saves the path under the home folder,
+    # where a project cannot write. Each hook starts that Python first, and
+    # an old Python earlier on PATH never runs a hook.
     FOUND=$(find_python)
     [ -n "$FOUND" ] || return 1
-    # A virtual environment's Python is not saved: every later hook would
-    # start it after that environment has left PATH.
+    # The function does not save the Python of a virtual environment. A saved
+    # one starts in each later hook, also after that environment leaves PATH.
     if [ -n "${HOME:-}" ] \
             && probe "$FOUND" -c 'import sys; sys.exit(sys.prefix != sys.base_prefix)'; then
-        # Written to a file of its own, then moved into place, so a hook never
-        # reads a half-written path.
+        # The path goes to a file of its own and then moves into place. A
+        # hook never reads a half-written path.
         state="$HOME/.claude/densepack-state"
         ( mkdir -p "$state" \
             && printf '%s\n' "$FOUND" > "$state/python-path.$$" \
@@ -89,16 +91,17 @@ usable_python() {
 }
 
 # On Windows, Claude Code runs this through Git Bash, and ensure_python.ps1
-# does the install with winget. One sh entry then serves every system, and a
+# does the install with winget. One sh entry then serves each system, and a
 # Linux or macOS machine never needs a powershell command.
 case "$OS" in
     MINGW*|MSYS*|CYGWIN*)
         if command -v powershell >/dev/null 2>&1; then
             exec powershell -NoProfile -ExecutionPolicy Bypass -File "$(dirname "$0")/ensure_python.ps1"
         fi
-        # No PowerShell to hand off to: say only when no Python starts here.
+        # No PowerShell to pass the work to. The script prints a message only
+        # when no Python starts here.
         usable_python && exit 0
-        say "DensePack needs Python 3.10 or newer on Windows. Install it from python.org, tick Add python.exe to PATH, then restart Claude Code."
+        say "DensePack needs Python 3.10 or newer on Windows. Install it from python.org, select Add python.exe to PATH, then restart Claude Code."
         exit 0
         ;;
 esac
@@ -107,36 +110,37 @@ if usable_python; then
     exit 0
 fi
 
-# One attempt per machine. Delete this file to let it try again.
+# The message with the install command shows once per machine. Delete this
+# file to show it again.
 #
-# Both writes run inside a subshell with stderr closed. A redirect that fails,
-# because the folder is not there or is read only, is reported by the SHELL and
-# not by the command, so 2>/dev/null on the command itself does not silence it
-# and "cannot create" reaches stderr. Claude Code reads a hook's stderr, so
-# that line would surface as a hook error on a machine this script is trying to
-# help. Failing to write the marker only means the next session tries again.
+# The two writes run inside a subshell with stderr closed. When a redirect
+# fails, because the folder is missing or read only, the SHELL reports it,
+# not the command. 2>/dev/null on the command does not hide it, and "cannot
+# create" reaches stderr. Claude Code reads the stderr of a hook, and that
+# line then shows as a hook error on a machine that this script tries to
+# help. When the marker write fails, the next session tries again.
 DATA="${CLAUDE_PLUGIN_DATA:-$HOME/.densepack}"
 ( mkdir -p "$DATA" ) 2>/dev/null
 TRIED="$DATA/python-install-tried"
 if [ -f "$TRIED" ]; then
-    say "DensePack found no Python 3.10 or newer, so none of its hooks run and reports arrive as plain text. It already tried once on this machine. Install Python 3.10 or newer, then restart Claude Code."
+    say "DensePack found no Python 3.10 or newer. None of its hooks run, and reports arrive as plain text. An earlier session showed the install command. Install Python 3.10 or newer, then restart Claude Code."
     exit 0
 fi
 ( printf 'tried' > "$TRIED" ) 2>/dev/null
 
-# No install runs here, on any platform. brew takes minutes and session start
-# waits for this hook, so the message below names the command to run instead.
+# No install runs here, on any platform. brew takes minutes, and session
+# start waits for this hook. The message below names the command to run.
 
-# What to tell the user to run. macOS gets its own answer, because apt, dnf and
-# pacman are Linux package managers and a Mac carries none of them. The two
-# routes named here need no administrator password: Homebrew and the uv
-# installer both write inside the user's own directories.
+# The command to show on screen. macOS gets its own answer, because apt, dnf
+# and pacman are Linux package managers and a Mac has none of them. The two
+# routes named here need no administrator password. Homebrew and the uv
+# installer write inside your own directories.
 #
-# No double quote and no backslash may appear in CMD. say() drops it straight
-# into a JSON string with printf and escapes nothing, so either character
-# would produce JSON that Claude Code cannot parse.
+# CMD must hold no double quote and no backslash. say() puts it directly
+# into a JSON string with printf and escapes nothing. Either character makes
+# JSON that Claude Code cannot parse.
 if [ "$OS" = "Darwin" ]; then
-    CMD="brew install python , after installing Homebrew from https://brew.sh , or curl -LsSf https://astral.sh/uv/install.sh | sh and then uv python install"
+    CMD="brew install python , after installing Homebrew from https://brew.sh , or curl -LsSf https://astral.sh/uv/install.sh | sh and then uv python install --default"
 elif command -v apt >/dev/null 2>&1; then
     CMD="sudo apt install python3 python3-pip"
 elif command -v dnf >/dev/null 2>&1; then
@@ -144,9 +148,9 @@ elif command -v dnf >/dev/null 2>&1; then
 elif command -v pacman >/dev/null 2>&1; then
     CMD="sudo pacman -S python python-pip"
 else
-    say "DensePack needs Python 3.10 or newer and this machine has no such Python, so none of its hooks run and reports arrive as plain text. Install Python 3.10 or newer with your package manager, then restart Claude Code."
+    say "DensePack needs Python 3.10 or newer, and this computer has no such Python. None of its hooks run, and reports arrive as plain text. Install Python 3.10 or newer with your package manager, then restart Claude Code."
     exit 0
 fi
 
-say "DensePack needs Python 3.10 or newer and this machine has no such Python, so none of its hooks run and reports arrive as plain text. Run: $CMD , then restart Claude Code."
+say "DensePack needs Python 3.10 or newer, and this computer has no such Python. None of its hooks run, and reports arrive as plain text. Run: $CMD , then restart Claude Code."
 exit 0

@@ -1,25 +1,35 @@
-"""Runs once when a session opens. The doorman.
+"""The SessionStart hook. It runs when a session opens, and again after a
+resume, a clear or a compact.
 
-HOW THIS FILE FITS, in plain words: four jobs before anything else happens.
-Make sure Pillow, the drawing library, is installed in the plugin's own private
-folder, because without it no image can be drawn and every other script quietly
-stands down. Tell the assistant how to treat a condensed-prompt image the user
-pastes, so the shortcut and right-click tools work without the user typing an
-explanation. Show the user the savings total the last conversation left behind.
-Warn the user when the drawing size does not match the model they are running,
-or when Pillow could not be installed.
+HOW THIS FILE FITS. The hook runs these steps before anything else happens:
+- It removes links that a project put in the plugin's working folders.
+- It deletes stale flags and old working files, and it records the lead
+  session.
+- It makes the vault folders.
+- It installs Pillow, the image library, with freetype-py and NumPy, in the
+  plugin's own private folder. Without Pillow the plugin cannot make an
+  image, and each other script does nothing.
+- It packs the instruction images. It converts CLAUDE.md, CLAUDE.local.md
+  and MEMORY.md into images behind a pointer.
+- When the lead gets images, it sends READ_TOOL_LINE and
+  SUBAGENT_BRIEF_LINE to the model. READ_TOOL_LINE says how files, command
+  output and Word files arrive as images.
+- It shows the savings table from the last conversation, and a warning
+  when the Pillow install failed.
 
-SessionStart hook. Four jobs, all quiet.
+The hook installs Pillow once into CLAUDE_PLUGIN_DATA. That folder stays
+after a plugin update. Claude Code installs only Node dependencies by itself.
+This hook installs the Python dependencies. The hook never blocks a session.
+If the Pillow install fails, each other hook does nothing, text reaches the
+model as it does without the plugin, and a message on screen tells you.
 
-Install Pillow once into CLAUDE_PLUGIN_DATA, which survives plugin updates.
-Claude Code auto-installs Node dependencies only, so the Python half is this
-hook's job. Never blocks a session. If Pillow cannot be installed, every other
-hook degrades to doing nothing and text flows exactly as it would without the
-plugin, and the user is told so.
-
-Three things go to the user through systemMessage, the field Claude Code shows
-the user directly: last conversation's totals table, a reader mismatch, and a
-failed Pillow install. Everything else goes to the lead as context.
+Four things go on screen through systemMessage, the field that Claude Code
+shows directly:
+- the note that DensePack set CLAUDE_CODE_THRIFTY_SONIC in settings.json
+- the note that DensePack converted an instruction file
+- the totals table from the last conversation
+- a failed Pillow install
+Everything else goes to the lead as context.
 """
 
 import hashlib
@@ -35,29 +45,31 @@ from common import (resolved_reader,
                     add_lead, disabled, emit, ensure_pillow, font_size,  # noqa: E402
                     CODE_PX, read_event, tmp_dir, vault_dir)
 
-# Working files older than this are deleted when a new session opens. Every
-# packed report and every packed brief leaves a PNG and a source text file
-# behind, and nothing else removes them.
+# Session start deletes working files older than this. Each packed report and
+# each packed brief leaves a PNG and a source text file. No other step
+# removes them.
 #
-# Why one day, and why only at session start. The lead re-reads a report image
-# during the session that produced it, and sometimes the session after, so
-# anything younger than a day stays. Nothing is deleted mid-session, so a file
-# can never disappear while the lead is using it. The manifest, the totals and
-# the settings are never touched: they are the record, not the working copy.
-# densepack-start- markers are on the list because a crashed agent's marker
-# never reaches the code that deletes it on a normal finish. 24 hours is far
-# longer than any agent runs, so nothing still working loses its marker.
+# The reason for one day and for session start only. The lead reads a report
+# image again in the session that made it, and sometimes in the next session.
+# For that reason a file younger than a day stays. The hook deletes nothing
+# during a session. No file disappears while the lead uses it. The prune
+# never touches the manifest, the totals or the settings. They are the
+# record, not the working copy.
+# The densepack-start- markers are on the list because the marker of a
+# crashed agent never reaches the code that deletes it on a normal finish. An
+# agent runs for much less than 24 hours. A running agent never loses its
+# marker.
 KEEP_HOURS = 24
 
-# A run marker is claimed within milliseconds of the event that names it and
-# is never read again, so an hour is already generous. Under the 24 hour rule
-# tens of thousands of markers pile up in .claude/tmp, and a listing of the
-# folder then takes seconds inside every Bash call.
+# A hook claims a run marker within milliseconds of the event that names it
+# and never reads it again. One hour is more than enough. Under the 24 hour
+# rule, tens of thousands of markers collect in .claude/tmp, and a listing of
+# the folder then takes seconds inside each Bash call.
 RAN_MARKER_HOURS = 1
-# Card sets in the machine-wide cache live this long after their last hit.
+# Card sets in the machine-wide cache stay this long after their last hit.
 CARD_KEEP_DAYS = 7
 # The bash names and the legend sidecar are working files by the same test as
-# every other name here: the vault keeps the copy that survives, and
+# each other name here. The vault keeps the permanent copy, and
 # prune_old_files() runs only at session start.
 PRUNE_PREFIXES = ("densepack-img-", "densepack-brief-", "densepack-briefsrc-",
                   "densepack-src-", "densepack-code-", "densepack-briefcode-",
@@ -69,10 +81,11 @@ PRUNE_PREFIXES = ("densepack-img-", "densepack-brief-", "densepack-briefsrc-",
 
 
 def prune_old_files():
-    """Delete working files older than KEEP_HOURS. Returns how many and how big.
+    """Delete working files older than KEEP_HOURS. Return the count and the bytes.
 
-    Failure is ignored on purpose. A file the operating system will not delete,
-    because another program holds it open, is not worth stopping a session for.
+    The function ignores a failure on purpose. The operating system does not
+    delete a file that another program holds open. Such a file is no reason
+    to stop a session.
     """
     import time
     cutoff = time.time() - KEEP_HOURS * 3600
@@ -109,16 +122,16 @@ def prune_old_files():
                              time.time() - RAN_MARKER_HOURS * 3600)
     removed += gone
     freed += bytes_gone
-    # images/, drops/ and drop-gate/ under the vault carry the same age rule
-    # as every other working file, or they grow without limit. A drop image
-    # is drawn again on the next Read of the same file, so deleting an old
-    # one loses nothing. The conversation folders and vault_trim() are left
-    # alone: those hold the copy that survives.
+    # images/, drops/ and drop-gate/ under the vault use the same age rule as
+    # each other working file. Without it they grow without limit. The next
+    # Read of the same file packs a drop image again. Deleting an old one
+    # loses nothing. This step does not touch the conversation folders or
+    # vault_trim(). Those hold the permanent copy.
     base = vault_dir()
     from common import project_dir, through_link
     for name, deep in (("images", False), ("drops", False), ("drop-gate", True)):
-        # A folder that is, or sits under, a link or a junction may point at
-        # the user's own files, so nothing through one is deleted.
+        # A folder that is a link or a junction, or is under one, can lead to
+        # your own files. The prune deletes nothing through a link.
         folder = base / name
         if through_link(project_dir(), folder):
             continue
@@ -126,23 +139,39 @@ def prune_old_files():
                                   if not through_link(folder, p)], None)
         removed += gone
         freed += bytes_gone
-    # A hook killed mid-draw leaves its per-path folder under drop-gate. Empty
-    # folders go, deepest first; rmdir refuses one that still holds a file,
-    # and nothing through a link is touched.
+    # A hook killed during a pack leaves its per-path folder under drop-gate.
+    # This step removes empty folders, deepest first. rmdir fails on a folder
+    # that still holds a file. The step touches nothing through a link.
     gate = base / "drop-gate"
     if not through_link(project_dir(), gate):
         for sub in sorted(listing(gate, True), key=lambda p: len(p.parts), reverse=True):
             try:
-                # Only a folder untouched for an hour: a running draw made
-                # its folder moments ago and is about to copy into it.
+                # Only a folder untouched for an hour goes. A running pack
+                # made its folder moments ago and copies into it next.
                 if (sub.is_dir() and not through_link(gate, sub)
                         and sub.stat().st_mtime < time.time() - 3600):
                     sub.rmdir()
             except OSError:
                 pass
-    # The machine-wide card cache. Every edit to a signed renderer file adds
-    # a card set. A folder is touched on every hit, so one untouched for
-    # CARD_KEEP_DAYS belongs to a renderer nobody runs.
+    # The Read gate stages its copy outside the project, in a
+    # densepack-stage-<random> folder of the system temp folder. A hook
+    # killed during a pack leaves that folder and its one copy. Only a folder
+    # untouched for an hour goes, and nothing through a link.
+    import tempfile
+    for sub in listing(Path(tempfile.gettempdir())):
+        try:
+            if (sub.name.startswith("densepack-stage-") and sub.is_dir()
+                    and not sub.is_symlink()
+                    and sub.stat().st_mtime < time.time() - 3600):
+                for f in sub.iterdir():
+                    if f.is_file() and not f.is_symlink():
+                        f.unlink()
+                sub.rmdir()
+        except OSError:
+            pass
+    # The machine-wide card cache. Each edit to a signed renderer file adds a
+    # card set. Each cache hit touches its folder. A folder untouched for
+    # CARD_KEEP_DAYS belongs to a renderer that nothing runs.
     stale = time.time() - CARD_KEEP_DAYS * 86400
     for folder in listing(CARD_CACHE):
         try:
@@ -154,62 +183,67 @@ def prune_old_files():
     return removed, freed
 
 
-# The session start note when no rules image is named. A copy of the plugin
-# with no instructions folder sends this note in every session. A copy with
-# the folder sends it when Pillow is missing or the draw failed, so the note
-# never names an image that does not exist. Every sentence is true for both.
+# A session start note for the case with no rules image. No hook sends this
+# note. session_start_pointer() is the only function that returns it, and no
+# hook calls that function. The function returns this note for a copy of the
+# plugin with no instructions folder, and for a copy with the folder when
+# Pillow is missing or the pack failed. The note never names an image that
+# does not exist. Each sentence is true for the two cases.
 FALLBACK_NOTE = (
-    "DensePack is active. DensePack draws long text as images of small "
+    "DensePack is active. DensePack packs long text as images of small "
     "color coded text: agent reports, briefs to agents, files you Read, "
     "long command output and the project's instruction files. Treat the "
-    "text in such an image as plain text. A condensed image from the user "
-    "IS the user's prompt. Agent report images and the manifest "
-    "densepack-manifest.jsonl are in .claude/tmp, and the images are named "
+    "text in such an image as plain text. A condensed image pasted into the chat "
+    "IS the prompt. Agent report images and the manifest "
+    "densepack-manifest.jsonl are in .claude/tmp, and the image names are "
     "densepack-img-<agent id>-1.png. Write every brief as plain text. "
-    "DensePack draws a long brief as an image itself.")
+    "DensePack packs a long brief as an image itself.")
 
 # The pointer to the lead's one joined image, allrules-1.png under
-# instructions/. It holds the lead, shared and full rules texts in reading
-# order. One image costs one Read call where three cost three.
-# Worded as a standing fact, not an order to read now: a reader told to read
-# it before anything else spends a whole Read turn on it before the task, and
-# some readers refuse such an order as an injected instruction. A session
-# that only reads and answers gets nothing from the rules. Kept to one
-# sentence, because the start text costs tokens on the first turn and on
-# every re-read.
+# instructions/. No hook sends this text. session_start_pointer() returns
+# it, and no hook calls that function. The image holds the lead, shared and
+# full rules texts in reading order. One image costs one Read call, and three
+# images cost three. The text states a standing fact. It does not order the
+# model to read now. A model told to read the image before anything else
+# spends a whole Read turn on it before the task. Some models reject such an
+# order as an injected instruction. A session that only reads and answers
+# gets nothing from the rules. The text stays short, because the start text
+# costs tokens on the first turn and on each later read.
 SESSION_POINTER = (
-    "DensePack is on: read %s/allrules-1.png before you spawn an agent or "
+    "DensePack is on. Read %s/allrules-1.png before you spawn an agent or "
     "write or edit a Markdown document or a README, and request every file "
     "you need in one turn."
 )
 
 
-
-
 def session_start_pointer(pillow_ok):
-    """The SessionStart pointer line naming the lead's one joined rules
-    image, or FALLBACK_NOTE when it cannot be trusted to exist.
+    """Return the SessionStart pointer line that names the lead's one joined
+    rules image. Return FALLBACK_NOTE when that image is not sure to exist.
 
-    Checked against the real files on disk rather than assumed from
-    pillow_ok alone: draw_instruction_images() skips a text that failed to
-    read and ensure_instruction_image() returns None on a pack failure, so
-    Pillow importing is not proof every file landed.
+    No hook calls this function. main() sends READ_TOOL_LINE through
+    deliver_context(). It does not send FALLBACK_NOTE or SESSION_POINTER.
 
-    The folder is one for every reader. At SessionStart the event carries
-    no model field and the transcript has no assistant line yet, so no
-    reader can be named here; the event's keys are cwd, hook_event_name,
-    scratchpad_dir, session_id, source and transcript_path.
+    The function checks the real files on disk. pillow_ok alone is not
+    enough. draw_instruction_images() skips a text that it failed to read,
+    and ensure_instruction_image() returns None on a pack failure. A
+    successful Pillow import does not prove that each file exists.
+
+    All models use one folder. At SessionStart the event has no model field
+    and the transcript has no assistant line yet. This function cannot name
+    a model. The event's keys are cwd, hook_event_name, scratchpad_dir,
+    session_id, source and transcript_path.
     """
-    # Only an image this plugin draws is named. The Export ships no
-    # instruction texts and draws none, so an image found there was planted
-    # by the project and must not reach the lead as the plugin's own rules.
+    # The note names only an image that this plugin packs. A copy of the
+    # plugin with no instructions folder packs no rules image. In that copy,
+    # the project put any image found there, and that image must not reach
+    # the lead as the plugin's own rules.
     instructions_ship = (Path(__file__).resolve().parent.parent / "instructions").is_dir()
     if pillow_ok and instructions_ship:
-        # One folder for every reader: one image at CODE_PX serves them all.
+        # All models use one folder. One image at CODE_PX serves all of them.
         folder = vault_dir() / "instructions"
-        # The .hash beside the image must hold this machine's seal over the
+        # The .hash beside the image must hold the local seal over the
         # current rules text. A project can commit an image and a plain
-        # digest; it cannot compute the seal.
+        # digest. It cannot compute the seal.
         try:
             drawn = ((folder / "allrules-1.png").is_file()
                      and (folder / "allrules.hash").read_text(encoding="utf-8").strip()
@@ -221,77 +255,80 @@ def session_start_pointer(pillow_ok):
     return FALLBACK_NOTE
 
 
-# The texts every instruction image or Haiku text file is drawn or copied
-# from. Read from the instructions folder, which ships with the plugin, never
-# from the vault: the vault holds the drawn output, not the source words.
+# The source texts for each instruction image and each Haiku text file. The
+# hook reads them from the instructions folder, which ships with the plugin.
+# It never reads them from the vault. The vault holds the packed output, not
+# the source words.
 INSTRUCTION_TEXTS = {"lead": "lead.txt", "worker": "worker.txt",
                      "facts": "facts.txt", "shared": "shared.txt",
                      "fullrules": "fullrules.txt",
                      "check": "check.txt", "reader": "reader.txt",
                      "runner": "runner.txt", "tune": "tune.txt"}
 
-# The lead's three texts, joined in reading order and converted as one
-# image. Three separate images cost three Read calls, so three turns,
-# before the agent touches the task. One image costs one.
+# The lead's three texts, joined in reading order and packed as one image.
+# Three separate images cost three Read calls, and three turns, before the
+# agent starts the task. One image costs one.
 ALL_LEAD = ("lead", "shared", "fullrules")
 
 # The worker's two texts, joined the same way and for the same reason.
 ALL_WORKER = ("worker", "shared")
 
-# The fact checker's two texts: its own card and the shared card.
+# The fact checker's two texts, its own card and the shared card.
 ALL_CHECK = ("check", "shared")
 
-# The source reader's two texts: a reader opens the files the brief names.
+# The source reader's two texts. A source reader opens the files that the
+# brief names.
 ALL_READER = ("reader", "shared")
 
-# The command runner's two texts: a runner runs the commands the brief names.
+# The command runner's two texts. A runner runs the commands that the brief
+# names.
 ALL_RUNNER = ("runner", "shared")
 
-# The tuning page, one text on its own: the procedure a lead runs to read
-# this user's own records, count what they do, and name the fix for each
-# count that misses a measured condition.
+# The tuning page is one text on its own. It holds the procedure that a lead
+# follows to read your own records, count what they do and name the fix for
+# each count that misses a measured condition.
 ALL_TUNE = ("tune",)
 
-# Every joined page a lead reads, drawn once. The stem names the image file
-# and the POINTERS.txt row. Neither page is a card: no spawn names either one.
+# Each joined page that a lead reads, packed once. The stem names the image
+# file and the POINTERS.txt row. Neither page is a card. No spawn names
+# either one.
 JOINED_IMAGES = (("allrules", ALL_LEAD), ("tune", ALL_TUNE))
 
-# Every identity card, one folder each under instructions/. A card's folder
-# can grow a second page with no code change and no name collision with
+# Each identity card, with one folder each under instructions/. A card's
+# folder can get a second page with no code change and no name collision with
 # another card. Each row is (card name, image stem, the INSTRUCTION_TEXTS keys
-# joined into the page). A card added here is drawn on the next run, and the
-# SHA gate in ensure_instruction_image() leaves the pages already on disk
-# alone.
+# joined into the page). The next run packs a card added here. The SHA gate
+# in ensure_instruction_image() does not change the pages already on disk.
 CARD_IMAGES = (("worker", "workerrules", ALL_WORKER),
                ("check", "checkrules", ALL_CHECK),
                ("reader", "readerrules", ALL_READER),
                ("runner", "runnerrules", ALL_RUNNER))
 
-# The single role images, each pair (image stem, INSTRUCTION_TEXTS key), drawn
-# once into instructions/ for every reader.
+# The single role images, each pair (image stem, INSTRUCTION_TEXTS key),
+# packed once into instructions/ for all models.
 ROLE_IMAGES = (("role-worker", "worker"),)
 
 
-# Every folder the vault layout names. They are made here, ahead of
-# draw_instruction_images(), because a folder costs nothing to make whether
-# or not Pillow can draw into it, and instructions/haiku holds plain text
-# copies that need no drawing at all. to-draw/ is where a user copies a file
-# in to have it drawn; images/ is where the drawn result lands.
+# The vault folders that session start makes. They come before
+# draw_instruction_images() because a folder costs nothing to make, with or
+# without Pillow. You copy a file into to-pack/ to have it packed.
+# DensePack then moves the file into to-pack/packed/ beside its images.
 VAULT_FOLDERS = (
-    ("to-draw",),
+    ("to-pack",),
+    ("to-pack", "packed"),
 )
 
 
 def ensure_vault_folders():
-    """Create every vault folder the layout table names, mkdir with
-    exist_ok so a folder already there is left alone and its own file
-    times never move. Runs before Pillow is even checked: nothing here
-    needs it, and a resume, a clear or a compact must find every folder
-    already present the same way a first run makes them."""
+    """Create each vault folder that the layout table names. mkdir with
+    exist_ok does not change a folder that exists or its file times. This
+    runs before the Pillow check. Nothing here needs Pillow, and a resume, a
+    clear or a compact must find each folder present, the same as a first
+    run makes them."""
     from common import project_dir, through_link
     base = vault_dir()
-    # A committed vault link would put these folders, and the .gitignore
-    # below, in the folder it points at.
+    # A committed vault link puts these folders, and the .gitignore below, in
+    # the folder that the link names.
     if through_link(project_dir(), base):
         return
     for parts in VAULT_FOLDERS:
@@ -302,12 +339,13 @@ def ensure_vault_folders():
 def ignore_working_folders():
     """Put a .gitignore holding one star in the vault and in .claude/tmp.
 
-    Both folders hold verbatim session content: the words of every file a
-    Read was redirected through, every Bash command's own output, and the
-    legend sidecar beside each image. Both sit inside the user's project, so
-    without this a first commit carries them into the repository. pip writes
-    the same one-line file into a new virtual environment for the same
-    reason. The plugin does not rely on the project having an ignore rule.
+    The two folders hold verbatim session content. That content is the words
+    of each file whose Read DensePack redirected, the output of each Bash
+    command, and the legend sidecar beside each image. The two folders are
+    inside your project. Without this file, a first commit adds them to the
+    repository. pip writes the same one-line file into a new virtual
+    environment for the same reason. The plugin does not rely on an ignore
+    rule in the project.
     """
     from common import project_dir, through_link
     for folder in (vault_dir(), tmp_dir()):
@@ -317,7 +355,7 @@ def ignore_working_folders():
             folder.mkdir(parents=True, exist_ok=True)
             path = folder / ".gitignore"
             # lexists is true for a link with no target, and mode "x" opens
-            # with O_EXCL, which refuses any link at the name.
+            # with O_EXCL, which fails on any link at the name.
             if os.path.lexists(path):
                 continue
             with open(path, "x", encoding="utf-8") as fh:
@@ -327,9 +365,9 @@ def ignore_working_folders():
 
 
 def instruction_text(filename):
-    """The shipped text of one file in the instructions folder, or None when it
-    is missing. Missing is not an error here: a folder still gets whatever
-    texts it has."""
+    """Return the shipped text of one file in the instructions folder, or None
+    when the file is missing. A missing file is not an error here. A folder
+    still gets the texts that it has."""
     path = Path(__file__).resolve().parents[1] / "instructions" / filename
     if not path.is_file():
         return None
@@ -337,23 +375,24 @@ def instruction_text(filename):
 
 
 def joined_text(keys):
-    """The named instruction texts, stripped and joined in reading order
-    with a blank line between each. An empty string when no named file
-    reads, which is what draw_instruction_images() skips on."""
+    """Return the named instruction texts, stripped and joined in reading
+    order with a blank line between each. Return an empty string when none
+    of the named files reads. draw_instruction_images() skips an empty
+    string."""
     parts = [instruction_text(INSTRUCTION_TEXTS[key]) for key in keys]
     return "\n\n".join(part.strip() for part in parts if part)
 
 
-# Every card this process has drawn, keyed on the digest of its text, size
-# and font, because draw_instruction_images() can ask for the same card more
+# Each card that this process packed, keyed on the digest of its text, size
+# and font, because draw_instruction_images() can request the same card more
 # than once.
 _DRAWN = {}
 
-# EVERY CARD ANY PROCESS ON THIS MACHINE HAS DRAWN. One folder per digest
-# under ~/.claude/densepack-cards, holding the card's page files. Without it
-# a new project folder draws the whole card set from nothing, which takes
-# minutes at session start. The digest carries the text, the size and the
-# font, so a card that matches is the same bytes and a copy is the same page.
+# EACH CARD THAT ANY LOCAL PROCESS PACKED. One folder per digest
+# under ~/.claude/densepack-cards holds the card's page files. Without it, a
+# new project folder packs the whole card set from nothing. That takes
+# minutes at session start. The digest holds the text, the size and the
+# font. A card that matches has the same bytes, and a copy is the same page.
 CARD_CACHE = Path.home() / ".claude" / "densepack-cards"
 
 
@@ -362,8 +401,8 @@ def _cached_card(digest):
     first = CARD_CACHE / digest / "card-1.png"
     if not first.is_file():
         return None
-    # A hit touches the folder, so prune_old_files() can tell a card set in
-    # use from one drawn by a renderer that no longer exists.
+    # A hit touches the folder. prune_old_files() uses that time to tell a
+    # card set in use from the card set of a renderer that no longer exists.
     try:
         os.utime(first.parent, None)
     except OSError:
@@ -372,14 +411,14 @@ def _cached_card(digest):
 
 
 def _cache_card(digest, first_page):
-    """Copy a freshly drawn card's pages into the machine cache. A failure
-    costs nothing but the next folder's draw time.
+    """Copy the pages of a new card into the machine cache. A failure costs
+    only the pack time of the next folder.
 
-    The pages go into a folder named for this process first and the folder
-    is renamed onto the digest in one step, so a process reading the cache
-    while another writes it never copies a half-written page. A digest
-    folder that already exists stays as it is,
-    because the same digest is the same bytes.
+    The pages go first into a folder that carries this process id in its
+    name. One rename then moves that folder onto the digest. A process that
+    reads the cache while another writes it never copies a half-written
+    page. A digest folder that exists stays as it is, because the same
+    digest is the same bytes.
     """
     try:
         folder = CARD_CACHE / digest
@@ -403,18 +442,20 @@ _RENDERER_SIG = None
 
 
 # DENSEPACK_ variables that change no pixel of an image. They stay out of the
-# image cache key, so setting one never converts the instruction images again.
+# image cache key. Setting one never packs the instruction images again.
 NOT_PIXEL_SETTINGS = {"DENSEPACK_STYLE", "DENSEPACK_CODE_PX", "DENSEPACK_HELPER_MEMORY_MB",
                       "DENSEPACK_SERIAL_DRAW", "DENSEPACK_DASHBOARD_NETWORK", "DENSEPACK_ARENA",
                       "DENSEPACK_ARENA_ROOT", "DENSEPACK_CONTEXT_TOKENS"}
 
 
 def renderer_signature():
-    """A short digest of everything that decides a card's pixels besides its
-    text and size: the bytes of style.py, codepack.py and freetype_glyph.py
-    in the folder this plugin runs from, and every DENSEPACK_ environment
-    variable. Part of card_digest(), so an edit to style.py changes the
-    digest and the machine cache never serves an old card to a new folder."""
+    """Return a short digest of all inputs, besides text and size, that set a
+    card's pixels. The inputs are the bytes of style.py, codepack.py,
+    freetype_glyph.py, densepack.py and common.py in the folder this plugin
+    runs from, and each DENSEPACK_ environment variable except the names in
+    NOT_PIXEL_SETTINGS and the DENSEPACK_BENCH_ names. card_digest()
+    includes this digest. An edit to style.py changes the digest, and the
+    machine cache never serves an old card to a new folder."""
     global _RENDERER_SIG
     if _RENDERER_SIG is None:
         h = hashlib.sha256()
@@ -425,9 +466,10 @@ def renderer_signature():
             except OSError:
                 h.update(name.encode("utf-8"))
         # DENSEPACK_STYLE names a file whose bytes card_digest() already
-        # hashes, and DENSEPACK_CODE_PX is the px the digest already carries,
-        # so neither belongs here: with the second one in, a process that set
-        # it and one that did not would draw the same card set twice.
+        # hashes. DENSEPACK_CODE_PX is the px that the digest already holds.
+        # Neither belongs here. With DENSEPACK_CODE_PX in the key, a process
+        # that sets it and a process that does not pack the same card set
+        # twice.
         for key in sorted(os.environ):
             if (key.startswith("DENSEPACK_") and key not in NOT_PIXEL_SETTINGS
                     and not key.startswith("DENSEPACK_BENCH_")):
@@ -437,16 +479,17 @@ def renderer_signature():
 
 
 def card_digest(text, px):
-    """The SHA-256 that names one drawn card: its text, its pixel size, the
-    font's name and byte size, and the bytes of the style file in force.
+    """Return the SHA-256 that names one packed card. The inputs are its
+    text, its pixel size, the font's name and byte size, and the bytes of
+    the style file in use.
 
-    The font's NAME and size, not its path: the hooks run from whichever
-    folder Claude Code loads the plugin from, and the same font at two paths
-    would give two digests and draw every card again.
+    The digest uses the font's NAME and size, not its path. The hooks run
+    from the folder that Claude Code loads the plugin from. The same font at
+    two paths gives two digests and packs each card again.
 
     The style file is part of the digest because the cards come from a
-    machine-wide cache: a recipe that moves a glyph must draw a new card,
-    not serve the one drawn under the old recipe.
+    machine-wide cache. A recipe that moves a glyph must pack a new card. It
+    must not serve the card packed under the old recipe.
     """
     import densepack as dp
     font = next((p for p in dp.REGULAR if Path(p).is_file()), "")
@@ -465,9 +508,10 @@ def card_digest(text, px):
 
 
 def _drop_old_pages(stem_path):
-    """Remove every page an earlier draw of this card left beside the stem,
-    so a card that shrank from three pages to two does not keep a stale
-    third page that the cache would then copy everywhere."""
+    """Remove each page that an earlier pack of this card left beside the
+    stem. Without this step, a card that shrank from three pages to two
+    keeps an old third page, and the cache copies that page to each
+    folder."""
     for old in Path(stem_path).parent.glob(Path(stem_path).name + "-*.png"):
         try:
             old.unlink()
@@ -476,20 +520,21 @@ def _drop_old_pages(stem_path):
 
 
 def sealed_digest(digest):
-    """What the .hash file beside an instruction image holds: the digest
-    sealed with this machine's key. A project can compute the plain digest
-    and commit it with its own image; it cannot compute the seal."""
+    """Return the text of the .hash file beside an instruction image. That
+    text is the digest, sealed with the local seal key. A project can
+    compute the plain digest and commit it with its own image. It cannot
+    compute the seal."""
     from common import _row_seal
     return _row_seal({"card_digest": digest}) or digest
 
 
 def ensure_instruction_image(text, px, stem_path):
-    """Draw one instruction image at str(stem_path) + "-1.png", gated on a
-    SHA-256 of the text, the pixel size and the font file, recorded beside
-    the image in str(stem_path) + ".hash". An unchanged text draws nothing.
-    The size is part of the hash, so a size change redraws the image. The
-    font file is part of the hash, so a font change redraws every image even
-    when the text has not changed.
+    """Pack one instruction image at str(stem_path) + "-1.png". A SHA-256 of
+    the text, the pixel size and the font file gates the pack. The function
+    records that SHA-256 beside the image in str(stem_path) + ".hash". An
+    unchanged text packs nothing. The size is part of the hash. A size
+    change packs the image again. The font file is part of the hash. A font
+    change packs each image again, even when the text is the same.
     """
     if not ensure_pillow():
         return None
@@ -503,11 +548,12 @@ def ensure_instruction_image(text, px, stem_path):
     if first.is_file() and hash_file.is_file():
         if hash_file.read_text(encoding="utf-8").strip() == sealed_digest(digest):
             return first
-    # ONE DRAW PER DIGEST. The same text at the same size draws the same
-    # bytes, so a digest already drawn in this process, or found in the
-    # machine cache, is copied rather than drawn again. A drawn page takes
-    # about 20 seconds and a file copy takes none. Copying also keeps every
-    # folder a consumer already reads from.
+    # ONE PACK PER DIGEST. The same text at the same size packs the same
+    # bytes. For a digest that this process already packed, or that the
+    # machine cache holds, the function copies the pages and does not pack
+    # them again. A packed page takes about 20 seconds, and a file copy takes
+    # almost no time. Copying also keeps each folder that a consumer already
+    # reads from.
     done = _DRAWN.get(digest)
     if not (done and Path(done).is_file()):
         done = _cached_card(digest)
@@ -529,11 +575,12 @@ def ensure_instruction_image(text, px, stem_path):
     stem_path.parent.mkdir(parents=True, exist_ok=True)
     _drop_old_pages(stem_path)
     try:
-        # The rules image draws through the code renderer: one renderer for
-        # everything.
+        # The rules image goes through the code renderer. One renderer serves
+        # all images.
         import codepack
-        # Real newlines: flatten() with the pilcrow mark would make
-        # pack_code() draw the word "[pilcrow]" at every line end.
+        # The text keeps its real newlines, because flatten() with the
+        # pilcrow mark makes pack_code() render the word "[pilcrow]" at each
+        # line end.
         written, _target, _lh = codepack.pack_code(
             dp.flatten(text, "\n"), px, str(stem_path), python=False, legend=None, title="rules")
     except Exception:
@@ -547,8 +594,9 @@ def ensure_instruction_image(text, px, stem_path):
 
 
 def write_pointers(path, lines):
-    """POINTERS.txt: one line per instruction file, model, purpose and
-    path, byte compare first so an unchanged set writes nothing."""
+    """Write POINTERS.txt, with one line per instruction file for model,
+    purpose and path. A byte compare comes first. An unchanged set writes
+    nothing."""
     text = "\n".join(lines) + "\n"
     encoded = text.encode("utf-8")
     if path.is_file() and path.read_bytes() == encoded:
@@ -558,14 +606,15 @@ def write_pointers(path, lines):
 
 
 def draw_instruction_images():
-    """Draw every role, joined and card image under
-    .claude/densepack-vault/instructions/, gated on a SHA-256 of the text
-    plus pixel size so unchanged text draws nothing.
-    Copy the Haiku text files, byte compare first. Write POINTERS.txt,
-    byte compare first. Safe to run many times a day: a resume, a clear
-    and a compact each fire main() again.
+    """Pack each role, joined and card image under
+    .claude/densepack-vault/instructions/. A SHA-256 of the text plus the
+    pixel size gates each image. Unchanged text packs nothing.
+    Copy the Haiku text files, with a byte compare first. Write
+    POINTERS.txt, with a byte compare first. The function is safe to run
+    many times a day. A resume, a clear and a compact each run main() again.
     """
-    # The Export ships no instruction texts, so it makes, writes and deletes nothing here.
+    # A copy of the plugin with no instructions folder has no texts to pack.
+    # There this function makes, writes and deletes nothing.
     if not (Path(__file__).resolve().parent.parent / "instructions").is_dir():
         return
     base = vault_dir() / "instructions"
@@ -607,45 +656,116 @@ def draw_instruction_images():
             dest.write_bytes(encoded)
         lines.append("haiku %s %s" % (text_key, dest))
     write_pointers(base / "POINTERS.txt", lines)
-    # The folders fable, opus and sonnet under instructions/ hold card sets
-    # nothing reads, so they are removed.
+    # The folders fable, opus and sonnet under instructions/ hold the card
+    # sets of an earlier version, and nothing reads them. This step removes
+    # them.
     for old in ("fable", "opus", "sonnet"):
         shutil.rmtree(base / old, ignore_errors=True)
 
 
-# No reader warning: every reader gets one image at one size, so there is no
-# pairing to warn about.
+# reader_warning() returns no warning, because all models get one image at
+# one size and no mismatch of model and size can happen.
 def reader_warning(model):
     return None
 
 
-# Without Pillow every hook stands down and the plugin saves nothing. Silence
-# would let a user run a whole session believing reports were packed, so this
-# states it once, at session start, only when the install failed.
+# Without Pillow, each hook does nothing and the plugin saves nothing. With
+# no message, you can run a whole session and think that DensePack packed the
+# reports. This warning states the fact once, at session start, and only when
+# the install failed.
 PILLOW_WARNING = (
-    "DensePack cannot make images: Pillow, freetype-py or NumPy is missing and the plugin could not "
-    "install it. Agent reports arrive as plain text, nothing is packed and "
-    "nothing is saved. Install them with: python3 -m pip install --user pillow freetype-py numpy "
+    "DensePack cannot make images. Pillow, freetype-py or NumPy is missing and the plugin could not "
+    "install it. Agent reports arrive as plain text, and DensePack packs nothing and "
+    "saves nothing. Install them with: python3 -m pip install --user pillow freetype-py numpy "
     "(on Debian and Ubuntu, add --break-system-packages)")
 
 
-
 # Claude Code's auto mode tells the agent to read files with cat, head or sed
-# in Bash. This line orders the tools instead of naming what each one saves.
-# A reader trades away a saving. A reader follows an order.
+# in Bash. This line gives the tool choice as an order and does not name what
+# each tool saves, because a model follows an order and does not act to keep
+# a saving. The order dates from DensePack 1.0, when Bash output stayed text.
+# CLAUDE_CODE_THRIFTY_SONIC=0 stops the auto mode message only from the next
+# session, and the order covers the first session. No test has run the note
+# without the order.
+# TWO ROUTES. A whole file goes through Read, which packs each page. A few
+# lines go through Bash (grep -n, sed -n, head), and bash_image.py packs that
+# output as images, with the short key under 1,000 characters. Output of
+# more than one image returns as image 1 and a note that names the other
+# images. The Grep tool has no image form, and the same lines pulled with
+# Grep stay text.
+# An earlier wording, "Not cat, head, sed or type. Change them with Edit.",
+# sent small pulls to the Grep tool, and made an agent Read a whole file for
+# a change that one sed makes without a Read. Claude Code tells an agent to
+# avoid grep in Bash unless an instruction names it. For that reason the
+# note names Bash for searches and says not the Grep tool. A note that only
+# said that Bash output packs kept each agent on the Grep tool, and a broad
+# search returned as text. A Grep result cannot carry an image, because a
+# hook that puts one there sends the model the base64 as text. A session
+# with no Bash tool searches with Grep. In a test with only the Read and
+# Glob tools, "not the Grep tool" made two of five runs read all 16 files to
+# search them.
+# THE BASH LINE IS GONE. The note said "Search files and pull a few lines
+# with Bash, such as grep -n, sed -n or head, not the Grep tool". On a trace
+# through 20,000 lines of code the agent then searched with one Bash call a
+# turn, and each output came back as an image: 62 turns against 35 without
+# DensePack. Without the line the same task took 50 turns and less output.
+# The agent searches as it does without DensePack. For an Edit, it now Reads
+# the lines it will change with a limit of 20 or fewer, which stays text,
+# because an Edit copied from an image failed on about 1 line in 9.
+# This text is the intro that the lead and each subagent get. The last
+# paragraph tells the model where each image's text is on disk and names Grep
+# as the last choice. The model then finds the text in one call and never
+# checks each image against it.
 READ_TOOL_LINE = (
-    "DensePack is on. Read a file with the Read tool first, not a shell read "
-    "with cat, head, sed or type, because a shell read costs more than a "
-    "Read. A shell read packs only above a large size limit. Change a file "
-    "with the Edit tool. Edit and Write both work on a file that arrived as "
-    "an image, unless it is a .doc or .docx. Claude Code refuses to Read a "
-    ".doc or .docx. DensePack converts one to images for you automatically. "
-    "Read those images.")
+    "DensePack is on. Files, command output and Word files arrive as images "
+    "of the same text.\n"
+    "Use the Read tool to read a file, not cat or type. Never read every file "
+    "to search them.\n"
+    "Edit and Write work on files that arrived as images, except .doc and "
+    ".docx. DensePack converts those to images. Read the images.\n"
+    "Formatting marks in the images:\n"
+    "- green N in a box: line number N starts here\n"
+    "- red N in a box: N spaces. A red 0 means no spaces\n"
+    "- blue \\t in a box: 1 tab\n- blue \\t then red \\t: 2 tabs\n"
+    "- blue N\\t in a box: N tabs, 3 and up\n"
+    "- green N\\n in a box before a line number: N blank lines before that line\n"
+    "- legend \"missing N =blank line\": a skipped line number is a blank line\n"
+    "- purple squiggle at a row's end: the line continues on the next row\n"
+    "- tab-indented files: the band color behind a line is its tab count, "
+    "as the legend's colored 0 1 2 3 show\n"
+    "The text in the highlighted bands of the images is identical to the text "
+    "of the files. The images use formatting numbers in the black outline boxes to "
+    "show the text file's literal formatting. When you run an Edit, follow "
+    "these formatting rules byte identically because otherwise the Edit will "
+    "fail. The formatting represents the literal page. Before your Edits, "
+    "Read the lines you will change with an offset and a limit of 20 or "
+    "fewer, which returns them as text, and copy each Edit from that text. "
+    "Each image's text is on disk. "
+    "A Read file is its own text. Command output, Word and to-pack text sit "
+    "beside the image under the file= name in its top right. Grep that text "
+    "only for an exact string the image cannot give you.")
+# No sentence here tells the model how many files to read or when. The
+# plugin changes how a file arrives, not what the model does. An order to
+# read all files in one turn makes the model Read more files than it needs,
+# and the session costs more.
+
+# The lead alone gets this line. subagent_start.py sends subagents
+# READ_TOOL_LINE, and a lead that repeats it in a brief only adds orders. In
+# a test where a Sonnet 5.5 subagent read 8 docstrings, the lead with
+# DensePack wrote "Read each one fully" and "verify with a Bash command like
+# head -n 5". That subagent read 8 whole files, while the subagent without
+# DensePack read 15 lines of each file. The run with DensePack cost $0.056,
+# and the run without it cost $0.033.
+SUBAGENT_BRIEF_LINE = (
+    "Subagents get this same note from DensePack. Write a subagent's task as "
+    "you would without DensePack: do not tell it that files arrive as images, "
+    "and do not ask it to check the images.")
 
 
 def lead_reads_images(model):
-    """True when a lead on this model is sent images: the model named at
-    session start, or the recorded lead when the event names none."""
+    """Return True when DensePack sends images to a lead on this model. The
+    model is the one that session start names, or the recorded lead when the
+    event names none."""
     from common import READER_SIZES, lead_gets_images, reader_gets_images
     if isinstance(model, dict):
         model = model.get("id") or model.get("display_name")
@@ -657,9 +777,9 @@ def lead_reads_images(model):
 
 BASH_FIRST_NOTE = (
     "DensePack set CLAUDE_CODE_THRIFTY_SONIC to 0 in ~/.claude/settings.json. "
-    "Auto mode then stops telling Claude to read files with Bash. A Bash "
-    "read saves less than a Read, because DensePack converts Bash output "
-    "only above 5,000 characters. It applies from your next session.")
+    "Auto mode then stops telling Claude to read files with Bash. The setting "
+    "applies from your next session. DensePack converts Bash output of 400 "
+    "characters or more, but a Bash read still costs a little more than a Read.")
 
 
 def deliver_context(pillow_ok, model, bash_first_set=False, packed_note=None):
@@ -671,20 +791,21 @@ def deliver_context(pillow_ok, model, bash_first_set=False, packed_note=None):
         shown.append(packed_note)
     if pillow_ok and lead_reads_images(model):
         parts.append(READ_TOOL_LINE)
-    # The last session's table comes from outside the project, so a cloned
+        parts.append(SUBAGENT_BRIEF_LINE)
+    # The last session's table comes from outside the project. A cloned
     # project cannot put its own words here.
     from common import machine_state_dir
     marker = machine_state_dir() / "densepack-last-session.md"
     if marker.is_file():
         summary = marker.read_text(encoding="utf-8").strip()
         marker.unlink(missing_ok=True)
-        # The wrap-up totals go in systemMessage, the field Claude Code shows
-        # the user directly, because a lead left to relay them skips them. A
-        # quiet-mode summary carries no table row and stays out of
-        # systemMessage, because quiet means print nothing until the user asks.
+        # The wrap-up totals go in systemMessage, the field that Claude Code
+        # shows on screen, because a lead that must relay them skips them. A
+        # quiet-mode summary has no table row and stays out of systemMessage,
+        # because quiet mode prints nothing until you ask.
         if any(line.startswith("|") for line in summary.splitlines()):
             shown.append(summary)
-            parts.append("DensePack showed the user this table from the "
+            parts.append("DensePack showed this table on screen from the "
                          "conversation that just ended:\n\n" + summary)
         else:
             parts.append(summary)
@@ -709,29 +830,30 @@ def deliver_context(pillow_ok, model, bash_first_set=False, packed_note=None):
 
 
 def record_lead_session(event):
-    # The pointer hook fires in every session, subagents included, and the queue
-    # is one shared file. Without this marker a subagent's first tool call could
-    # drain the queue and receive the lead's report pointers. SessionStart fires
-    # for a lead session and never for a subagent, so the ids gathered here are
-    # exactly the sessions entitled to collect. The marker holds a LIST, not one
-    # id, so a project open in two windows keeps both windows' receipts.
+    # The pointer hook runs in each session, subagents included, and the
+    # queue is one shared file. Without this marker, a subagent's first tool
+    # call can empty the queue and get the lead's report pointers.
+    # SessionStart runs for a lead session and never for a subagent. The ids
+    # that this function records are exactly the sessions allowed to collect.
+    # The marker holds a LIST, not one id. A project open in two windows
+    # keeps the receipts of the two windows.
     sid = event.get("session_id")
     if sid:
         add_lead(sid)
 
 
 def clear_stale_blocks():
-    """A blocked flag lives for one agent turn, and an asked flag for one
-    agent's whole life. Either one still on disk at session start belongs to
-    an agent that already finished, and leaving it would switch the
-    enforcement net off for that agent id.
+    """A blocked flag lasts for one agent turn. An asked flag lasts for the
+    whole run of one agent. A flag still on disk at session start belongs to
+    an agent that finished. A flag left in place disables the enforcement
+    check for that agent id.
 
-    densepack-asked-* is the one-ask marker subagent_stop.py never consumes
-    during a session, so this is the only thing that clears it.
+    densepack-asked-* is the one-ask marker that subagent_stop.py never
+    removes during a session. This function is the only step that clears it.
 
-    densepack-floorpass-* is keyed on one turn's prompt_id rather than an
-    agent id, so it goes stale on its own the moment the turn ends; sweeping
-    it here only keeps the folder tidy across sessions."""
+    The key of densepack-floorpass-* is one turn's prompt_id, not an agent
+    id. The flag becomes stale when the turn ends. This sweep only keeps the
+    folder clean across sessions."""
     for pattern in ("densepack-blocked-*", "densepack-asked-*",
                     "densepack-floorpass-*"):
         for flag in tmp_dir().glob(pattern):
@@ -741,19 +863,21 @@ def clear_stale_blocks():
                 pass
 
 
-# The floor is the major of the Pillow this plugin was measured with, 12.
-# There is no ceiling: a later major still installs, an earlier one does not.
+# The floor is 12, the Pillow major that the plugin's measurements used.
+# There is no ceiling. A later major still installs, and an earlier one does not.
 PILLOW_SPEC = "pillow>=12"
-FREETYPE_SPEC = "freetype-py>=2"  # ships a wheel with libfreetype inside, so --only-binary holds
+FREETYPE_SPEC = "freetype-py>=2"  # ships a wheel with libfreetype inside, which --only-binary needs
 NUMPY_SPEC = "numpy>=2"  # codepack.py blends each glyph with it
 
 
 def install_pillow():
-    """True when Pillow imports, installing it once if it does not.
+    """Return True when Pillow imports. Otherwise install Pillow, freetype-py
+    and NumPy into the pylibs folder of CLAUDE_PLUGIN_DATA, and return True
+    when Pillow then imports.
 
-    It runs before the context is delivered, so the first session on a
-    machine can draw its images, and its answer is what the session start
-    message reports to the user.
+    It runs before the hook sends the context. The first session on a
+    machine can then pack its images, and the session start message shows
+    its result on screen.
     """
     if ensure_pillow():
         return True
@@ -765,18 +889,19 @@ def install_pillow():
     try:
         subprocess.run(
             [sys.executable, "-m", "pip", "install", "--quiet",
-             # --upgrade, because pip skips a package already in --target:
-             # after a Python upgrade the old NumPy stays and fails to import.
+             # --upgrade, because pip skips a package already in --target.
+             # After a Python upgrade, the old NumPy stays and fails to import.
              "--upgrade",
-             # --only-binary means pip takes a built wheel or nothing, so a
-             # source distribution can never run its own setup code at
-             # install time, and the floor keeps the install on the major
-             # this plugin was measured with.
+             # --only-binary means pip takes a built wheel or nothing. A
+             # source distribution then never runs its own setup code at
+             # install time. The floor keeps the install on the major that
+             # the plugin's measurements used.
              "--only-binary", ":all:",
              "--target", str(pylibs), PILLOW_SPEC, FREETYPE_SPEC, NUMPY_SPEC],
             # "-m" puts the working folder first on sys.path. The hook's
-            # working folder is the user's project, so pip runs from the
-            # plugin's own data folder, where a project cannot plant a module.
+            # working folder is your project. For that reason pip runs from
+            # the plugin's own data folder, where a project cannot plant a
+            # module.
             cwd=str(pylibs), capture_output=True, timeout=300)
     except Exception:
         return False
@@ -784,23 +909,28 @@ def install_pillow():
 
 
 def drop_links():
-    """Remove every symbolic link and junction directly inside .claude/tmp.
+    """Remove each symbolic link and junction directly inside .claude/tmp
+    and inside each vault folder that the plugin writes into. Break each
+    second hard link there with a copy.
 
-    A cloned project can commit .claude/tmp/densepack-totals.json as a link to
-    a file in the user's home, and the next write to that name would
-    overwrite the file it points at. Removing a link removes only the link.
-    A .claude or .claude/tmp that is itself a link is left alone: the scan
-    would reach the folder it points at, and disabled() stands down for it."""
+    A cloned project can commit .claude/tmp/densepack-totals.json as a link
+    to a file in your home folder. The next write to that name then
+    overwrites the file that the link names. Removing a link removes only
+    the link. The function does nothing when .claude or .claude/tmp is
+    itself a link. A scan there reaches the folder that the link names, and
+    disabled() stops the hooks for it. The function also skips a vault
+    folder that is a link or is under one."""
     from common import project_dir, through_link
     if through_link(project_dir(), tmp_dir()):
         return
     from common import is_junction, project_dir as _proj, through_link as _link
-    # Every vault folder the plugin writes into, not .claude/tmp alone: a
-    # planted name in any of them takes a write the same way.
+    # Each vault folder that the plugin writes into, not .claude/tmp alone. A
+    # planted name in any of them receives a write the same way.
     vault = vault_dir()
     for folder in (tmp_dir(), vault / "images", vault / "instructions",
                    vault / "drop-gate", vault / "not-converted",
-                   vault / "to-draw", vault / "drop"):
+                   vault / "to-pack", vault / "to-pack" / "packed",
+                   vault / "drop"):
         if _link(_proj(), folder):
             continue
         try:
@@ -813,22 +943,24 @@ def drop_links():
                     os.unlink(entry.path)
                 elif is_junction(entry.path):
                     os.rmdir(entry.path)
-                # A second hard link is a real directory entry, so only the
-                # link count tells it from an ordinary file, and a write to
-                # the name would land in the file it shares. os.stat, not the
-                # entry's own: on Windows a DirEntry serves the folder scan's
-                # cached data, where the link count always reads 1.
+                # A second hard link is a real directory entry. Only the link
+                # count tells it from an ordinary file. A write to the name
+                # goes into the file that it shares. The code uses os.stat,
+                # not the entry's own stat. On Windows a DirEntry returns the
+                # cached data of the folder scan, where the link count is
+                # always 1.
                 #
-                # The link is BROKEN, not unlinked: both names carry the same
-                # count, so unlinking would as often delete the plugin's own
-                # image as the planted twin. A copy moved onto the name keeps
-                # the content and leaves the other name pointing elsewhere.
+                # The code BREAKS the link and does not unlink it. The two
+                # names have the same count. An unlink deletes the plugin's
+                # own image as often as the planted twin. A copy moved onto
+                # the name keeps the content, and the other name then refers
+                # to a different file.
                 elif (entry.is_file(follow_symlinks=False)
                         and os.stat(entry.path).st_nlink > 1):
-                    # mkstemp, never a name built from this one: a part name
-                    # a project can work out would take the copy through a
-                    # link planted there, and the move would then put that
-                    # link onto the plugin's own name.
+                    # mkstemp, never a name built from this one. A project
+                    # can predict a built part name and plant a link there.
+                    # The copy then goes through that link, and the move
+                    # puts that link onto the plugin's own name.
                     import shutil as _shutil
                     import tempfile as _tempfile
                     fd, part = _tempfile.mkstemp(dir=str(folder),
@@ -838,9 +970,10 @@ def drop_links():
                         _shutil.copyfile(entry.path, part)
                         os.replace(part, entry.path)
                     except OSError:
-                        # A file another process holds open refuses the move
-                        # on Windows. The copy goes, or the to-draw scan
-                        # converts it into an image nobody asked for.
+                        # On Windows the move fails on a file that another
+                        # process holds open. The code deletes the copy.
+                        # Otherwise the to-pack scan packs it into an
+                        # unwanted image.
                         try:
                             os.unlink(part)
                         except OSError:
@@ -850,13 +983,12 @@ def drop_links():
 
 
 def main():
-    # The event is read before the switch is checked, because the off
-    # switch is per session and the id that names
-    # the session is on the event.
+    # The hook reads the event before it checks the switch. The off switch is
+    # per session, and the session id is in the event.
     event = read_event()
-    # Links go first, off or on. A project that commits the off flag beside a
-    # linked settings file would otherwise keep the link until /densepack
-    # writes the settings through it.
+    # Links go first, with DensePack off or on. Otherwise a project that
+    # commits the off flag beside a linked settings file keeps the link until
+    # /densepack writes the settings through it.
     drop_links()
     if disabled(event.get("session_id")):
         return 0
@@ -868,9 +1000,10 @@ def main():
     draw_instruction_images()
     packed_note = None
     if pillow_ok:
-        # CLAUDE.md, CLAUDE.local.md and MEMORY.md reach every call as text.
-        # pack_instructions turns each into images behind a pointer, from the
-        # next session on, because Claude Code loads them before this hook.
+        # CLAUDE.md, CLAUDE.local.md and MEMORY.md reach each call as text.
+        # pack_instructions packs each one into images behind a pointer. The
+        # change applies from the next session, because Claude Code loads
+        # them before this hook runs.
         try:
             import pack_instructions
             packed_note = pack_instructions.converted_note(
@@ -885,9 +1018,9 @@ def main():
 def guarded_main():
     """Never let an exception out of this hook.
 
-    main() outside any try would let a fault change the outcome of the tool
-    call that fired the hook. The error is written to stderr so the fault is
-    still visible. The exit code stays 0, which lets the call through.
+    main() runs inside a try. A fault in main() cannot change the result of
+    the event that started the hook. The function writes the error to
+    stderr, where the fault stays visible. The exit code stays 0.
     """
     try:
         return main()
