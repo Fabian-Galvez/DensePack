@@ -248,9 +248,9 @@ def _word_file_sentence(path, event, dp, gate, pointer, pack_images):
     if not words:
         return None
     size = len(words.encode("utf-8"))
-    # The same floor as in drop_read_gate.py. A small file costs more to
-    # pack than it saves.
-    if size < 1000:
+    # The same floor and ceiling as in drop_read_gate.py. A small file costs
+    # more to pack than it saves, and a large file makes a long wait.
+    if size < 1000 or size > gate.READ_MAX_BYTES:
         return None
     # THE PACK USES A COPY WITH A FIXED NAME. drop_and_draw() copies the
     # bytes that it gets into a staging folder and leaves the file in place.

@@ -9,7 +9,7 @@ The DensePack right-click tool packs a file or selected text into a DensePack im
 | --- | --- |
 | Windows | Run `install-densepack.bat`. It installs Python, Pillow, freetype-py, NumPy and AutoHotkey when they are missing, and Windows can ask for administrator rights for AutoHotkey. The installer adds the shell menu entry, starts the hotkeys and puts a DensePack shortcut in your Windows Startup folder, and the hotkeys then start with Windows. `DensePack.ahk` takes Ctrl+Right-click in each application. The installer also adds a reading card hook to `~\.claude\settings.json`, and that hook runs before each prompt in each Claude Code project. To install without the hook, run `powershell -ExecutionPolicy Bypass -File install-densepack.ps1 -NoCard`. To install without the hotkeys, add `-NoHotkey` |
 | Linux | Run `sh install-densepack.sh`. It checks Python, installs Pillow, freetype-py and NumPy, and writes the file manager menu items and the Open With entry in your home folder. Ubuntu 24.04 and later block a pip install into the system Python, and on those systems the script prints the command to run. `sh uninstall-densepack.sh` removes the tool |
-| macOS | Open `DensePack it.workflow` and accept the install when macOS asks. The right-click menu of Finder then has DensePack it. The workflow runs `~/DensePack/tools/densepack.py`. When the download is in another folder, edit the PACKER line of the workflow. A GitHub zip unpacks to a folder named DensePack-main. Rename that folder to DensePack |
+| macOS | Open `DensePack it.workflow` and accept the install when macOS asks. The right-click menu of Finder then has DensePack it. The workflow runs `~/DensePack/tools/densepack.py`. When the download is in another folder, edit the PACKER line of the workflow. GitHub zips unpack to a folder named DensePack-main. Rename that folder to DensePack |
 
 ## DensePack it
 
@@ -71,10 +71,10 @@ This tool and the DensePack plugin use the same renderer, `plugin/scripts/codepa
 | Black characters | Letters |
 | Blue characters | Digits |
 | Red characters | Most other characters |
-| A green number in a box | The line number in the source file |
-| A gap in the green numbers | Blank lines |
-| A red number after the green number | The exact indent of the line, in spaces |
-| A purple mark at the right edge | The line continues on the next row |
+| Green numbers in a box | The line number in the source file |
+| Gaps in the green numbers | Blank lines |
+| Red numbers after the green number | The exact indent of the line, in spaces |
+| Purple marks at the right edge | The line continues on the next row |
 | The band color | The nesting depth of the line |
 | The key at the top of the first image | The name of each mark |
 

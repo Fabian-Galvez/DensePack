@@ -33,9 +33,9 @@ DensePack changes some of your files and adds its own folders and packages. The 
 | What it changes | What DensePack does | Why |
 | --- | --- | --- |
 | `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in a project, your `~/.claude/CLAUDE.md` and the auto memory index `MEMORY.md` of the project | At session start, DensePack copies the file to `<name>.densepack.bak`, packs the text into images and replaces the file with a short pointer that names each image. It converts a file only when the images and the pointer cost less than the text | Claude Code sends these files as text on each turn |
-| `~/.claude/settings.json` | Adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` to the `env` block one time, when the key is not there | Auto mode and bypassPermissions mode tell the agent to read files with cat, head or sed in Bash. A Bash read saves less than a Read |
-| A `.gitignore` in `.claude/tmp/` and `.claude/densepack-vault/` | Writes one line, `*` | Those folders hold copies of your files and of command output. Git does not commit them |
-| `~/.claude/densepack-state` | Creates the folder. It holds the path of the Python that DensePack found, the seal key `sidecar.key`, the list of the instruction files that DensePack converted and the images of your `~/.claude/CLAUDE.md`. It also holds the images of each `MEMORY.md`, in one folder for each project | DensePack reads its own notes to find the files that it converted. A cloned repository can hold a fake copy of those notes. DensePack keeps the real notes in your home folder, where a clone cannot write |
+| `~/.claude/settings.json` | Adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` to the `env` block one time, when the key is not there | Auto mode and bypassPermissions mode tell the agent to read files with cat, head or sed in Bash. Bash reads save less than Reads |
+| `.gitignore` files in `.claude/tmp/` and `.claude/densepack-vault/` | Writes one line, `*` | Those folders hold copies of your files and of command output. Git does not commit them |
+| `~/.claude/densepack-state` | Creates the folder. It holds the path of the Python that DensePack found, the seal key `sidecar.key`, the list of the instruction files that DensePack converted and the images of your `~/.claude/CLAUDE.md`. It also holds the images of each `MEMORY.md`, in one folder for each project | DensePack reads its own notes to find the files that it converted. Cloned repositories can hold a fake copy of those notes. DensePack keeps the real notes in your home folder, where a clone cannot write |
 | `~/.claude/densepack-cards` | Nothing. Session start packs no card, because the plugin ships no `instructions` folder | `/dense-remove` deletes this folder when it exists |
 | Pillow, freetype-py and NumPy | Installs them with pip into the data folder of the plugin, one time | DensePack needs all three to render an image. It does not change your own Python and asks for no password |
 
@@ -47,13 +47,13 @@ DensePack changes some of your files and adds its own folders and packages. The 
 - When you start in a folder that holds one of these files, Claude Code reads that file as text and caches it before the conversion. To prevent this, run `/mdpack <folder>` from an empty folder next to the folder with the files. The command converts them without reading them as text. Then start Claude Code in that folder. Claude Code reads the short pointer and the images, not the text.
 - Each converted file becomes three kinds of files, the pointer, the `.densepack.bak` and the images.
 - The `.bak` holds your original text, byte for byte. Claude Code does not load the `.bak` because it loads only the names `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md`.
-- DensePack converts a file only when its images and pointer cost less than its text. A short file stays text.
-- An instruction file over 250,000 characters or 6,000 lines stays text.
+- DensePack converts a file only when its images and pointer cost less than its text. Short files stay text.
+- Instruction files over 250,000 characters or 6,000 lines stay text.
 - The images can cost one extra turn at the start of a session. DensePack does not count that turn when it compares the costs, and for that reason short sessions can cost more with a converted file.
 - To change your instructions, edit the `.bak`. DensePack converts it again at the next session start.
 - DensePack moves text that you add below the pointer into the `.bak` at the next session start. It moves new lines from auto memory the same way.
 - When you replace a pointer with a new file, DensePack converts the new file and renames the old `.bak` to `.densepack.bak.old-N`, where N is the first free number.
-- A Haiku session reads the `.bak` as text because Haiku does not read the text in an image correctly.
+- Haiku sessions read the `.bak` as text because Haiku does not read the text in an image correctly.
 - Auto memory keeps working. DensePack sets no flag that stops it.
 - In a shared repository, commit the `.bak` with the pointer. Teammates without DensePack get the pointer but not its images, because the images are in `.claude/densepack-vault/`, which Git does not commit. No test shows whether their model then reads the `.bak`.
 
@@ -75,32 +75,32 @@ The swap happens by itself, around the tool call.
 
 1. The agent calls the Read tool on a file.
 2. The Read runs on the real file. Claude Code records the Read, and a later Edit of the file works.
-3. A hook runs after the Read. It packs the file into images, or it uses the saved images of the same bytes. It puts the images in the tool result in place of the text when they cost fewer tokens than the text. For a file of more than one image, the result holds one image with all the pages, one page below the other, when that image fits with no resize. Otherwise the result holds the first image and a note that names the other images and their lines, and the model needs at least one more turn to Read the other images. A file of two full pages does not fit in one image.
+3. `read_image.py` runs after the Read. It packs the file into images, or it uses the saved images of the same bytes. It puts the images in the tool result in place of the text when they cost fewer tokens than the text. For a file of more than one image, the result holds one image with all the pages, one page below the other, when that image fits with no resize. Otherwise the result holds the first image and a note that names the other images and their lines, and the model needs at least one more turn to Read the other images. Files of two full pages do not fit in one image.
 4. The model receives the image, not the text. Anthropic bills only what reaches the model.
 
 - The note that names the other images goes one time to each agent for each file in a session. It ends with "Read all the other images that you need in one turn.", because an agent that Reads one image a turn spends a turn on each page.
 - DensePack never puts two pages side by side in one image. In a bench of 16 files for DensePack 1.0, Sonnet 5 answered 3 of 5 questions right from pages side by side and 5 of 5 from pages one below the other, and Opus 5 answered 5 of 5 from pages one below the other. In DensePack 1.0, the pages of `drop_read_gate.py` cost 7,224 tokens side by side and 7,168 tokens one below the other.
-- A Read with an offset, or with a limit of more than 20 lines, gets images of only the lines that it names, or those lines as text when the text costs less. When the pages of those lines do not fit in one image, the Read returns the first image and a note that names the others. A Read with a limit of 20 lines or fewer stays text.
+- Reads with an offset, or with a limit of more than 20 lines, get images of only the lines that they name, or those lines as text when the text costs less. When the pages of those lines do not fit in one image, the Read returns the first image and a note that names the others. Reads with a limit of 20 lines or fewer stay text.
 
 Bash output takes the same route.
 
 1. The Bash command runs.
-2. A hook runs after the command. It packs the output into images when the output has 400 characters or more and the images cost fewer tokens than the text.
+2. `bash_image.py` runs after the command. It packs the output into images when the output has 400 characters or more and the images cost fewer tokens than the text.
 3. The model receives image 1 in the same result, and a Bash result holds only that one image. When the output needs more images, the note of the hook names each other image and the lines that it holds, and the model Reads the images that it needs. The text of the output stays in `.claude/densepack-vault/images/bash-output-<id>.txt`.
-4. A model can misread some kinds of line in an image. The hook sends the exact text of each such line, with its line number, in its note in the same result. The output stays text when the images and those lines cost more than the text. These kinds of line go as exact text.
-   - An ID of 8 or more letters and digits that mixes capitals, small letters and digits and holds a capital I or a small l. A word with a number, such as `Makefile2`, does not count.
+4. Models can misread some kinds of lines in an image. The hook sends the exact text of each such line, with its line number, in its note in the same result. The output stays text when the images and those lines cost more than the text. These kinds of lines go as exact text.
+   - IDs of 8 or more letters and digits that mix capitals, small letters and digits and hold a capital I or a small l. Words with a number, such as `Makefile2`, do not count.
    - 8 or more letters in random case that hold a capital I or a small l.
-   - A `git --stat` bar.
-   - A row of dash rules, as `pip list` prints it.
-   - A number of 18 or more digits.
-   - A line of only spaces or tabs.
-   - A tab inside a line. A tab right after a line number, as `cat -n` and `nl` print it, does not count.
+   - `git --stat` bars.
+   - Rows of dash rules, as `pip list` prints them.
+   - Numbers of 18 or more digits.
+   - Lines of only spaces or tabs.
+   - Tabs inside a line. Tabs right after a line number, as `cat -n` and `nl` print them, do not count.
 
 ### How subagents send and receive images
 
 Agents still write their briefs and reports as text, and DensePack swaps that text for images when the images cost less than the text.
 
-A hook can change the prompt of an Agent call and the result of the Agent tool only as text. In a test, a hook put an image into the Agent result in four different shapes, and each time the lead got the original text. A Read result and a Bash result can carry an image. For that reason the receiving agent gets one short line that names the image, and it opens the image with the Read tool.
+Hooks can change the prompt of an Agent call and the result of the Agent tool only as text. In a test, a hook put an image into the Agent result in four different shapes, and each time the lead got the original text. Read results and Bash results can carry an image. For that reason the receiving agent gets one short line that names the image, and it opens the image with the Read tool.
 
 When the lead gives a task to a subagent:
 
@@ -114,7 +114,7 @@ When the lead gives a task to a subagent:
 When a subagent returns its report to the lead:
 
 1. The subagent writes its report as text in its last answer, and it takes no extra turn for DensePack unless it runs in the background.
-2. When the subagent stops, `subagent_stop.py` packs the report into images when `report_pack_worth()` in `common.py` calculates that the images will save more than the Read of the lead costs. A report stays text when the lead gets text, when code blocks are more than half of it, or when its images do not save more than that Read.
+2. When the subagent stops, `subagent_stop.py` packs the report into images when `report_pack_worth()` in `common.py` calculates that the images will save more than the Read of the lead costs. Reports stay text when the lead gets text, when code blocks fill more than half of the report, or when the images do not save more than that Read.
 3. After the Agent call, `report_swap.py` replaces the report in the Agent result with one line that names the report file, and `pointer.py` adds a note that names the images and says that each image is the full report.
 4. The lead opens the images with the Read tool. When several report images wait and they fit in one image with no resize, the first Read returns all of them in that one image.
 
@@ -146,7 +146,7 @@ Session start also shows these notes on screen.
 - The note that DensePack set CLAUDE_CODE_THRIFTY_SONIC in `~/.claude/settings.json`. It says that DensePack converts Bash output of 400 characters or more, but a Bash read still costs a little more than a Read.
 - The note that DensePack converted an instruction file.
 - The totals table of the last conversation, when receipts are not quiet.
-- A warning when Pillow, freetype-py or NumPy is missing and the install failed.
+- Warnings when Pillow, freetype-py or NumPy is missing and the install failed.
 
 ### Folder files
 
@@ -156,10 +156,10 @@ When a prompt says "this folder", "the current folder" or "the project folder", 
 - Each folder must be at least two levels below the root, such as `C:\Users\me`. This rule applies to "this folder" too.
 - The hook splits the prompt at spaces, quotes, commas and semicolons. For that reason it does not find a folder path that holds a space.
 - The hook lists at most 4 folders for one prompt. The list holds only the files directly in the folder, and it does not include hidden files, whose names start with a dot.
-- A folder with more than 200 files gets no names and no background pack.
+- Folders with more than 200 files get no names and no background pack.
 - The names go with each prompt that names the folder, whatever the model.
 
-`prompt_card.py` also starts to pack those files in the background, several at a time. It packs each file of 1,000 to 500,000 bytes, but it packs nothing when those files hold more than 700,000 bytes together. A Read of one of those files waits for that job, for up to 300 seconds, and gets the same images. It does not pack the file again.
+`prompt_card.py` also starts to pack those files in the background, several at a time. It packs each file of 1,000 to 1,000,000 bytes, but it packs nothing when those files hold more than 700,000 bytes together. Reads of those files wait for that job, for up to 300 seconds, and get the same images. Those Reads do not pack the files again.
 
 "This folder" gives the agent no image of a Word file. The background pack can pack the Word files of that folder, but the prompt hook sends a note that names their images only when the prompt names the folder by its full path, as [The three ways DensePack packs a Word file](#the-three-ways-densepack-packs-a-word-file) shows.
 
@@ -174,27 +174,27 @@ When a prompt says "this folder", "the current folder" or "the project folder", 
 DensePack packs the files that the agent Reads, Word files, instruction files such as `CLAUDE.md` and `MEMORY.md`, Bash output, the briefs that go to subagents and the reports that come from subagents. Before it sends an image, DensePack compares the price of the image with the price of the text, and it sends the text when the image costs more.
 
 - For a file, Bash output, a Word file and an instruction file, DensePack compares tokens only. The image costs its patches and its note, as [The image](#the-image) shows, and the text costs one token for each 2.4 characters. The test is the same for each model, because each model gets the same image.
-- For a brief, DensePack also compares tokens. When the subagent must spend one turn only to Read the image, DensePack charges that turn as 30,000 tokens of context at the cache read share of the model that the Agent call names, or of the lead model when the call names none, plus 100 output tokens at 5x the input price. The share is 0.025 on Fable 5.1, 0.05 on Opus 5.5 and 0.1 on each other model, such as Sonnet 5.5. A model name with no version, such as `opus`, also gets 0.1. DensePack counts the saving at the 5-minute cache write price, 1.25x the input price.
-- DensePack compares dollars only for a report, at the prices of the lead model in [BENCHMARKS.md](BENCHMARKS.md#how-anthropic-bills). A model name that DensePack does not know gets the Sonnet prices. The report must also save more tokens than the Read of the lead costs.
+- For a brief, DensePack also compares tokens. When the subagent must spend one turn only to Read the image, DensePack charges that turn as 30,000 tokens of context at the cache read share of the model that the Agent call names, or of the lead model when the call names none, plus 100 output tokens at 5x the input price. The share is 0.025 on Fable 5.1, 0.05 on Opus 5.5 and 0.1 on each other model, such as Sonnet 5.5. Model names with no version, such as `opus`, also get 0.1. DensePack counts the saving at the 5-minute cache write price, 1.25x the input price.
+- DensePack compares dollars only for a report, at the prices of the lead model in [BENCHMARKS.md](BENCHMARKS.md#how-anthropic-bills). Model names that DensePack does not know get the Sonnet prices. The report must also save more tokens than the Read of the lead costs.
 
 These files and outputs stay text.
 
-- A file under 1,000 bytes or over 500,000 bytes.
-- A Read with a limit of 20 lines or fewer. A Read with an offset, or with a limit of more lines, gets images of those lines only, or those lines as text when the text costs less.
-- A file whose path holds a `.claude` folder, or a folder or file name with `sandbox` or `scratch` in it.
-- A file in which more than 2% of the characters that are not spaces, tabs or line breaks have no glyph in the Inter font, such as Chinese, Japanese, Korean or emoji characters.
+- Files under 1,000 bytes or over 1,000,000 bytes.
+- Reads with a limit of 20 lines or fewer. Reads with an offset, or with a limit of more lines, get images of those lines only, or those lines as text when the text costs less.
+- Files whose path holds a `.claude` folder, or a folder or file name with `sandbox` or `scratch` in it.
+- Files in which more than 2% of the characters that are not spaces, tabs or line breaks have no glyph in the Inter font, such as Chinese, Japanese, Korean or emoji characters.
 - Each file, Bash output, brief and report when Pillow, freetype-py or NumPy is missing.
 - Most of the files of a turn in which a Sonnet agent Reads more than 32 files, or files of more than 700,000 bytes together.
-- Bash output under 400 characters or over 500,000 characters.
+- Bash output under 400 characters or over 1,000,000 characters.
 - The stderr of a Bash command. Only its stdout packs.
 - The output of a Bash command that you interrupt, and all output of the PowerShell tool.
-- A file or Bash output with a null byte.
-- A brief under 1,000 characters.
+- Files or Bash output with a null byte.
+- Briefs under 1,000 characters.
 - Each file, output, brief and report for an agent on a model that gets text, such as Haiku.
 
 ### What each DensePack part costs
 
-Turns are calls to the model that send the entire conversation that has been written to cache at cache read price. Claude Code writes each new token of the lead to the 1-hour cache, and Anthropic bills that token at 2x the input price. Claude Code writes the new tokens of a subagent to the 5-minute cache, at 1.25x the input price. The cache read price is 0.1x the input price on Sonnet 5.5, 0.05x on Opus 5.5 and 0.025x on Fable 5.1. An output token costs 5x the input price.
+Turns are calls to the model that send the entire conversation that has been written to cache at cache read price. Claude Code writes each new token of the lead to the 1-hour cache, and Anthropic bills that token at 2x the input price. Claude Code writes the new tokens of a subagent to the 5-minute cache, at 1.25x the input price. The cache read price is 0.1x the input price on Sonnet 5.5, 0.05x on Opus 5.5 and 0.025x on Fable 5.1. Output tokens cost 5x the input price.
 
 The table shows the tokens that each part adds. The image is not in the table because its size changes with the file.
 
@@ -203,7 +203,7 @@ The table shows the tokens that each part adds. The image is not in the table be
 | The session start note and the command list | One time at each session start, which also runs after a resume, `/clear` or `/compact` | 569 tokens at the cache write price | The same 569 tokens at the cache read price |
 | The file names of a folder | Each prompt that names a folder | About 80 tokens in one test and 187 in another, at the cache write price | The same tokens at the cache read price |
 | The session start note in a subagent | One time in each subagent | Not measured | Not measured |
-| A Read of a file that fits one image | Each Read | Nothing. The hook replaces the result and adds no text | Nothing |
+| Reads of files that fit one image | Each Read | Nothing. The hook replaces the result and adds no text | Nothing |
 | Bash output packed as images | Each packed output | Nothing for one image. For more images, a short note that names them. For lines that a model can misread, the exact text of those lines | Nothing when the hook adds no note. Otherwise the same note at the cache read price |
 
 The session start note added 569 tokens on Opus 5.5, and at that count it costs this much in the 1-hour cache.
@@ -214,18 +214,18 @@ The session start note added 569 tokens on Opus 5.5, and at that count it costs 
 | Sonnet 5.5 | $0.0023 | $0.0001 |
 | Fable 5.1 | $0.011 | $0.00014 |
 
-When a part goes to the model a second time, Anthropic bills it as new again. A second Read of the same file uses the saved image, but Anthropic bills that image at the cache write price again, because the image is new at the end of the conversation. The same is true when the agent runs the same command a second time. The lower price applies only to the tokens that an earlier turn sent.
+When a part goes to the model a second time, Anthropic bills it as new again. When the agent Reads the same file a second time, DensePack uses the saved image, but Anthropic bills that image at the cache write price again, because the image is new at the end of the conversation. The same is true when the agent runs the same command a second time. The lower price applies only to the tokens that an earlier turn sent.
 
 <sub>The first row comes from one `claude -p` session on Opus 5.5 with no tool call, first with DensePack off and then on. The file names row compares the first turn of a session with the names and without them, in two tests. The Read and Bash rows come from the code of `read_image.py` and `bash_image.py`, not from a measured session. The `usage` rows of each transcript give the token counts. The dollars use the prices in [BENCHMARKS.md](BENCHMARKS.md#how-anthropic-bills).</sub>
 
 | What DensePack packs | When |
 | --- | --- |
-| A brief that goes to a subagent | Before the subagent starts |
-| The report of a subagent | When the subagent finishes |
-| A file that the Read tool reads | After the Read runs |
+| Briefs that go to subagents | Before the subagent starts |
+| Subagent reports | When the subagent finishes |
+| Files that the Read tool reads | After the Read runs |
 | Bash output of 400 characters or more | After the Bash command runs |
 | The instruction files, such as `CLAUDE.md` and `MEMORY.md` | At session start |
-| A file that you copy into `.claude/densepack-vault/to-pack/` | After the next tool call. The file and its images then move to `to-pack/packed/` |
+| Files that you copy into `.claude/densepack-vault/to-pack/` | After the next tool call. The file and its images then move to `to-pack/packed/` |
 
 | File type | Reads as an image |
 | --- | --- |
@@ -237,13 +237,13 @@ When a part goes to the model a second time, Anthropic bills it as new again. A 
 | GDScript `.gd`, with tab indents | Yes.<br><br>Opus 5.5 rebuilt the file byte identical in 65 of 100 runs |
 | Go `.go`, with tab indents | Yes.<br><br>No bench in this repository records a rebuild of a Go file |
 | Markdown with a wide table row | Only when its images cost less than its text, the same as other files. In a DensePack 1.0 test, one Markdown file with a wide table row packed into 30 images that cost more than its text, and the plugin sent text |
-| Word `.docx` and `.doc` | Yes. The Read tool of Claude Code cannot open a Word file. DensePack reads the words and packs them in the same turn as other files. The limit is 0.5 MB. [INSTALL.md](INSTALL.md#the-size-limit) shows how to raise it |
+| Word `.docx` and `.doc` | Yes. The Read tool of Claude Code cannot open a Word file. DensePack reads the words and packs them in the same turn as other files. The limit is 1 MB. [INSTALL.md](INSTALL.md#the-size-limit) shows how to raise it |
 | JSON, CSV, YAML | Not measured |
 | Haiku, all files | No. Haiku gets text |
 | Sonnet, all files | Yes. Type `/max-off` to send Sonnet text |
 | Chinese, Japanese and Korean text | No. The Inter font has no glyphs for them |
 
-<sub>A byte identical rebuild is not a normal task. This bench shows how exactly a model can rebuild four files, one Python, one Markdown, one HTML and one GDScript file, from a DensePack image. The runs of Opus 5.5 and Sonnet 5.5 used medium effort. Each file had 100 runs, and the Python file had 10 more rebuilds. [BENCHMARKS.md](BENCHMARKS.md#byte-identical-rebuild-25-september-2026) has the 100 runs of each file.</sub>
+<sub>Byte identical rebuilds are not normal tasks. This bench shows how exactly a model can rebuild four files, one Python, one Markdown, one HTML and one GDScript file, from a DensePack image. The runs of Opus 5.5 and Sonnet 5.5 used medium effort. Each file had 100 runs, and the Python file had 10 more rebuilds. [BENCHMARKS.md](BENCHMARKS.md#file-rebuilds-25-september-2026) has the 100 runs of each file.</sub>
 
 <br>
 
@@ -289,15 +289,15 @@ Agents can copy a line break to the wrong place when they copy a block from an i
 
 | Mark | What it shows |
 | --- | --- |
-| A colored band behind a line | The text of that line. In a tab-indented file, the band color is the tab count of the line. A space-indented file uses one band color |
-| A green number in a box | The line with that number starts here. A line can start in the middle of a row |
-| A gap in the green numbers | Blank lines |
-| A green `N\n` in a box before a line number | N blank lines before that line |
-| A red number in a box | A count of spaces. After the green number, it is the indent of the line. Inside a line, it counts a run of 2 or more spaces, or the spaces at the end of the line. A red 0 means no spaces |
-| A blue `\t` in a box | 1 tab |
-| A blue `\t` then a red `\t` | 2 tabs |
-| A blue `N\t` in a box | N tabs, for 3 tabs or more |
-| A purple mark at the right edge | The line continues on the next row |
+| Colored bands behind a line | The text of that line. In a tab-indented file, the band color is the tab count of the line. Space-indented files use one band color |
+| Green numbers in a box | The line with that number starts here. Lines can start in the middle of a row |
+| Gaps in the green numbers | Blank lines |
+| Green `N\n` boxes before a line number | N blank lines before that line |
+| Red numbers in a box | Counts of spaces. After the green number, the red number is the indent of the line. Inside a line, it counts a run of 2 or more spaces, or the spaces at the end of the line. Red 0s mean no spaces |
+| One blue `\t` in a box | 1 tab |
+| Blue `\t` then red `\t` | 2 tabs |
+| Blue `N\t` boxes | N tabs, for 3 tabs or more |
+| Purple marks at the right edge | The line continues on the next row |
 | The top row of the image, or the top two rows | The key to the colors and marks. The name of the file is at the top right |
 
 DensePack 1.0 made this image of a Python file of 116 lines. The current code packs the same file at 896 by 728 pixels, for 834 tokens.
@@ -325,17 +325,17 @@ Anthropic bills an image by patches of 28 by 28 pixels. The plugin adds 2 tokens
 
 DensePack packs a `.doc` or `.docx` into images when it holds 1,000 bytes of words or more and the images cost less than the text. Such a Word file costs one turn, the same as other files whose pages fit in one image.
 
-Two hooks find Word files, `prompt_card.py` and `pointer.py`. They miss a Word file that shows only in the output of the PowerShell tool, only as a relative path in a tool result, or only in a folder that the prompt calls "this folder". A Word file takes a different route because the Read tool of Claude Code does not open a Word file. The table shows each difference.
+Two hooks find Word files, `prompt_card.py` and `pointer.py`. They miss a Word file that shows only in the output of the PowerShell tool, only as a relative path in a tool result, or only in a folder that the prompt calls "this folder". Word files take a different route because the Read tool of Claude Code does not open Word files. The table shows each difference.
 
 | | `.docx` | `.doc` | All other files |
 | --- | --- | --- | --- |
 | **File format** | a zip of XML | an OLE2 container, a small file system of streams | plain text on disk |
 | **How DensePack gets the text** | `pointer.docx_text()` unzips it, reads `word/document.xml` and reads each `<w:p>` paragraph node. It puts each table row `<w:tr>` on one line, with a pipe character between the cells | `pointer.doc_text()` opens the OLE2 streams and reads the `WordDocument` stream. Then it reads the piece table in the `Table` stream to put the bytes in reading order | not needed, the bytes are the words |
-| **Text copy** | A text file in `.claude/densepack-vault/images/`. Its name comes from a copy of the Word file in `.claude/tmp`, for example `.claude-tmp-densepack_word_8d36c710126a.docx.txt`. It holds the exact text that the images show. The images take its name, for example `.claude-tmp-densepack_word_8d36c710126a.docx.txt-image-1-of-1-DensePack.png` | the same, with `.doc.txt` at the end of the name | not needed, the file is the text |
+| **Text copy** | Each Word file gets a text file in `.claude/densepack-vault/images/`. Its name comes from a copy of the Word file in `.claude/tmp`, for example `.claude-tmp-densepack_word_8d36c710126a.docx.txt`. It holds the exact text that the images show. The images take its name, for example `.claude-tmp-densepack_word_8d36c710126a.docx.txt-image-1-of-1-DensePack.png` | the same, with `.doc.txt` at the end of the name | not needed, the file is the text |
 | **Library** | `zipfile` and `xml.etree` from the standard library | `struct` parsing by hand, standard library | none |
 | **Which hook packs it** | `prompt_card.py` on UserPromptSubmit, before the agent starts, or `pointer.py` on PostToolUse | same | `read_image.py` on PostToolUse for Read |
 | **How the agent reads it** | the agent Reads the PNG that the hook packed | same | the agent Reads the file, and the hook swaps the result for the image |
-| **Turns to read** | one, when DensePack packed the file. A file with fewer than 1,000 bytes of words, or with images that cost more than its text, gets no images, and Read rejects it | same | one when all pages fit in one image. Otherwise the Read returns the first image and a note, and the other images need at least one more turn |
+| **Turns to read** | one, when DensePack packed the file. Files with fewer than 1,000 bytes of words, or with images that cost more than their text, get no images, and Read rejects them | same | one when all pages fit in one image. Otherwise the Read returns the first image and a note, and the other images need at least one more turn |
 | **Edit** | does not work | does not work | works |
 | **Write** | does not work | does not work | works |
 | **How to change one** | a shell command, for example a Python script with `python-docx` | a shell command | Edit or Write |
@@ -346,11 +346,11 @@ Two hooks find Word files, `prompt_card.py` and `pointer.py`. They miss a Word f
 
 Claude Code sets this limit, not DensePack. The image is not the reason.
 
-In Claude Code 2.1.284, Edit works on a file with no Read of its path. In a test without DensePack, Edit worked 3 times after cat and one time after grep with head. Claude Code marks the path as read when the agent makes the Read call, whatever the result. An image result counts.
+In Claude Code 2.1.284, Edit works on a file with no Read of its path. In a test without DensePack, Edit worked 3 times after cat and one time after grep with head. Claude Code marks the path as read when the agent makes the Read call, whatever the result. Image results count.
 
-A Word file never gets that mark. The Read tool of Claude Code rejects a binary file in its own input check, and that check runs **before** all PreToolUse hooks. `drop_read_gate.py` never runs for a `.doc` or `.docx`. In a test, a Read of a `.md` file logged an event in that gate, and a Read of a `.doc` file logged nothing. No test in this repository shows why Edit and Write do not work on a Word file.
+Word files never get that mark. The Read tool of Claude Code rejects a binary file in its own input check, and that check runs **before** all PreToolUse hooks. `drop_read_gate.py` never runs for a `.doc` or `.docx`. In a test, a Read of a `.md` file logged an event in that gate, and a Read of a `.doc` file logged nothing. No test in this repository shows why Edit and Write do not work on a Word file.
 
-The limit does not apply to the shell. A Python script can rewrite the file. No other route changes a Word file.
+The limit does not apply to the shell. Python scripts can rewrite the file. No other route changes a Word file.
 
 <br>
 
@@ -418,7 +418,7 @@ The plugin has seven commands, and each one is a Markdown file in `plugin/comman
 
 - `/maxpack` and `/max-off` start or stop images for Sonnet at the next tool call.
 - The session start note follows the setting only at the next session start, which also runs after a resume, `/clear` or `/compact`. Until then, Sonnet sessions get images with no note after `/maxpack`, and they keep the note that says files arrive as images after `/max-off`.
-- `/max-off` does not change the converted `CLAUDE.md` and `MEMORY.md` files. A Sonnet session still gets their pointer, which names the images. One line of the pointer tells a model that DensePack sends text, such as Haiku, to read the `.bak` instead.
+- `/max-off` does not change the converted `CLAUDE.md` and `MEMORY.md` files. Sonnet sessions still get their pointer, which names the images. One line of the pointer tells a model that DensePack sends text, such as Haiku, to read the `.bak` instead.
 
 `dpctl.py` also takes verbs that have no slash command. Each verb that changes a setting also prints the status line.
 
@@ -428,7 +428,7 @@ The plugin has seven commands, and each one is a Markdown file in `plugin/comman
 | `receipts` | `default`, `verbose`, `light` or `quiet` | `quiet` | Sets the receipt table. With `quiet`, DensePack writes the table to `.claude/tmp/densepack-receipt-last.md` and not to the conversation |
 | `totals` | `on`, `off` or `auto` | `auto` | Sets when the row of conversation totals prints |
 | `keep` | `images`, `reports`, `both` or `off`, then a folder if you want one | `both` | Sets which copies DensePack keeps in the vault. The folder is where `keep <conversation id>` copies a conversation. It must be a relative path inside the project, or DensePack ignores it |
-| `keep` | A conversation id from `dpctl.py vault` | None | Copies that conversation out of the vault into the keep folder, or into `densepack-archive` in the project |
+| `keep` | The conversation id from `dpctl.py vault` | None | Copies that conversation out of the vault into the keep folder, or into `densepack-archive` in the project |
 | `vault` | None, or a number of megabytes | 200 MB | With no number, lists the conversation folders of the vault and the cap, or says that the vault is empty. With a number, sets the cap and deletes the oldest folders until the vault is at or below the cap |
 | `reader` | `auto`, `fable`, `opus` or `sonnet` | `auto` | Names the model of the lead in place of the model that DensePack reads from the transcript. DensePack then uses that name when it decides whether the lead gets images. The image stays the same for each model |
 | `stylecard` | `on` or `off` | `off` | Stores the setting of the writing rule check. No hook of this version reads it |
@@ -465,9 +465,9 @@ Claude Code runs a hook at a named event. `plugin/hooks/hooks.json` names the ev
 | PreToolUse | Read | `read_gate.py` | When several packed report images wait and they fit in one image with no resize, returns all of them in that image on the first Read |
 | PreToolUse | Edit | `edit_gate.py` | Runs only after Claude Code accepts the Edit, and then finds the old text in the file. [The Edit check](#the-edit-check) explains why it stops nothing |
 | PreToolUse | Grep, Glob | `grep_gate.py` | Stops a Glob in `.claude/tmp` or `.claude/densepack-vault` that can list the text file of a packed report or brief. Stops a Grep in content mode whose pattern matches each line, such as `^`, on a file that a Read packs, and tells the agent to Read the file. It also stops that Grep on a folder that holds such a file, in the first 500 files, and its message names one such file. That Grep passes with a head_limit of 20 or fewer, in files_with_matches or count mode, on a Word file and for an agent that gets text. Each other Grep passes. The agent can find the text of an image with one Grep |
-| PreToolUse | Bash | `source_gate.py` | Replaces a shell read of the text file of a packed report or brief in `.claude/tmp` with a line that names its image. A command with DENSEPACK_SOURCE_OK runs as written |
+| PreToolUse | Bash | `source_gate.py` | Replaces a shell read of the text file of a packed report or brief in `.claude/tmp` with a line that names its image. Commands with DENSEPACK_SOURCE_OK run as written |
 | PreToolUse | Agent, Task | `brief_pack.py` | Packs a brief of 1,000 characters or more into images before the subagent starts, when the images save more than they cost |
-| SubagentStart | None | `subagent_start.py` | Sends the session start note to each subagent when it starts. A subagent on Sonnet after `/max-off` gets no note, when DensePack knows its model at the start |
+| SubagentStart | None | `subagent_start.py` | Sends the session start note to each subagent when it starts. Subagents on Sonnet after `/max-off` get no note, when DensePack knows their model at the start |
 | SubagentStop | None | `subagent_stop.py` | Packs the finished report into images when `report_pack_worth()` calculates that they will save more than the Read of the lead costs, and writes the report to a file. When the images also pay for one more answer, it asks a subagent in the background one time for an answer that names that file |
 | PostToolUse | Read | `read_image.py` | Puts the image of the file in the Read result in place of the text |
 | PostToolUseFailure | Read | `read_image.py` | Puts the image in the result of a Read that failed, such as a file over the size limit of Read |
