@@ -2,13 +2,13 @@
 
 Each bench gives the same task to the same model twice, once with DensePack and once without it. The price of a run is what Anthropic bills for the whole conversation.
 
-## Realistic benches, 29 September 2026
+## Benches, 29 September 2026
 
 The three tasks below are real requests on a real codebase, a frozen copy of the DensePack scripts with 28 files and 23,993 lines. They ran with Anthropic's own eval command, `claude plugin eval`. It runs each task with the plugin and again without it, grades each run, and reports the price of each run. The suite ships with the plugin in [plugin/evals/](plugin/evals/), so you can run it again.
 
 Each pair is one run with DensePack and one without it, on Opus 5.5 and Claude Code 2.1.284 in WSL2, one session at a time. Each DensePack run scored 1.00, which means it passed every check.
 
-![The mean price of the DensePack runs as a share of the runs without it, for the three realistic benches](images/savings-realistic.svg)
+![The mean price of the DensePack runs as a share of the runs without it, for the three benches](images/savings-benchmarks.svg)
 
 ### The code trace
 
@@ -57,7 +57,7 @@ Every run read all five files and took 4 turns, and every summary passed all six
 The cases use Bash, so they need a sandbox: Linux, macOS or WSL2. Run this command in a folder that holds the plugin.
 
 ```
-claude plugin eval ./plugin --tag realistic --runs 5 --scaffold --allow-tools Bash Write Edit --model claude-opus-5-5 -j 1
+claude plugin eval ./plugin --tag bench --runs 5 --scaffold --allow-tools Bash Write Edit --model claude-opus-5-5 -j 1
 ```
 
 - `--scaffold` runs each case's `setup.sh`, which copies the frozen scripts into the empty workspace.
@@ -68,9 +68,9 @@ The report gives the score and the price of each run in each arm. Prices change 
 
 ## Where DensePack does not save
 
-On 28 September 2026, the same `claude plugin eval` command ran 15 short tasks on Opus 5.5, each 5 times with DensePack and 5 times without it. Each run could use Bash, and each run did its task correctly. The table gives the price of each run in run order.
+The same `claude plugin eval` command ran 15 short tasks on Opus 5.5, each 5 times with DensePack and 5 times without it. Each run could use Bash, and each run did its task correctly. The table gives the price of each run in run order.
 
-### Short tasks
+### Short tasks, 28 September 2026
 
 | Task | 5 runs with DensePack | 5 runs without DensePack |
 | --- | --- | --- |
@@ -100,19 +100,19 @@ In the task that copies 6 lines of a Python file and in the task that finds 2 va
 - **Extra steps with DensePack.** In the task that copies 6 lines of a Python file, 4 of the 5 runs with DensePack read 10 or 20 lines with the Read tool, and each run without DensePack used one `sed` command. Those Reads saved nothing, because DensePack keeps a Read of 20 lines or fewer as text. In the task that lists each call of a function, runs 1 and 2 with DensePack printed code ranges with `sed`. In the task that finds 2 values in the Python file of 116 lines, each run with DensePack read the image and then ran `grep` for the 2 values. That check added one turn, about $0.0065 in each run.
 - **Causes outside DensePack.** In the HTML task, Claude Code denied the `sed` and `cp` commands of run 4 with DensePack, and the agent wrote the whole file with Write. That run cost $0.3128. In the rename task, run 4 with DensePack deleted the `__pycache__` folder that its own `py_compile` check made. In the Markdown task, runs 1, 4 and 5 with DensePack searched the DensePack code, because the Markdown file says that it is out of date, and the runs without DensePack searched only the task folder.
 
-### Close work on code
+### Close work on code, 29 September 2026
 
 When the agent hunts a subtle bug or makes many Edits, DensePack can cost more. The model writes more output when it reasons over code in images, and Anthropic bills output at 5x the input price.
 
-- In a bug hunt of one Python file of 587 lines, on 29 September 2026, each of 10 runs found the bug. The 5 runs with DensePack wrote 6,844 to 10,762 output tokens and cost $0.3072 to $0.3972. The 5 runs without it wrote 3,669 to 5,833 output tokens and cost $0.2561 to $0.3454. At a text size of 24 px in place of 17 px, the runs with DensePack still wrote 4,388 to 8,615 output tokens.
+- In a bug hunt of one Python file of 587 lines, each of 10 runs found the bug. The 5 runs with DensePack wrote 6,844 to 10,762 output tokens and cost $0.3072 to $0.3972. The 5 runs without it wrote 3,669 to 5,833 output tokens and cost $0.2561 to $0.3454. At a text size of 24 px in place of 17 px, the runs with DensePack still wrote 4,388 to 8,615 output tokens.
 - In a pre-release review of 10 hook scripts with 3 planted bugs, the runs with DensePack wrote 19,743 to 35,550 output tokens against 11,848 to 17,046 without it, and cost more in 5 of the 10 pairs of two batches of 5.
 - When an agent copies a block of several lines from an image into an Edit, it can put a line break in the wrong place, and the Edit fails. In five bug-fix and feature tasks, 12 of 103 lines that Opus 5.5 copied from images into Edits were wrong, and 0 of 44 when it copied from text. The session note now tells the agent to Read the lines it will change as text before an Edit.
 
 ## Accuracy
 
-Sonnet 5.5 answered 15 of 15 questions from images at high effort and 15 of 15 at medium effort on 28 September 2026, the same as Opus 5.5.
+Sonnet 5.5 answered 15 of 15 questions from images at high effort and 15 of 15 at medium effort, the same as Opus 5.5.
 
-### Byte identical rebuild on Sonnet 5.5 and Opus 5.5
+### Byte identical rebuild on Sonnet 5.5 and Opus 5.5, 28 September 2026
 
 The model reads the Python script of the [byte identical rebuild](#byte-identical-rebuild-25-september-2026) as an image and writes the file again from the image. Sonnet 5.5 and Opus 5.5 each ran 10 times at medium effort.
 
@@ -159,13 +159,13 @@ The image uses these marks.
 - A purple wave at the end of a row shows that the line continues on the next row.
 - In a file with tab indents, the band color behind a line shows its tab count.
 
-### A Sonnet 5.5 subagent
+### A Sonnet 5.5 subagent, 28 September 2026
 
 An Opus 5.5 lead started one Sonnet 5.5 subagent that read 8 whole Python files and copied the first line of the docstring of each file. In 10 runs with DensePack, the subagent copied 78 of 80 lines exactly, and in 10 runs without DensePack it copied 80 of 80. In the two misses, the subagent typed "stalled agent" for "stalled subagent", and the image shows "subagent" clearly. The Sonnet 5.5 part of each run cost $0.050 to $0.055 with DensePack and $0.198 to $0.201 without it.
 
-### What each action adds to the conversation
+### What each action adds to the conversation, 28 September 2026
 
-On 28 September 2026, Opus 5.5 ran each action in two `claude -p` sessions, one with DensePack and one without it. Each number is the cache write of the turn after the action, which is the count of tokens that the action added to the conversation.
+Opus 5.5 ran each action in two `claude -p` sessions, one with DensePack and one without it. Each number is the cache write of the turn after the action, which is the count of tokens that the action added to the conversation.
 
 | Action | With DensePack | Without DensePack |
 | --- | --- | --- |
@@ -197,7 +197,7 @@ When the agent reads a text file, DensePack packs the file into an image, and th
 - Each Fable, Opus and Sonnet model gets images, for example Fable 5.1, Opus 5.5 and Sonnet 5.5. Each model gets the same image, with a font size of 17 px.
 - Sonnet gets images while the maxpack setting is on. That setting is on by default. /max-off sends Sonnet text. In a turn that Reads more than 32 files or more than 700,000 bytes, Sonnet gets most of those files as text.
 - Haiku gets text, except for some Word files and the files in `.claude/densepack-vault/to-pack/`, which DensePack packs into images for each model.
-- The Sonnet results in [Accuracy](#accuracy) and [A Sonnet 5.5 subagent](#a-sonnet-55-subagent) ran on Sonnet 5.5 on 28 September 2026.
+- The Sonnet results in [Accuracy](#accuracy) and [A Sonnet 5.5 subagent](#a-sonnet-55-subagent-28-september-2026) ran on Sonnet 5.5.
 
 ### Bash output
 
@@ -207,15 +207,15 @@ DensePack also packs Bash output of 400 characters or more into images.
 - Lines that a model can misread go beside the image as exact text. These are random IDs that mix capital and small letters and hold a capital I or a small l, `git --stat` bars, the dash rules that `pip list` prints, numbers of 18 digits or more, lines of only spaces or tabs, and a tab inside a line. The tab after a line number, as `cat -n` prints it, does not count.
 - The output stays text when DensePack's estimate says that the images and those lines cost as many tokens as the text or more.
 
-A test on 26 September 2026 measured which kinds of line Opus 5.5 misreads in images of Bash output. In a copy of the plugin without the rule, Opus 5.5 at medium effort read images of realistic Bash output and typed their text. It typed 76 of 108 random IDs with I or l wrong, each time with I and l swapped, and it miscounted 54 of 72 `git --stat` bars. It typed 106 of 108 IDs without I or l, 167 of 168 hex hashes and 160 of 160 numbers of 8 to 17 digits right. On that day, the rule matched a line in 597 of 8,274 Bash outputs of 400 characters or more from real sessions, 7%.
+A test measured which kinds of line Opus 5.5 misreads in images of Bash output. In a copy of the plugin without the rule, Opus 5.5 at medium effort read images of real Bash output and typed their text. It typed 76 of 108 random IDs with I or l wrong, each time with I and l swapped, and it miscounted 54 of 72 `git --stat` bars. It typed 106 of 108 IDs without I or l, 167 of 168 hex hashes and 160 of 160 numbers of 8 to 17 digits right. On that day, the rule matched a line in 597 of 8,274 Bash outputs of 400 characters or more from real sessions, 7%.
 
-In another test on 26 September 2026, Opus 5.5 typed 33 of 34 packed Bash outputs from the image with each character right, apart from a final newline. The one miss is a space lost at the end of a row. With DensePack it answered 59 of 60 questions that ask for an exact string of packed output, and 50 of 51 when it used only the image. From text it answered 60 of 60.
+In another test, Opus 5.5 typed 33 of 34 packed Bash outputs from the image with each character right, apart from a final newline. The one miss is a space lost at the end of a row. With DensePack it answered 59 of 60 questions that ask for an exact string of packed output, and 50 of 51 when it used only the image. From text it answered 60 of 60.
 
 ### Subagents
 
 At the start of each session, DensePack sends its session note to the lead when the lead gets images. It also sends the note to each subagent when the subagent starts, except to a Sonnet subagent after /max-off. Haiku subagents get the note too, but their Reads, their Bash output and their briefs stay text. DensePack packs a brief of 1,000 characters or more, or a subagent report, only when the plugin calculates that the image costs less than the text.
 
-The lead opens a packed report with one Read, because the result of the Agent tool cannot carry an image. On 28 September 2026, a test hook on the Agent tool changed the result to other text, and the Opus 5.5 lead read that text. The same hook then put an image into the result in four shapes: an image block, the image shape of a Read result, the image shape of a Bash result, and a text block with an image block. Each time the lead got the original text of the subagent. A Read result and a Bash result can carry an image.
+The lead opens a packed report with one Read, because the result of the Agent tool cannot carry an image. A test hook on the Agent tool changed the result to other text, and the Opus 5.5 lead read that text. The same hook then put an image into the result in four shapes: an image block, the image shape of a Read result, the image shape of a Bash result, and a text block with an image block. Each time the lead got the original text of the subagent. A Read result and a Bash result can carry an image.
 
 ### More turns can still cost less
 
@@ -259,11 +259,11 @@ Anthropic bills per million tokens (MTok). Each model has its own price.
 | <strong>Opus 5.5</strong> | $4 | $8 | $5 | $0.20 (0.05x) | $20 |
 | <strong>Sonnet 5.5</strong> | $2 | $4 | $2.50 | $0.20 (0.1x) | $10 |
 
-<sub>The prices come from the <strong>Model pricing</strong> table on <a href="https://platform.claude.com/docs/en/about-claude/pricing">Anthropic's pricing page</a> on 28 September 2026. The Sonnet 5 benches of 23 September 2026 and earlier used the same prices as Sonnet 5.5.</sub>
+<sub>The prices come from the <strong>Model pricing</strong> table on <a href="https://platform.claude.com/docs/en/about-claude/pricing">Anthropic's pricing page</a>. The Sonnet 5 benches used the same prices as Sonnet 5.5.</sub>
 
 - The multipliers apply to the base input price. The cache read price is not a part of the 2x cache write price.
 - `cache_creation_input_tokens` are the input tokens that Claude Code writes to the cache. A 1-hour cache write costs 2x the base input price, and a 5-minute cache write costs 1.25x.
-- In the Opus 5.5 runs of 28 September 2026, Claude Code wrote the main conversation to the 1-hour cache, and in the Sonnet 5.5 subagent runs it wrote the conversation of each subagent to the 5-minute cache.
+- In the Opus 5.5 runs, Claude Code wrote the main conversation to the 1-hour cache, and in the Sonnet 5.5 subagent runs it wrote the conversation of each subagent to the 5-minute cache.
 - Claude Code sends the whole conversation on each turn. The cache holds the part that repeats. Anthropic bills that part at the `cache_read_input_tokens` price.
 - Without a cache, Anthropic bills the whole conversation at the base input price on each turn.
 
@@ -275,7 +275,7 @@ Anthropic bills per million tokens (MTok). Each model has its own price.
 
 ## Exact values
 
-In a test on 26 September 2026, Opus 5.5 typed 167 of 168 hex hashes, 160 of 160 numbers of 8 to 17 digits and 96 of 96 temp folder names right from images of Bash output. DensePack puts each line of Bash output that holds a number of 18 digits or more beside the image as exact text.
+In a test, Opus 5.5 typed 167 of 168 hex hashes, 160 of 160 numbers of 8 to 17 digits and 96 of 96 temp folder names right from images of Bash output. DensePack puts each line of Bash output that holds a number of 18 digits or more beside the image as exact text.
 
 The text of each image stays on disk. For a Read, that text is the file itself. Command output, Word files and the files of `.claude/densepack-vault/to-pack/` have a text copy that the key row of the image names after `file=`. The briefs and reports of subagents keep their text in a `.txt` file beside the image, and the CLAUDE.md, CLAUDE.local.md and MEMORY.md files keep their text in a `.densepack.bak` file beside them.
 

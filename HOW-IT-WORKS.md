@@ -100,7 +100,7 @@ Bash output takes the same route.
 
 Agents still write their briefs and reports as text, and DensePack swaps that text for images when the images cost less than the text.
 
-A hook can change the prompt of an Agent call and the result of the Agent tool only as text. In a test on 28 September 2026, a hook put an image into the Agent result in four different shapes, and each time the lead got the original text. A Read result and a Bash result can carry an image. For that reason the receiving agent gets one short line that names the image, and it opens the image with the Read tool.
+A hook can change the prompt of an Agent call and the result of the Agent tool only as text. In a test, a hook put an image into the Agent result in four different shapes, and each time the lead got the original text. A Read result and a Bash result can carry an image. For that reason the receiving agent gets one short line that names the image, and it opens the image with the Read tool.
 
 When the lead gives a task to a subagent:
 
@@ -216,7 +216,7 @@ The session start note added 569 tokens on Opus 5.5, and at that count it costs 
 
 When a part goes to the model a second time, Anthropic bills it as new again. A second Read of the same file uses the saved image, but Anthropic bills that image at the cache write price again, because the image is new at the end of the conversation. The same is true when the agent runs the same command a second time. The lower price applies only to the tokens that an earlier turn sent.
 
-<sub>The first row comes from one `claude -p` session on Opus 5.5 with no tool call, on 28 September 2026, first with DensePack off and then on. The file names row compares the first turn of a session with the names and without them, in two tests on 28 September 2026. The Read and Bash rows come from the code of `read_image.py` and `bash_image.py`, not from a measured session. The `usage` rows of each transcript give the token counts. The dollars use the prices in [BENCHMARKS.md](BENCHMARKS.md#how-anthropic-bills).</sub>
+<sub>The first row comes from one `claude -p` session on Opus 5.5 with no tool call, first with DensePack off and then on. The file names row compares the first turn of a session with the names and without them, in two tests. The Read and Bash rows come from the code of `read_image.py` and `bash_image.py`, not from a measured session. The `usage` rows of each transcript give the token counts. The dollars use the prices in [BENCHMARKS.md](BENCHMARKS.md#how-anthropic-bills).</sub>
 
 | What DensePack packs | When |
 | --- | --- |
@@ -243,7 +243,7 @@ When a part goes to the model a second time, Anthropic bills it as new again. A 
 | Sonnet, all files | Yes. Type `/max-off` to send Sonnet text |
 | Chinese, Japanese and Korean text | No. The Inter font has no glyphs for them |
 
-<sub>A byte identical rebuild is not a normal task. This bench shows how exactly a model can rebuild four files, one Python, one Markdown, one HTML and one GDScript file, from a DensePack image. The runs of Opus 5.5 and Sonnet 5.5 used medium effort. The 100 runs of each file ran on 25 September 2026, and the 10 more rebuilds of the Python file ran on 28 September 2026. [BENCHMARKS.md](BENCHMARKS.md#byte-identical-rebuild-25-september-2026) has the 100 runs of each file.</sub>
+<sub>A byte identical rebuild is not a normal task. This bench shows how exactly a model can rebuild four files, one Python, one Markdown, one HTML and one GDScript file, from a DensePack image. The runs of Opus 5.5 and Sonnet 5.5 used medium effort. Each file had 100 runs, and the Python file had 10 more rebuilds. [BENCHMARKS.md](BENCHMARKS.md#byte-identical-rebuild-25-september-2026) has the 100 runs of each file.</sub>
 
 <br>
 
@@ -253,9 +253,9 @@ When a part goes to the model a second time, Anthropic bills it as new again. A 
 
 ## The Edit check
 
-Claude Code checks each Edit before any hook runs. When the old text is not in the file, or is in the file more than one time without replace_all, Claude Code rejects the Edit with its own error, "String to replace not found in file", and `edit_gate.py` does not run. Tests on Claude Code 2.1.280 and 2.1.284 on 29 September 2026 showed this in the `auto`, `default` and `dontAsk` permission modes.
+Claude Code checks each Edit before any hook runs. When the old text is not in the file, or is in the file more than one time without replace_all, Claude Code rejects the Edit with its own error, "String to replace not found in file", and `edit_gate.py` does not run. Tests on Claude Code 2.1.280 and 2.1.284 showed this in the `auto`, `default` and `dontAsk` permission modes.
 
-Agents can copy a line break to the wrong place when they copy a block from an image, and then the Edit fails. In five bug-fix and feature tasks on 29 September 2026, 12 of 103 lines that Opus 5.5 copied from images into Edits were wrong, and 0 of 44 when it copied from text. For that reason the session note tells the agent to Read the lines it will change with a limit of 20 or fewer before its Edits. That Read returns them as exact text, such as a Read with offset N, where N is the green line number in the image. When an Edit still fails, the same Read gets the exact lines, and the agent sends the Edit again.
+Agents can copy a line break to the wrong place when they copy a block from an image, and then the Edit fails. In five bug-fix and feature tasks, 12 of 103 lines that Opus 5.5 copied from images into Edits were wrong, and 0 of 44 when it copied from text. For that reason the session note tells the agent to Read the lines it will change with a limit of 20 or fewer before its Edits. That Read returns them as exact text, such as a Read with offset N, where N is the green line number in the image. When an Edit still fails, the same Read gets the exact lines, and the agent sends the Edit again.
 
 <br>
 

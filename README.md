@@ -6,7 +6,7 @@
 <p align="center">
 DensePack packs text into the smallest image that Fable, Opus and Sonnet models can read. The image uses about half the input tokens of the text.<br>
 <br>
-<strong>On three realistic coding tasks, run with Anthropic's <code>claude plugin eval</code> on Opus 5.5, each DensePack run saved 20.7% to 44.5% on a code trace, 7.7% to 53.7% on an architecture doc and 37.7% to 38.8% on a summary of five files read whole, against the same task without DensePack, and scored 1.00.</strong><br>
+<strong>On three coding tasks, run with Anthropic's <code>claude plugin eval</code> on Opus 5.5, DensePack saved 31.8% to 38.3% of the price on average, and every run passed its checks.</strong><br>
 <br>
 Turns are calls to the model that send the entire conversation that has been written to cache at cache read price.
 </p>
@@ -40,21 +40,15 @@ Turns are calls to the model that send the entire conversation that has been wri
 
 ## Savings on the whole conversation
 
-<strong>On 29 September 2026, Anthropic's <code>claude plugin eval</code> ran three realistic tasks on Opus 5.5, 5 times with DensePack and 5 times without it. Each run with DensePack saved against its pair and passed every check.</strong><br>
+<strong>Anthropic's <code>claude plugin eval</code> ran three tasks on Opus 5.5, 5 times with DensePack and 5 times without it. Each run with DensePack saved against its pair and passed every check.</strong><br>
 
-![The mean price of the DensePack runs as a share of the runs without it, for the three realistic benches](images/savings-realistic.svg)
+![The mean price of the DensePack runs as a share of the runs without it, for the three benches](images/savings-benchmarks.svg)
 
-| Task | Mean saving | Saved in each pair, lowest to highest |
+| Task | What the agent does | Mean saving |
 | --- | --- | --- |
-| Code trace | 32.6% | 20.7% to 44.5% |
-| Architecture doc | 31.8% | 7.7% to 53.7% |
-| Five files read whole | 38.3% | 37.7% to 38.8% |
-
-| Task | What the agent does | Saved in each pair |
-| --- | --- | --- |
-| Code trace | Traces how a Read becomes an image, through about 20,000 lines of code | 44.5%, 34.3%, 21.0%, 42.4%, 20.7% |
-| Architecture doc | Writes an architecture doc of 14 hook scripts, about 8,700 lines | 11.2%, 53.7%, 45.4%, 7.7%, 40.8% |
-| Five files read whole | Reads five scripts whole, 5,586 lines, and writes a 5-line summary | 38.1%, 38.8%, 38.7%, 37.7%, 37.9% |
+| Code trace | Traces how a Read becomes an image, through about 20,000 lines of code | 32.6% |
+| Architecture doc | Writes an architecture doc of 14 hook scripts, about 8,700 lines | 31.8% |
+| Five files read whole | Reads five scripts whole, 5,586 lines, and writes a 5-line summary | 38.3% |
 
 Each bench is one short task in a new session. In a longer session, every later turn reads the whole conversation again from the cache, and the images of the files the agent read cost about half the tokens of their text.
 
@@ -62,7 +56,7 @@ Each bench is one short task in a new session. In a longer session, every later 
 
 ### Byte identical rebuild
 
-Opus 5.5 read each file as a DensePack image and wrote the file again from the image. A run passes when the new file is byte for byte identical to the source file. Each file had 100 runs on 25 September 2026.
+Opus 5.5 read each file as a DensePack image and wrote the file again from the image. A run passes when the new file is byte for byte identical to the source file. Each file had 100 runs.
 
 | File | Text tokens | Image tokens | Saving | Passes |
 | --- | --- | --- | --- | --- |
@@ -105,7 +99,7 @@ The DensePack plugin, the right-click tool and the HTML app each pack text into 
 ```
 <br>
 
-DensePack needs Python 3.10 or newer, and an older Python counts as missing. On Windows, the first run installs <strong>Python</strong> with winget when it is missing. On macOS and Linux, the plugin prints the command that installs Python. The plugin then installs <strong>Pillow, freetype-py and NumPy</strong> into its own data folder. On Windows, the hooks run through Git Bash, or through PowerShell when the computer has no Git for Windows. The tests of 28 September 2026 ran on Claude Code 2.1.283 and 2.1.284.
+DensePack needs Python 3.10 or newer, and an older Python counts as missing. On Windows, the first run installs <strong>Python</strong> with winget when it is missing. On macOS and Linux, the plugin prints the command that installs Python. The plugin then installs <strong>Pillow, freetype-py and NumPy</strong> into its own data folder. On Windows, the hooks run through Git Bash, or through PowerShell when the computer has no Git for Windows. The tests ran on Claude Code 2.1.283 and 2.1.284.
 
 | System | Python | Pillow, freetype-py and NumPy |
 | --- | --- | --- |
@@ -230,7 +224,7 @@ The Edit and Write tools of Claude Code do not work on a Word file. Change a Wor
 
 ## Speed and memory
 
-| Text size | Renderer before 22 September 2026 | Renderer of 22 September 2026 |
+| Text size | Old renderer | New renderer |
 | --- | --- | --- |
 | 11 KB | 3.2 s, 528 MB, 16 processes | 0.9 s, 55 MB, 1 process |
 | 21 KB | 5.4 s, 630 MB, 15 processes | 1.8 s, 76 MB, 1 process |
@@ -256,7 +250,7 @@ The background pack of a named folder starts one process for each file, up to th
 - Edit and Write work on a file that arrived as an image. They do not work on a Word file because Claude Code does not Read a Word file. See [Word files](#word-files).<br>
   <sub>DensePack tells this to each agent that gets images, to the lead at session start and to each subagent when it starts.</sub>
 - On Opus 5.5, DensePack adds about 569 tokens to the first turn of a session. They are the session start note and the command list. Each later turn reads them again at the cache read price. The other hooks add nothing to a message that has no pasted image and names no folder and no Word file.<br>
-  <sub>The count comes from two `claude -p` sessions with no tool call on 28 September 2026, one with DensePack off and one with it on.</sub>
+  <sub>The count comes from two `claude -p` sessions with no tool call, one with DensePack off and one with it on.</sub>
 - No bench measured the cost of the session start note in a subagent.
 - After a conversation that packed a report or a brief, the next session gets a summary at session start. With the default receipts setting, the summary is one line that names the file of the totals.
 - Files under 1,000 bytes, files over 500,000 bytes and files with a null byte stay text.
@@ -267,7 +261,7 @@ The background pack of a named folder starts one process for each file, up to th
   <sub>A company policy that blocks PowerShell scripts stops DensePack on that computer.</sub>
 - The benches measure the renderer of the plugin, which the right-click tool also uses. The HTML app uses its own renderer.
 - When one Sonnet turn gets many images, the reply can hold thousands of output tokens. More output lowers the saving because Anthropic bills output at 5x the input price.
-- Sonnet 5.5 and Opus 5.5 each copied one Python file of 116 lines from its image 10 times at medium effort on 28 September 2026. Sonnet 5.5 wrote each word right, with code that runs the same, in 8 copies, and Opus 5.5 did this in all 10. Run `/max-off` for work that must copy text exactly. [BENCHMARKS.md](BENCHMARKS.md#byte-identical-rebuild-on-sonnet-55-and-opus-55) has the results.
+- Sonnet 5.5 and Opus 5.5 each copied one Python file of 116 lines from its image 10 times at medium effort. Sonnet 5.5 wrote each word right, with code that runs the same, in 8 copies, and Opus 5.5 did this in all 10. Run `/max-off` for work that must copy text exactly. [BENCHMARKS.md](BENCHMARKS.md#byte-identical-rebuild-on-sonnet-55-and-opus-55-28-september-2026) has the results.
 <br>
 
 ---

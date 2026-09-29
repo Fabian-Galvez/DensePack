@@ -1,4 +1,4 @@
 schema_version: "1.1"
-name: realistic-trace-large
+name: five-files-read
 context:
   scaffold_script: setup.sh
