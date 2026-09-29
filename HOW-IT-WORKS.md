@@ -85,7 +85,7 @@ The hooks make the swap automatically before and after the tool call.
 
 - The note that names the other images goes one time to each agent for each file in a session. It ends with "Read all the other images that you need in one turn.", because agents that Read one image in each turn spend a turn on each page.
 - DensePack never puts two pages side by side in one image.
-  - In a bench of 16 files for DensePack 1.0, Sonnet 5 answered 3 of 5 questions right from pages side by side and 5 of 5 from pages one below the other, and Opus 5 answered 5 of 5 from pages one below the other.
+  - In a bench of 16 files for DensePack 1.0, Sonnet 5 answered 3 of 5 questions correctly from pages side by side and 5 of 5 from pages one below the other. Opus 5 answered 5 of 5 from pages one below the other.
   - In DensePack 1.0, the pages of `drop_read_gate.py` cost 7,224 tokens side by side and 7,168 tokens one below the other.
 - Reads with an offset, or with a limit of more than 20 lines, get images of only the lines that they name, or those lines as text when the text costs less. When the pages of those lines do not fit in one image, the Read returns the first image and a note that names the others. Reads with a limit of 20 lines or fewer stay text.
 
@@ -198,7 +198,7 @@ DensePack packs the files that the agent Reads, Word files, instruction files su
 Before it sends an image, DensePack compares the price of the image with the price of the text, and it sends the text when the image costs more.
 
 - For a file, Bash output, a Word file and an instruction file, DensePack compares tokens only. The image costs its patches and its note, as [The image](#the-image) shows, and the text costs one token for each 2.4 characters. The test is the same for each model, because each model gets the same image.
-- For a brief, DensePack also compares tokens. When the subagent must spend one turn only to Read the image, DensePack charges that turn as 30,000 tokens of context at the cache read share of the model that the Agent call names, or of the lead model when the call names none, plus 100 output tokens at 5x the input price.
+- For a brief, DensePack also compares tokens. When the subagent must spend one turn only to Read the image, DensePack charges that turn as 30,000 tokens of context plus 100 output tokens at 5x the input price. The context uses the cache read share of the model that the Agent call names, or of the lead model when the call names none.
   - The share is 0.025 on Fable 5.1, 0.05 on Opus 5.5 and 0.1 on each other model, such as Sonnet 5.5.
   - Model names with no version, such as `opus`, also get 0.1.
   - DensePack counts the saving at the 5-minute cache write price, 1.25x the input price.
