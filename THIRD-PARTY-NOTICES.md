@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.1 -->
+<!-- DensePack 1.3.2 -->
 # Third-party notices
 
 DensePack uses the MIT license. This file lists the software and the font
