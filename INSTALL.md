@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.2 -->
+<!-- DensePack 1.3.3 -->
 # Install DensePack
 
 Follow the steps for your system in order. Type each command exactly and press Enter after it.
