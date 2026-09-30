@@ -139,7 +139,7 @@ fi
 # into a JSON string with printf and escapes nothing. Either character makes
 # JSON that Claude Code cannot parse.
 if [ "$OS" = "Darwin" ]; then
-    CMD="brew install python , after installing Homebrew from https://brew.sh , or curl -LsSf https://astral.sh/uv/install.sh | sh and then uv python install"
+    CMD="brew install python , after installing Homebrew from https://brew.sh , or install uv from https://docs.astral.sh/uv and then run uv python install --default"
 elif command -v apt >/dev/null 2>&1; then
     CMD="sudo apt install python3 python3-pip"
 elif command -v dnf >/dev/null 2>&1; then
