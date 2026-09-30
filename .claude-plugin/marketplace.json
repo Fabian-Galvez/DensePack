@@ -8,7 +8,7 @@
     {
       "name": "densepack",
       "source": "./plugin",
-      "version": "1.3.2",
+      "version": "1.3.3",
       "description": "DensePack packs file Reads, shell output, long subagent briefs and subagent reports into dense images that an AI model reads for fewer input tokens, and it sends the text when the image costs more. All work runs on your computer."
     }
   ]

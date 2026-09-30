@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.2 -->
+<!-- DensePack 1.3.3 -->
 # How DensePack works
 
 This file explains each part of DensePack in full. [README.md](README.md) has a short summary of each part.
@@ -520,13 +520,13 @@ The hooks read the settings files again on each event, and a change applies at t
 
 To run a verb, open a terminal in the project folder and run the `dpctl.py` of the installed plugin with the verb and its value.
 
-- `1.3.2` in the path is the version of the plugin.
+- `1.3.3` in the path is the version of the plugin.
 - On Windows, run the line in PowerShell and type `python` in place of `python3`.
 
 This line shows a receipt table in the conversation.
 
 ```
-python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/1.3.2/scripts/dpctl.py receipts default
+python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/1.3.3/scripts/dpctl.py receipts default
 ```
 
 `/dense-off` stops only the conversation that ran it and the subagents of that conversation. All other conversations keep packing.
