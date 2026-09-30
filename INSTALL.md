@@ -167,6 +167,7 @@ DensePack packs a file into images the first time the agent reads it.
 - DensePack packs the lines again at each Read that has an offset and no limit or a limit of more than 20 lines.
 - After a change to the file or a new plugin version, DensePack packs the file again.
 - At session start, DensePack deletes images older than 24 hours and packs those files again at their next Read.
+- The Read tool of Claude Code rejects files over 256 KB. DensePack still packs those files, and the agent gets a note that names the images and opens the first image with one more Read.
 
 The table below lists the first wait for five file sizes. The pack times come from tests on one computer, and the wait is longer when DensePack packs files in other sessions at the same time.
 
