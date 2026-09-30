@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.1 -->
+<!-- DensePack 1.3.2 -->
 # Install DensePack
 
 Follow the steps for your system in order. Type each command exactly and press Enter after it.
@@ -97,7 +97,7 @@ DensePack packs the files that you copy into `.claude/densepack-vault/to-pack/` 
     If Python 3.10 or newer is installed and Pillow, freetype-py or NumPy is missing, the plugin installs them into its own folder in this session. If that install fails, DensePack shows a `pip` command at each session start that installs them into your own Python.
 13. If Python 3.10 or newer is missing, DensePack shows a message with two ways to install it. Use one of them.
     - To use Homebrew, install Homebrew from https://brew.sh and then run `brew install python`.
-    - To use uv, run `curl -LsSf https://astral.sh/uv/install.sh | sh` and then run `uv python install --default`. DensePack finds Python only by the names `python3`, `python` and `py`, and the `--default` option adds the name `python3`. Without `--default`, uv adds only a name that contains the version, such as `python3.13`, and DensePack does not find that Python.
+    - To use uv, install uv from https://docs.astral.sh/uv and then run `uv python install --default`. DensePack finds Python only by the names `python3`, `python` and `py`, and the `--default` option adds the name `python3`. Without `--default`, uv adds only a name that contains the version, such as `python3.13`, and DensePack does not find that Python.
 
     DensePack shows the commands only in the first session and shows a short message without them in later sessions. To see the commands again, delete `~/.claude/plugins/data/densepack-densepack-marketplace/python-install-tried`.
 14. After the Python install, type `/exit` and start `claude` again in your project folder. The plugin then installs Pillow, freetype-py and NumPy into its own folder.
