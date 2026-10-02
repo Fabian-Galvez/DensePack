@@ -303,7 +303,7 @@ DensePack saves the most in long sessions in which the agent reads many files or
 1. Start Claude Code in a folder next to the repository, not in the repository. In that folder, Claude Code does not load the `CLAUDE.md` of the repository.
 2. Run `/mdpack <path to the repository>`.
    - DensePack packs the `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` of the repository into images and puts a pointer in the place of each file.
-   - Files stay text when their images and pointer cost as much as their text or more, or when they hold more than 250,000 characters or 6,000 lines.
+   - Files stay text when their images and pointer cost as much as their text or more, or when they are over 1,000,000 bytes.
    - DensePack keeps the original text next to each file as `<name>.densepack.bak`.
    - The agent reads none of the text.
 3. Close Claude Code and start a new session in the repository. In the new session, Claude Code loads the pointer and the agent reads the images. Claude Code never sends the text.
