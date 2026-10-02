@@ -50,7 +50,7 @@ DensePack changes some of your files and adds its own folders and packages. The 
 - Each converted file becomes three kinds of files, the pointer, the `.densepack.bak` and the images.
 - The `.bak` holds your original text, byte for byte. Claude Code does not load the `.bak` because it loads only the names `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md`.
 - DensePack converts a file only when its images and pointer cost less than its text. Short files stay text.
-- Instruction files over 250,000 characters or 6,000 lines stay text.
+- Instruction files over 1,000,000 bytes stay text, the same limit as for a Read.
 - The images can cost one extra turn at the start of a session. DensePack does not count that turn when it compares the costs, and for that reason short sessions can cost more with a converted file.
 - To change your instructions, edit the `.bak`. DensePack converts it again at the next session start.
 - DensePack moves text that you add below the pointer into the `.bak` at the next session start. It moves new lines from auto memory the same way.

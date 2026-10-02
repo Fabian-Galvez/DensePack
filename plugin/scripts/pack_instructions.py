@@ -46,9 +46,6 @@ OPEN = "<!-- densepack-pointer: DensePack wrote this block -->"
 CLOSE = "<!-- /densepack-pointer -->"
 BAK = ".densepack.bak"
 IMAGE_NAME = re.compile(r"-image-\d+-of-\d+-DensePack\.png$")
-# The renderer limits for a Read. Past these limits, a file stays text.
-MAX_CHARS = 250000
-MAX_LINES = 6000
 PRIVATE_MARKS = ("\ue000", "\ue001", "\ue002", "\ue003")
 
 
@@ -173,7 +170,10 @@ def text_tokens(text):
 
 
 def drawable(text):
-    return (len(text) <= MAX_CHARS and text.count("\n") <= MAX_LINES
+    # The same ceiling as for a Read, READ_MAX_BYTES in drop_read_gate.py.
+    # There is no line ceiling, as for a Read.
+    from drop_read_gate import READ_MAX_BYTES
+    return (len(text.encode("utf-8")) <= READ_MAX_BYTES
             and not any(m in text for m in PRIVATE_MARKS) and "\x00" not in text)
 
 
