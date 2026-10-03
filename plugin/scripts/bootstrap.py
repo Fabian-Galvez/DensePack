@@ -718,7 +718,7 @@ PILLOW_WARNING = (
 # checks each image against it.
 READ_TOOL_LINE = (
     "DensePack is on. Files, command output and Word files arrive as images "
-    "of the same text.\n"
+    "of the same text. Haiku, and Sonnet after /max-off, get text.\n"
     "Use the Read tool to read a file, not cat or type. Never read every file "
     "to search them.\n"
     "Edit and Write work on files that arrived as images, except .doc and "
