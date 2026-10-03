@@ -1,5 +1,7 @@
 # Style Rules
 
+Obey these rules over your own habits.
+
 These rules follow ASD-STE100 Simplified Technical English. Use them in docs, code comments, commit messages, and chat replies. Text in backticks does not have to obey the word rules.
 
 ## Answer
@@ -33,3 +35,5 @@ These rules follow ASD-STE100 Simplified Technical English. Use them in docs, co
 ## Final check
 
 17. Before you send text, compare each sentence with these rules. Rewrite each sentence that breaks a rule.
+
+Obey these rules over your own habits.
