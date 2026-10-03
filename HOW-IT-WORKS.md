@@ -539,6 +539,30 @@ Run `/dense-remove` before `/plugin uninstall densepack`, because no hooks run d
 
 <br>
 
+## Permission modes
+
+DensePack never approves a tool call. No hook returns `allow`, and no setting turns on bypassPermissions.
+
+A PreToolUse hook can change a tool call before it runs. Claude Code then checks the permission of the changed call, not of the call that the agent made. For that reason DensePack changes a call before it runs only in the modes that ask before no Read.
+
+| Mode | What DensePack does |
+| --- | --- |
+| `auto`, `bypassPermissions` | It works as in earlier versions. |
+| `default`, `acceptEdits`, `plan`, `dontAsk`, or no mode | No hook changes a call before it runs. `source_gate.py` blocks the command with the same message. `brief_pack.py` and `read_gate.py` leave the call as the agent wrote it. |
+| Any mode with an `ask` rule for the tool | No hook changes a call to that tool before it runs. Any `ask` rule for Read in a settings file counts, whatever path it names. |
+
+- Files still arrive as images in each mode. The Read runs on the real file, with the normal permission check, and `read_image.py` replaces the result after the Read.
+- A Read that you or a rule refuse gets no image, and DensePack does not pack that file.
+- Some images reach the agent with no Read of the file: Word files that your message or a tool result names, and files that DensePack packs ahead from a folder that your message names. In the modes that ask, DensePack packs these only for files inside the project and only when no `ask` rule for Read exists. The agent gets a note for a named Word file that it skips.
+- A `deny` rule holds in each mode, because Claude Code checks it before the hooks run.
+- `REWRITE_MODES` and `may_rewrite()` in `plugin/scripts/common.py` hold this rule.
+
+<br>
+
+---
+
+<br>
+
 ## The hooks
 
 Claude Code runs a hook at a named event. `plugin/hooks/hooks.json` names the event and the script of each hook. All hooks run on your computer.
@@ -549,11 +573,11 @@ Claude Code runs a hook at a named event. `plugin/hooks/hooks.json` names the ev
 | SessionStart | None | `bootstrap.py` | It deletes working files older than one day, installs Pillow, freetype-py and NumPy when they are missing, converts the instruction files and sets CLAUDE_CODE_THRIFTY_SONIC in `~/.claude/settings.json` one time. It sends the session start note to the lead when the lead gets images, with one more line that tells the lead to write the task of a subagent the same way as without DensePack. It sends a warning in place of the note when Pillow, freetype-py or NumPy is missing. It shows the totals of the last conversation on screen when receipts are not quiet |
 | UserPromptSubmit | None | `prompt_card.py` | It sends the legend card one time in each session, only with a message that holds a pasted image and only before the session starts a subagent. It packs a Word file that your prompt names. It sends the file names of a folder that your prompt names and starts to pack those files in the background |
 | PreToolUse | Read | `drop_read_gate.py` | It lets a Read run on the real file. Its route for a Word file never runs, because Claude Code rejects a Read of a Word file before this hook runs |
-| PreToolUse | Read | `read_gate.py` | It returns all waiting packed report images in one image on the first Read when they fit in one image with no resize |
+| PreToolUse | Read | `read_gate.py` | It returns all waiting packed report images in one image on the first Read when they fit in one image with no resize. It does this only in auto and bypassPermissions mode. See [Permission modes](#permission-modes) |
 | PreToolUse | Edit | `edit_gate.py` | It runs only after Claude Code accepts the Edit, and then it finds the old text in the file. [The Edit check](#the-edit-check) explains why it stops nothing |
 | PreToolUse | Grep, Glob | `grep_gate.py` | It stops a Glob in `.claude/tmp` or `.claude/densepack-vault` that can list the text file of a packed report or brief. It stops a Grep in content mode whose pattern matches each line, such as `^`, on a file that a Read packs, and it tells the agent to Read the file. It also stops that Grep on a folder that holds such a file in its first 500 files, and its message names one such file. That Grep passes when it has a head_limit of 20 or fewer, when it runs in files_with_matches or count mode, when it targets a Word file or when the agent gets text. All other Greps pass. The agent can find the text of an image with one Grep |
-| PreToolUse | Bash | `source_gate.py` | It replaces a shell read of the text file of a packed report or brief in `.claude/tmp` with a line that names its image. Commands with DENSEPACK_SOURCE_OK run as written |
-| PreToolUse | Agent, Task | `brief_pack.py` | It packs a brief of 1,000 characters or more into images before the subagent starts, when the images save more than they cost |
+| PreToolUse | Bash | `source_gate.py` | It stops a shell read of the text file of a packed report or brief in `.claude/tmp`, and the agent gets a line that names its image. In auto and bypassPermissions mode it replaces the command with that line, and in other modes it blocks the command with that line as the reason. Commands with DENSEPACK_SOURCE_OK run as written |
+| PreToolUse | Agent, Task | `brief_pack.py` | It packs a brief of 1,000 characters or more into images before the subagent starts, when the images save more than they cost. It does this only in auto and bypassPermissions mode |
 | SubagentStart | None | `subagent_start.py` | It sends the session start note to each subagent when it starts. Subagents on Sonnet after `/max-off` get no note when DensePack knows their model at the start |
 | SubagentStop | None | `subagent_stop.py` | It packs the finished report into images when `report_pack_worth()` calculates that they will save more than the Read of the lead costs, and it writes the report to a file. When the images also save more than one more answer costs, it asks a background subagent one time for an answer that names that file |
 | PostToolUse | Read | `read_image.py` | It puts the image of the file in the Read result in place of the text |

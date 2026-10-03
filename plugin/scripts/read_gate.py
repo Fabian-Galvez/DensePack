@@ -27,8 +27,8 @@ import sys
 from pathlib import Path
 import time
 
-from common import (disabled, emit, pending_entries, pending_path, project_dir,
-                    read_event, tmp_dir, vault_dir)
+from common import (disabled, emit, may_rewrite, pending_entries, pending_path,
+                    project_dir, read_event, tmp_dir, vault_dir)
 import densepack as dp
 
 # The three name prefixes that the plugin gives a packed image. The gate does
@@ -136,6 +136,12 @@ def main():
         # 4. That path names a packed image.
         name = asked.replace("\\", "/").rsplit("/", 1)[-1]
         if not any(name.startswith(mark) for mark in PACKED_NAMES):
+            return 0
+
+        # The swaps below change the Read before it runs. They are for the
+        # modes that ask before no Read. See THE PERMISSION RULE in
+        # common.py. In the other modes the Read opens the image it names.
+        if not may_rewrite(event, "Read"):
             return 0
 
         # 5. That exact path is on the pending list. The gate matches the

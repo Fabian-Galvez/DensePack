@@ -45,7 +45,8 @@ import shlex
 import sys
 import time
 
-from common import disabled, emit, read_event, sibling_image, tmp_dir
+from common import (disabled, emit, may_rewrite, read_event, sibling_image,
+                    tmp_dir)
 from subagent_stop import manifest_write
 
 # The basename of each source-text sidecar that this plugin writes. It is
@@ -328,6 +329,21 @@ def main():
         text = ACTION % safe
         if not why_already_sent(event.get("session_id")):
             text += WHY
+        # In a mode that asks before a command, the gate refuses the
+        # command and sends the same text as the reason. It changes no call.
+        # See THE PERMISSION RULE in common.py. The model gets the same
+        # words in the same turn, and the command does not run.
+        if not may_rewrite(event, "Bash"):
+            text = text.replace("DensePack replaced this command.",
+                                "DensePack blocked this command.", 1)
+            emit({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": text,
+                }
+            })
+            return 0
         replacement["command"] = "echo %s" % shlex.quote(text)
         emit({
             "hookSpecificOutput": {
