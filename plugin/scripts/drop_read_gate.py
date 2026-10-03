@@ -42,8 +42,8 @@ EXEMPTIONS. Each one is required, or the plugin blocks itself.
   never a densepack- name prefix. A name prefix does not show whether a
   file is a picture, because a plugin file can be text too, such as the
   sidecar densepack-bashsrc-*.txt beside each packed image.
-  Any file in a scratch folder. This is a .claude folder, or a path with
-  "sandbox" or "scratch" in it, where working files are. The OS temp root
+  Any file in a scratch folder. This is a .claude folder, or the scratchpad
+  folder that the hook event names, where working files are. The OS temp root
   is not exempt, because a browser unpacks a download there, and all
   working files of the plugin are under .claude.
   The drop and image folders of the vault under densepack-vault/. The scan
@@ -752,14 +752,22 @@ def discard(drawn):
             continue
 
 
-def is_scratch_or_temp(path):
-    """True under a .claude folder or a folder with sandbox or scratch in its
-    name. These hold working files, and the gate skips them. The OS temp root
-    is not exempt."""
+def is_scratch_or_temp(path, event=None):
+    """True under a .claude folder or under the scratchpad folder that the
+    hook event names. These hold working files, and the gate skips them.
+    DensePack 1.3.3 also skipped each folder with "sandbox" or "scratch" in
+    its name, and a project such as from-scratch-app then got no images.
+    The OS temp root is not exempt."""
     parts = [p.lower() for p in path.replace("\\", "/").split("/") if p]
     if ".claude" in parts:
         return True
-    return any("sandbox" in p or "scratch" in p for p in parts)
+    scratch = str((event or {}).get("scratchpad_dir") or "")
+    if not scratch:
+        return False
+    import os
+    here = os.path.normcase(os.path.abspath(path))
+    base = os.path.normcase(os.path.abspath(scratch))
+    return here == base or here.startswith(base.rstrip(os.sep) + os.sep)
 
 
 def capped(event, model, cap):
@@ -1013,7 +1021,7 @@ def draws_on_read(path, event):
             return False
         if not gets_images(event):
             return False
-        if is_drop_folder(path) or is_scratch_or_temp(path):
+        if is_drop_folder(path) or is_scratch_or_temp(path, event):
             return False
         if _drawable_text(path) is None:
             return False
@@ -1103,7 +1111,7 @@ def route(event, prefetch=False, post=False):
             return {"hookSpecificOutput": answer}
         if is_drop_folder(path):
             return None
-        if is_scratch_or_temp(path):
+        if is_scratch_or_temp(path, event):
             return None
         # A Read of more than LINE_PULL_MAX lines is a whole read and is not
         # exempt. Otherwise a model can read a file as text in a few wide
