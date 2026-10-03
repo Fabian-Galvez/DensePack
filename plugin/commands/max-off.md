@@ -13,6 +13,6 @@ Then relay the status line in one sentence.
 
 Fable and Opus still get images. A report to a Fable or Opus main agent still becomes an image when the image saves more than it costs. A report to a Sonnet main agent stays text.
 
-At its next session start, a Sonnet main agent gets no DensePack session start note. A Sonnet subagent gets no note either, when DensePack knows its model at the start.
+A Sonnet main agent still gets the session start note, because Claude Code does not name the model at session start. The note says that Sonnet after /max-off gets text. A Sonnet subagent gets no note when DensePack knows its model at the start.
 
 The setting applies to each session in this project folder. Another project folder keeps its own setting.

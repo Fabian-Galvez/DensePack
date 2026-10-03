@@ -128,8 +128,8 @@ def record_miss(agent_id, record, images):
     and never stops the note."""
     if images:
         try:
-            # read_gate.py then never puts these images into the composite
-            # of a later Read. It imports densepack, which needs Pillow.
+            # The pending list then no longer names these images as
+            # waiting. The import needs Pillow.
             from common import ensure_pillow
             if ensure_pillow():
                 import read_gate

@@ -269,6 +269,13 @@ def _model_from_transcript(path, skip_sidechain=False):
                 if skip_sidechain and row.get("isSidechain"):
                     continue
                 found = (row.get("message") or {}).get("model") or row.get("model")
+                # Claude Code 2.1.288 writes an attachment that names the
+                # model before the first assistant line. At the first tool
+                # call of a session, it is the only line that names it.
+                attachment = row.get("attachment")
+                if not found and isinstance(attachment, dict) \
+                        and attachment.get("type") == "model":
+                    found = (attachment.get("identity") or {}).get("modelId")
                 if found:
                     return str(found)
     except OSError:
@@ -370,13 +377,60 @@ def lead_model_name(session=None):
     session = str(session or lead_session()).strip()
     if not session:
         return ""
+    # The newest model comes first. A /model change during a session writes
+    # a new model line in the transcript before the next tool call. Tests on
+    # Claude Code 2.1.288 showed this line after a change from Sonnet to
+    # Haiku. The recorded first model is the fallback.
+    path = transcript_path(session)
+    if path is not None:
+        newest = _newest_model_from_transcript(path)
+        if newest:
+            return newest
     found = read_lead_models().get(session)
     if found:
         return found
-    path = transcript_path(session)
     if path is None:
         return ""
     return _model_from_transcript(path, skip_sidechain=True) or ""
+
+
+def _newest_model_from_transcript(path):
+    """Returns the model of the last lead line of transcript `path` that
+    names one: an assistant line, or the model attachment of Claude Code.
+    The function reads only the end of the file. A transcript can be larger
+    than 100 MB, and one image result can fill the end, so it reads a second,
+    larger end when the first names no model. Returns None when the end
+    names no model."""
+    for tail in (262144, 4194304):
+        try:
+            with open(path, "rb") as fh:
+                fh.seek(0, 2)
+                end = fh.tell()
+                fh.seek(max(0, end - tail))
+                lines = fh.read().split(b"\n")
+        except OSError:
+            return None
+        for raw in reversed(lines):
+            if b'"model' not in raw:
+                continue
+            try:
+                row = json.loads(raw.decode("utf-8", "replace"))
+            except ValueError:
+                continue
+            if not isinstance(row, dict) or row.get("isSidechain"):
+                continue
+            if row.get("type") == "assistant":
+                found = (row.get("message") or {}).get("model")
+                if found and found != "<synthetic>":
+                    return str(found)
+            attachment = row.get("attachment")
+            if isinstance(attachment, dict) and attachment.get("type") == "model":
+                found = (attachment.get("identity") or {}).get("modelId")
+                if found:
+                    return str(found)
+        if end <= tail:
+            return None
+    return None
 
 
 SESSION_FILE = "densepack-session.json"
@@ -739,9 +793,14 @@ def lead_gets_images(session=None):
     """Returns True when the lead of this session gets images.
 
     A lead whose model has a name that matches no reader profile, such as
-    Haiku, gets text. A lead with no recorded model uses resolved_reader().
+    Haiku, gets text. A lead with no known model also gets text.
     """
     name = lead_model_name(session).lower()
+    # A lead with no known model gets text. Haiku and other models that no
+    # test measured must never get images, and an unknown name can be one
+    # of them. A reader setting other than "auto" names the model itself.
+    if not name and settings().get("reader", "auto") == "auto":
+        return False
     if (name and settings().get("reader", "auto") == "auto"
             and not any(key in name for key in READER_SIZES)):
         return False
@@ -2932,6 +2991,78 @@ def read_event(raw=None):
     if not disabled(event.get("session_id")):
         note_lead_model(event)
     return event
+
+
+# THE PERMISSION RULE. A PreToolUse hook that changes a tool call with
+# updatedInput makes Claude Code check the permission of the NEW call, not of
+# the call that the agent made. Tests on Claude Code 2.1.288 show this.
+#
+#   A Read outside the project, changed to a file inside it, ran in default
+#   mode with no prompt. The same Read unchanged asked first.
+#   A Read of a file that an "ask" rule names, changed to another file, ran
+#   with no prompt in default mode.
+#   A "deny" rule held in each mode. Claude Code checks it before the hook
+#   runs, and the hook never saw the denied Read.
+#   A Read that the user or a rule refuses fires no PostToolUseFailure.
+#
+# A mode that asks before some Reads (default, acceptEdits, plan) or refuses
+# them (dontAsk) gets no changed call from any hook of this plugin. Auto and
+# bypassPermissions ask before no Read, so a change there skips no prompt.
+# Each mode still asks when a rule names the tool, so a hook never changes a
+# call to a tool that an "ask" rule names. A missing or unknown mode counts as
+# a mode that asks.
+REWRITE_MODES = ("auto", "bypassPermissions")
+
+
+def _managed_settings_paths():
+    if sys.platform == "darwin":
+        return [Path("/Library/Application Support/ClaudeCode/managed-settings.json")]
+    if os.name == "nt":
+        return [Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+                / "ClaudeCode" / "managed-settings.json"]
+    return [Path("/etc/claude-code/managed-settings.json")]
+
+
+def ask_rule_names(tool, kind="ask"):
+    """True when a settings file holds an "ask" rule for `tool`, such as
+    "Read" or "Read(./notes.txt)". The code does not match the pattern of
+    the rule against a path. Any ask rule for the tool counts. A settings
+    file that exists but does not parse also counts, because its rules are
+    unknown. With kind="deny", the function checks the "deny" rules."""
+    files = [Path.home() / ".claude" / "settings.json"]
+    try:
+        root = project_dir()
+        files += [root / ".claude" / "settings.json",
+                  root / ".claude" / "settings.local.json"]
+    except Exception:  # noqa: BLE001
+        return True
+    files += _managed_settings_paths()
+    for path in files:
+        try:
+            if not path.is_file():
+                continue
+            raw = path.read_bytes()
+            data = json.loads(raw.decode("utf-8-sig") or "{}")
+        except (OSError, ValueError):
+            return True
+        if not isinstance(data, dict):
+            return True
+        rules = (data.get("permissions") or {}).get(kind) or []
+        if not isinstance(rules, list):
+            return True
+        for rule in rules:
+            name = str(rule).strip()
+            if name == tool or name.startswith(tool + "("):
+                return True
+    return False
+
+
+def may_rewrite(event, tool=None):
+    """True when a PreToolUse hook may change the call with updatedInput.
+    See THE PERMISSION RULE above."""
+    if str(event.get("permission_mode") or "") not in REWRITE_MODES:
+        return False
+    return not ask_rule_names(tool or str(event.get("tool_name") or ""))
 
 
 def emit(payload):
