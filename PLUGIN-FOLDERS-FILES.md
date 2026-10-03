@@ -274,7 +274,7 @@ DensePack uses the model name for these things.
 
 <sub>Run `/dense-remove` before you uninstall. The command makes these changes.</sub>
 
-- <sub>It restores the original text of each converted `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md`.</sub>
+- <sub>It restores the original text of each converted instruction file.</sub>
 - <sub>It deletes `~/.claude/densepack-cards/`, `~/.claude/densepack-state/`, and the vault and the `densepack-` and `.densepack-` files in `.claude/tmp/` of each project folder that a conversation file in `~/.claude/projects/` names.</sub>
 - <sub>It also deletes `~/.densepack`, the `python-install-tried` file in `%LOCALAPPDATA%\densepack` and the `densepack-trial-*.pkl` files in your temp folder.</sub>
 - <sub>It deletes `~/.claude/densepack-tracker.json`, which only versions before DensePack 1.0 wrote.</sub>
