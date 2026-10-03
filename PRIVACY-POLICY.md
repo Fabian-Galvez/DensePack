@@ -19,7 +19,7 @@ DensePack saves files on your own disk only.
 
 - The plugin saves the images it makes and copies of the text it packs in the `.claude` folder of each project and in `~/.claude`.
 - During a pack, the plugin puts a temporary copy of the text in the system temp folder and deletes that copy after the pack.
-- When the images and the pointer of a `CLAUDE.md`, `CLAUDE.local.md` or `MEMORY.md` cost less than its text, the plugin replaces that text with the pointer and keeps the original beside the file as `<name>.densepack.bak`.
+- When the images and the pointer of a `CLAUDE.md`, `CLAUDE.local.md` or `MEMORY.md` cost less than its text, the plugin replaces that text with the pointer and keeps the original beside the file as `<name>.bakpack`.
 - When `~/.claude/settings.json` has no `CLAUDE_CODE_THRIFTY_SONIC` entry, the plugin sets it to 0 there.
 - `/dense-remove` restores the originals and removes that setting.
 - `dpctl.py keep <conversation>` copies one conversation from the vault into `densepack-archive` in the project folder, or into the keep folder that you set. No DensePack code deletes that folder.
