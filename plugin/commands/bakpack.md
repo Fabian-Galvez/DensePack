@@ -1,5 +1,5 @@
 ---
-description: Pack the instruction files of a folder, such as CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md, into images and put a pointer in their place, without reading them. DensePack packs a file only when its images and pointer cost less than its text.
+description: Pack the instruction files of a folder, such as CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md, into images and put a pointer in their place. The agent does not read them. DensePack packs a file only when its images and pointer cost less than its text.
 argument-hint: "<folder>"
 disable-model-invocation: true
 ---
