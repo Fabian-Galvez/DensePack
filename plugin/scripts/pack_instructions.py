@@ -8,7 +8,7 @@ Each file becomes three parts. The pointer and the .bak stay side by side,
 and the images go into the images folder of that file.
 
     CLAUDE.md                  a short pointer, the only text Claude Code loads
-    CLAUDE.md.densepack.bak    the original text, byte for byte, which Claude
+    CLAUDE.md.bakpack          the original text, byte for byte, which Claude
                                Code never loads because of its name
     <images folder>/<label>-image-N-of-M-DensePack.png
                                the text packed as images, which the pointer
@@ -27,11 +27,16 @@ At each session start, for each file:
   MEMORY.md, and you can add a rule to CLAUDE.md.
 - A .bak that changed. The code packs the images again.
 - A file that is not a pointer. It is the new original. The code keeps an
-  older .bak as .densepack.bak.old-N and converts the file.
+  older .bakpack as .bakpack.old-N and converts the file.
 - A file whose images cost more than its text, with the pointer counted. It
   stays text, and the code restores the original in place of a pointer.
 
 restore_all() restores each original. /dense-remove runs it.
+
+Session start runs convert_all() in a process of its own, through
+start_background(). The session does not wait for the pack, because the
+images reach the model only from the next session. The next session start
+shows the note of the last pack, through take_background_note().
 """
 import hashlib
 import json
@@ -44,11 +49,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 OPEN = "<!-- densepack-pointer: DensePack wrote this block -->"
 CLOSE = "<!-- /densepack-pointer -->"
-BAK = ".densepack.bak"
+BAK = ".bakpack"
+# The name of the backup in DensePack 1.3.3 and earlier. bak_path() moves an
+# old backup to the new name the first time it finds one.
+OLD_BAK = ".densepack.bak"
+# The files that /bakpack and session start pack in each folder, relative to
+# the folder. The "bakpack_files" list in .claude/tmp/densepack-settings.json
+# of a folder replaces this list for that folder.
+DEFAULT_FILES = ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md", "AGENTS.md",
+                 ".claude/rules/*.md"]
+# The image labels of DensePack 1.3.3, which the code keeps.
+OLD_LABELS = {"CLAUDE.md": "project-CLAUDE.md",
+              ".claude/CLAUDE.md": "project-dot-claude-CLAUDE.md",
+              "CLAUDE.local.md": "project-CLAUDE.local.md"}
 IMAGE_NAME = re.compile(r"-image-\d+-of-\d+-DensePack\.png$")
-# The renderer limits for a Read. Past these limits, a file stays text.
-MAX_CHARS = 250000
-MAX_LINES = 6000
 PRIVATE_MARKS = ("\ue000", "\ue001", "\ue002", "\ue003")
 
 
@@ -104,15 +118,61 @@ def targets(event):
     return found
 
 
+def bakpack_files(project):
+    """Return the file patterns that DensePack packs in `project`: the
+    "bakpack_files" list in .claude/tmp/densepack-settings.json of that
+    folder, or DEFAULT_FILES."""
+    try:
+        data = json.loads((project / ".claude" / "tmp" / "densepack-settings.json")
+                          .read_text(encoding="utf-8"))
+        found = data.get("bakpack_files") if isinstance(data, dict) else None
+        if isinstance(found, list) and all(isinstance(p, str) for p in found):
+            return found
+    except (OSError, ValueError):
+        pass
+    return list(DEFAULT_FILES)
+
+
 def folder_targets(project):
-    """Return the three project instruction files of one folder."""
+    """Return the instruction files of one folder that bakpack_files() names
+    and that exist. Claude Code loads AGENTS.md only when the folder has no
+    CLAUDE.md. A pack of AGENTS.md beside a CLAUDE.md saves nothing, and the
+    code then leaves it."""
     images = project / ".claude" / "densepack-vault" / "instruction-images"
-    return [
-        (project / "CLAUDE.md", "project-CLAUDE.md", "this project's CLAUDE.md", images),
-        (project / ".claude" / "CLAUDE.md", "project-dot-claude-CLAUDE.md",
-         "this project's .claude/CLAUDE.md", images),
-        (project / "CLAUDE.local.md", "project-CLAUDE.local.md", "this project's CLAUDE.local.md", images),
-    ]
+    found, seen = [], set()
+    for pattern in bakpack_files(project):
+        rel = pattern.replace("\\", "/").strip("/")
+        if not rel or ".." in rel.split("/"):
+            continue
+        paths = sorted(project.glob(rel)) if any(c in rel for c in "*?[") else [project / rel]
+        for path in paths:
+            if path in seen or path.name.endswith((BAK, OLD_BAK)):
+                continue
+            seen.add(path)
+            name = path.relative_to(project).as_posix()
+            if name == "AGENTS.md" and (project / "CLAUDE.md").exists():
+                continue
+            label = OLD_LABELS.get(name) or "project-" + name.replace(".claude/", "dot-claude-").replace("/", "-")
+            found.append((path, label, "this project's %s" % name, images))
+    return found
+
+
+def restore_folder(folder):
+    """Restore each packed instruction file of one folder, for /bakoff.
+    Returns the restored file names."""
+    project = str(Path(folder).resolve())
+    state = load_state()
+    done = []
+    for name in list(state):
+        if name == project or not name.startswith(project.rstrip(os.sep) + os.sep):
+            continue
+        try:
+            if restore(Path(name), state):
+                done.append(name)
+        except Exception as exc:  # noqa: BLE001
+            print("Could not restore %s: %s" % (name, exc))
+    save_state(state)
+    return done
 
 
 def convert_folder(folder, reader="opus"):
@@ -142,13 +202,42 @@ def convert_folder(folder, reader="opus"):
     return log
 
 
+def bak_path(path):
+    """Return the backup of `path`. An old .densepack.bak moves to the new
+    name when no .bakpack exists."""
+    bak = path.with_name(path.name + BAK)
+    old = path.with_name(path.name + OLD_BAK)
+    if not bak.exists() and old.is_file():
+        try:
+            os.replace(str(old), str(bak))
+        except OSError:
+            return old
+    return bak
+
+
+def frontmatter(text):
+    """Return the YAML block at the top of `text`, or "". A rules file keeps
+    its block above the pointer, because Claude Code reads its paths."""
+    if not text.startswith("---"):
+        return ""
+    end = text.find("\n---", 3)
+    if end < 0:
+        return ""
+    stop = text.find("\n", end + 4)
+    return text[:len(text) if stop < 0 else stop + 1]
+
+
 def split_pointer(text):
-    """Return (is a pointer, text outside the pointer block)."""
+    """Return (is a pointer, text outside the pointer block). The YAML block
+    that convert_one() copies above the pointer does not count as added
+    text."""
     start = text.find(OPEN)
     end = text.find(CLOSE)
     if start < 0 or end < start:
         return False, text
-    outside = text[:start] + text[end + len(CLOSE):]
+    head = text[:start]
+    block = frontmatter(head)
+    outside = head[len(block):] + text[end + len(CLOSE):]
     return True, outside.strip("\r\n \t")
 
 
@@ -173,7 +262,10 @@ def text_tokens(text):
 
 
 def drawable(text):
-    return (len(text) <= MAX_CHARS and text.count("\n") <= MAX_LINES
+    # The same ceiling as for a Read, READ_MAX_BYTES in drop_read_gate.py.
+    # There is no line ceiling, as for a Read.
+    from drop_read_gate import READ_MAX_BYTES
+    return (len(text.encode("utf-8")) <= READ_MAX_BYTES
             and not any(m in text for m in PRIVATE_MARKS) and "\x00" not in text)
 
 
@@ -219,7 +311,7 @@ def keep_old_bak(bak):
 def restore(path, state):
     """Restore one original from its .bak, with the text added below the pointer."""
     from common import write_text_atomic
-    bak = path.with_name(path.name + BAK)
+    bak = bak_path(path)
     entry = state.pop(str(path), None)
     try:
         current = read(path)
@@ -246,7 +338,7 @@ def convert_one(path, label, what, folder, reader, state):
     from common import write_text_atomic
     if not path.is_file():
         return "absent"
-    bak = path.with_name(path.name + BAK)
+    bak = bak_path(path)
     current = read(path)
     is_pointer, added = split_pointer(current)
     if is_pointer:
@@ -273,7 +365,7 @@ def convert_one(path, label, what, folder, reader, state):
         cost = entry.get("cost", 0)
     else:
         images, cost = draw(plain(original), label, folder, reader)
-    pointer = pointer_text(what, bak, images)
+    pointer = frontmatter(original) + pointer_text(what, bak, images)
     if cost + text_tokens(pointer) >= text_tokens(plain(original)):
         for image in images:
             try:
@@ -302,13 +394,84 @@ def convert_one(path, label, what, folder, reader, state):
 
 
 def converted_note(log):
-    """Return one line for the screen when this session start converted a file."""
+    """Return one line for the screen when a pack converted a file."""
     names = [name for name, result in log if result.startswith("converted")]
     if not names:
         return None
     return ("DensePack converted %s into images behind a short pointer, to save tokens on each call. "
-            "Each original is unchanged beside it as <name>.densepack.bak, and the change applies from "
-            "your next session. /dense-remove restores the originals." % ", ".join(names))
+            "Each original is unchanged beside it as <name>.bakpack. A session that starts "
+            "after the conversion loads the pointer and the images. /dense-remove restores the "
+            "originals." % ", ".join(names))
+
+
+# The files of the pack that session start runs in its own process. They are
+# in .claude/tmp of the project.
+NOTE_FILE = "densepack-instructions-note.txt"
+LOCK_FILE = "densepack-instructions-lock"
+JOB_PREFIX = "densepack-instructions-job-"
+# A lock older than this belongs to a pack that stopped. A pack of 300 KB
+# took 31 seconds on a 4 core test machine.
+LOCK_STALE_S = 1800
+
+
+def start_background(event):
+    """Start convert_all() for this event in a process of its own, and
+    return at once. The process keeps the environment of the hook, so it
+    finds the same project and the same Python packages."""
+    import subprocess
+    from common import tmp_dir
+    job = tmp_dir() / ("%s%d.json" % (JOB_PREFIX, os.getpid()))
+    job.write_text(json.dumps(event), encoding="utf-8")
+    kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+              "stderr": subprocess.DEVNULL, "close_fds": True,
+              "cwd": str(Path(__file__).resolve().parent)}
+    if os.name == "nt":
+        # DETACHED_PROCESS and CREATE_NEW_PROCESS_GROUP. The pack then
+        # continues after the hook process ends.
+        kwargs["creationflags"] = 0x00000008 | 0x00000200
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "--job", str(job)],
+                     **kwargs)
+
+
+def run_job(job):
+    """The body of the background process. One pack runs at a time for each
+    project. A second session start that finds the lock packs nothing."""
+    from common import ensure_pillow, tmp_dir, write_text_atomic
+    try:
+        event = json.loads(job.read_text(encoding="utf-8"))
+    finally:
+        job.unlink(missing_ok=True)
+    if not ensure_pillow():
+        return
+    import time
+    lock = tmp_dir() / LOCK_FILE
+    try:
+        if lock.exists() and time.time() - lock.stat().st_mtime > LOCK_STALE_S:
+            lock.unlink()
+        fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except OSError:
+        return
+    try:
+        note = converted_note(convert_all(event, "opus"))
+        if note:
+            write_text_atomic(tmp_dir() / NOTE_FILE, note)
+    finally:
+        os.close(fd)
+        lock.unlink(missing_ok=True)
+
+
+def take_background_note():
+    """Return the note of the last background pack and delete it, or None."""
+    from common import tmp_dir
+    path = tmp_dir() / NOTE_FILE
+    try:
+        note = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    path.unlink(missing_ok=True)
+    return note or None
 
 
 def convert_all(event, reader):
@@ -337,7 +500,9 @@ def restore_all():
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["restore"]:
+    if sys.argv[1:2] == ["--job"] and len(sys.argv) > 2:
+        run_job(Path(sys.argv[2]))
+    elif sys.argv[1:] == ["restore"]:
         for name in restore_all():
             print("restored " + name)
     else:

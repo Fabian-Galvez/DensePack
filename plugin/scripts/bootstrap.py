@@ -718,7 +718,7 @@ PILLOW_WARNING = (
 # checks each image against it.
 READ_TOOL_LINE = (
     "DensePack is on. Files, command output and Word files arrive as images "
-    "of the same text.\n"
+    "of the same text. Haiku, and Sonnet after /max-off, get text.\n"
     "Use the Read tool to read a file, not cat or type. Never read every file "
     "to search them.\n"
     "Edit and Write work on files that arrived as images, except .doc and "
@@ -766,11 +766,19 @@ def lead_reads_images(model):
     """Return True when DensePack sends images to a lead on this model. The
     model is the one that session start names, or the recorded lead when the
     event names none."""
-    from common import READER_SIZES, lead_gets_images, reader_gets_images
+    from common import (READER_SIZES, lead_gets_images, lead_model_name,
+                        reader_gets_images)
     if isinstance(model, dict):
         model = model.get("id") or model.get("display_name")
     name = str(model or "").lower()
     if not name:
+        # At session start Claude Code 2.1.288 names no model, and the
+        # transcript does not exist yet. lead_gets_images() gives text for an
+        # unknown model, and the session then gets no note. The note follows
+        # the reader setting here, as in DensePack 1.3.3. Each Read still
+        # gives text until DensePack knows the model.
+        if not lead_model_name():
+            return reader_gets_images(resolved_reader())
         return lead_gets_images()
     return reader_gets_images(next((k for k in READER_SIZES if k in name), None))
 
@@ -1003,11 +1011,13 @@ def main():
         # CLAUDE.md, CLAUDE.local.md and MEMORY.md reach each call as text.
         # pack_instructions packs each one into images behind a pointer. The
         # change applies from the next session, because Claude Code loads
-        # them before this hook runs.
+        # them before this hook runs. For this reason the pack runs in a
+        # process of its own, and the session does not wait for it. The note
+        # of the last pack shows now.
         try:
             import pack_instructions
-            packed_note = pack_instructions.converted_note(
-                pack_instructions.convert_all(event, "opus"))
+            packed_note = pack_instructions.take_background_note()
+            pack_instructions.start_background(event)
         except Exception as err:  # noqa: BLE001
             sys.stderr.write("DensePack pack_instructions: %s\n" % err)
     from common import bash_first_off

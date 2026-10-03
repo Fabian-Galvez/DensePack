@@ -714,7 +714,7 @@ def main():
     # fails, the report reaches the lead as text in the Agent result, which
     # is net mode, and the receipt then prices the net pointer. The record
     # also names the images. When the swap misses, report_swap.py marks them
-    # delivered, and read_gate.py never puts them into a later Read.
+    # delivered, and the pending list no longer names them as waiting.
     if swap_file is not None and not write_report_swap(
             agent_id, text, swap_file, images=[str(p) for p, _w, _h in written],
             spawned_by=spawned_by):

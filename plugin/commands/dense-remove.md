@@ -1,5 +1,5 @@
 ---
-description: Restore the original text of each converted CLAUDE.md, CLAUDE.local.md and MEMORY.md. Remove CLAUDE_CODE_THRIFTY_SONIC from ~/.claude/settings.json. Delete the DensePack files that /plugin uninstall does not delete. Run it before the uninstall.
+description: Restore the original text of each converted instruction file. Remove CLAUDE_CODE_THRIFTY_SONIC from ~/.claude/settings.json. Delete the DensePack files that /plugin uninstall does not delete. Run it before the uninstall.
 disable-model-invocation: true
 ---
 
@@ -11,4 +11,4 @@ PowerShell: powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN
 
 Then print the command's output exactly as it returns it.
 
-It also removes the trust entry of the densepack-marketplace folder from ~/.claude.json. It cleans each project folder that a transcript in ~/.claude/projects names. It keeps each densepack-archive folder and each .densepack.bak.old-N file.
+It also removes the trust entry of the densepack-marketplace folder from ~/.claude.json. It cleans each project folder that a transcript in ~/.claude/projects names. It keeps each densepack-archive folder and each .bakpack.old-N file.
