@@ -269,6 +269,13 @@ def _model_from_transcript(path, skip_sidechain=False):
                 if skip_sidechain and row.get("isSidechain"):
                     continue
                 found = (row.get("message") or {}).get("model") or row.get("model")
+                # Claude Code 2.1.288 writes an attachment that names the
+                # model before the first assistant line. At the first tool
+                # call of a session, it is the only line that names it.
+                attachment = row.get("attachment")
+                if not found and isinstance(attachment, dict) \
+                        and attachment.get("type") == "model":
+                    found = (attachment.get("identity") or {}).get("modelId")
                 if found:
                     return str(found)
     except OSError:
@@ -739,9 +746,14 @@ def lead_gets_images(session=None):
     """Returns True when the lead of this session gets images.
 
     A lead whose model has a name that matches no reader profile, such as
-    Haiku, gets text. A lead with no recorded model uses resolved_reader().
+    Haiku, gets text. A lead with no known model also gets text.
     """
     name = lead_model_name(session).lower()
+    # A lead with no known model gets text. Haiku and other models that no
+    # test measured must never get images, and an unknown name can be one
+    # of them. A reader setting other than "auto" names the model itself.
+    if not name and settings().get("reader", "auto") == "auto":
+        return False
     if (name and settings().get("reader", "auto") == "auto"
             and not any(key in name for key in READER_SIZES)):
         return False
