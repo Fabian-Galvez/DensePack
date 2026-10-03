@@ -1,5 +1,5 @@
 ---
-description: Restore the original text of each converted CLAUDE.md, CLAUDE.local.md and MEMORY.md. Remove CLAUDE_CODE_THRIFTY_SONIC from ~/.claude/settings.json. Delete the DensePack files that /plugin uninstall does not delete. Run it before the uninstall.
+description: Restore the original text of each converted instruction file. Remove CLAUDE_CODE_THRIFTY_SONIC from ~/.claude/settings.json. Delete the DensePack files that /plugin uninstall does not delete. Run it before the uninstall.
 disable-model-invocation: true
 ---
 

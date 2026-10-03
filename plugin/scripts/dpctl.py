@@ -130,7 +130,7 @@ Only /dense-off stops them all.
 | --- | --- |
 | The standing reminder | On a message with a pasted image, DensePack tells the lead how to read a condensed image |
 | Report packing | DensePack packs the report of each finished subagent into an image when the image costs less than the text |
-| Brief packing | DensePack packs each brief over the threshold into an image before the subagent starts, at the one text size |
+| Brief packing | In auto and bypassPermissions mode, DensePack packs each brief over the threshold into an image before the subagent starts. In other modes, the subagent gets the brief as text |
 | One text size | DensePack packs each report and brief at one text size for all models. Each image is between 700 and 952 px wide, at the width that costs the fewest tokens. A longer text makes a taller image or more images. It is not a setting |
 | Reject when worse | DensePack deletes an image that costs more than the text and sends the text |
 | Never to an unmeasured model | Haiku 4.5 gets plain text because Haiku does not read text on images accurately |
@@ -139,14 +139,14 @@ Only /dense-off stops them all.
 | The manifest | Each agent that finishes gets a row, packed or not |
 | The vault | DensePack copies each packed image and its text to .claude/densepack-vault, one folder per conversation. The copies stay when DensePack prunes .claude/tmp. When the vault is over 200 MB, DensePack deletes the oldest folders |
 | The spawn log | Each SPAWNED agent also gets a row before it finishes, with the model that it runs on. The log changes nothing |
-| Instruction files as images | At session start, the folder's CLAUDE.md, .claude/CLAUDE.md and CLAUDE.local.md, your ~/.claude/CLAUDE.md and the project's MEMORY.md each become a short pointer, the images and <name>.bakpack with the original text. DensePack packs a file only when its images and pointer cost less than its text. A short file stays text. The change applies from the next session, because Claude Code loads these files before DensePack runs. /dense-remove restores the originals |
+| Instruction files as images | At session start, the folder's CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md, your ~/.claude/CLAUDE.md and the project's MEMORY.md each become a short pointer, the images and <name>.bakpack with the original text. DensePack packs a file only when its images and pointer cost less than its text. A short file stays text. The change applies from the next session, because Claude Code loads these files before DensePack runs. /dense-remove restores the originals |
 
 | Command | What it sets | Is this the default |
 | --- | --- | --- |
 | /densepack | Packing on and all settings below back to default | It IS the reset |
 | /dense-off | All hooks stop | No |
-| /dense-remove | Restores each converted CLAUDE.md, CLAUDE.local.md and MEMORY.md to its original text from its .bakpack, removes CLAUDE_CODE_THRIFTY_SONIC and deletes all DensePack files that /plugin uninstall does not delete. Run it before the uninstall | Sets nothing |
-| /bakpack <folder> | Packs the CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of that folder into images behind a pointer, without reading them. Run it from a session in another folder. The first session in that folder reads the images | Sets nothing |
+| /dense-remove | Restores each converted instruction file to its original text from its .bakpack, removes CLAUDE_CODE_THRIFTY_SONIC and deletes all DensePack files that /plugin uninstall does not delete. Run it before the uninstall | Sets nothing |
+| /bakpack <folder> | Packs the CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of that folder into images behind a pointer. The agent does not read them. Run it from a session in another folder. The first session in that folder reads the images | Sets nothing |
 | /bakoff <folder> | Restores the originals of that folder from their .bakpack copies and deletes their images | Sets nothing |
 | /maxpack | Sonnet gets images too | YES |
 | /max-off | Sonnet gets plain text | No |
