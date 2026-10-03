@@ -164,7 +164,7 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 | `/max-off` | It sends text to Sonnet |
 | `/helppack` | It prints all commands |
 | `/dense-remove` | It restores each converted instruction file and deletes the DensePack files. Run it before the uninstall. [Remove DensePack](INSTALL.md#remove-densepack) has the details |
-| `/bakpack <folder>` | It packs the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of that folder into images. It puts a pointer in each file and keeps the original as `<name>.bakpack`. Run it from a session in another folder. The first session in the packed folder then reads the images and never the text |
+| `/bakpack <folder>` | It packs the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` (when the folder has no `CLAUDE.md`) and `.claude/rules/*.md` of that folder into images. It puts a pointer in each file and keeps the original as `<name>.bakpack`. Run it from a session in another folder. The first session in the packed folder then reads the images and never the text |
 | `/bakoff <folder>` | It restores the original files of that folder from their `.bakpack` copies and deletes their images. DensePack stays installed |
 | <strong>Coming soon</strong> | |
 | `/dashpack` | It shows the saving of each conversation while the conversation runs. It calculates the text price of each image that the agents read. It does the same for each later turn that reads the image again |
@@ -208,7 +208,7 @@ Claude Code loads instruction files at session start and sends them again with e
 | `AGENTS.md` beside a `CLAUDE.md` | Never | Leaves it as text |
 | `CLAUDE.md` in a parent folder | At session start | Leaves it as text |
 | `CLAUDE.md` in a subfolder | When the agent reads a file in that subfolder | Leaves it as text |
-| An edit of `CLAUDE.md` during a session | At the next session start | Packs it at the next session start |
+| An edit of `CLAUDE.md` during a session | At the next session start | Packs it at the next session start. The session after that uses the images. |
 
 - A pack at session start helps only the next session. Run `/bakpack <folder>` from a session in another folder. The first session in that folder then reads the images.
 - Run `/bakoff <folder>` to restore the original files of one folder. DensePack stays installed.
@@ -319,7 +319,7 @@ DensePack also writes the text of each Word file beside its images.
 - Short tasks can cost more with DensePack. The session note and the extra steps of some runs cost more than the images save. In a task that copies 6 lines of a Python file on Opus 5.5, runs with DensePack cost $0.0915 to $0.1082. Runs without it cost $0.0827 to $0.0839. [BENCHMARKS.md](BENCHMARKS.md#why-some-short-tasks-cost-more) gives the price of each run and each cause.
 - Edit and Write work on files that arrived as images. They do not work on Word files because Claude Code does not Read Word files. See [Word files](#word-files).<br>
   <sub>DensePack tells this to the agents that get images. The lead agent gets it at session start. Each subagent gets it when the subagent starts.</sub>
-- On Opus 5.5, DensePack adds about 569 tokens for the session start note and the command list to the first turn of a session. Each later turn reads these tokens again at the cache read price. The other hooks add nothing to messages that have no pasted image and name no folder and no Word file.<br>
+- On Opus 5.5, DensePack adds about 603 tokens for the session start note and the command list to the first turn of a session. Each later turn reads these tokens again at the cache read price. The other hooks add nothing to messages that have no pasted image and name no folder and no Word file.<br>
   <sub>This count comes from two `claude -p` sessions with no tool call, one with DensePack off and one with DensePack on.</sub>
 - No bench measured the cost of the session start note in a subagent.
 - After conversations that packed a report or a brief, the next session gets a summary at session start. With the default receipts setting, the summary is one line that names the file of the totals.
@@ -343,6 +343,7 @@ DensePack also writes the text of each Word file beside its images.
 ## Thank you
 
 DensePack renders each character with [FreeType](https://freetype.org) and the [Inter](https://rsms.me/inter/) font family. Thank you to the FreeType and Inter projects.
+
 <br>
 
 ---
