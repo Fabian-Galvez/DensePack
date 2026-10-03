@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.3 -->
+<!-- DensePack 1.3.4 -->
 <p align="left">
   <img src="images/densepack-readme-banner.svg" alt="DensePack" />
 </p>
@@ -20,6 +20,7 @@ Turns are calls to the model that send the entire conversation that has been wri
 <details>
 <summary><strong>Contents</strong></summary>
 
+- [Changes in 1.3.4](#changes-in-134)
 - [Savings](#savings)
 - [Parts](#parts)
 - [Install the plugin](#install-the-plugin)
@@ -32,6 +33,29 @@ Turns are calls to the model that send the entire conversation that has been wri
 - [Thank you](#thank-you)
 - [Files](#files)
 </details>
+<br>
+
+---
+
+<br>
+
+## Changes in 1.3.4
+
+| Change | Before | Now |
+| --- | --- | --- |
+| Permission prompts | In manual mode, a Word file outside the project reached the agent as images with no prompt. | In manual mode, DensePack packs only files that the agent can read with no prompt. |
+| Tool calls before they run | Hooks changed some tool calls before they ran. | Hooks change a call only in auto and bypassPermissions mode, and never when an `ask` rule names the tool. |
+| Packed report text | In auto mode, a `cat` of packed report text became an `echo`, and the agent did not act on it. | DensePack blocks the command in all modes, and the agent reads the image. |
+| Report images | DensePack joined waiting report images into one image. Two packed reports did not fit. | The lead gets each report as its own image. |
+| Unknown model | A session with an unknown model got images. | It gets text. DensePack reads the model at the first tool call and after a `/model` change. |
+| `/mdpack` limit | 250,000 characters or 6,000 lines. | 1,000,000 bytes, the same as a file Read. |
+| Session start | The session waited for the pack of `CLAUDE.md`. | The pack runs in the background. The next session uses the images. |
+| Folders named "scratch" | Files in a folder with "scratch" or "sandbox" in its name stayed text. | Only `.claude` and the scratchpad folder of Claude Code stay text. |
+
+- DensePack 1.3.3 and 1.3.4 send no data off your computer. Claude Code checks `deny` rules before the hooks run.
+- [HOW-IT-WORKS.md](HOW-IT-WORKS.md#permission-modes) explains each permission mode.
+- The tests ran on Linux with 4 Intel Xeon cores at 2.1 GHz, 16 GB RAM, Python 3.11, and Claude Code 2.1.288.
+
 <br>
 
 ---
@@ -279,6 +303,7 @@ DensePack also writes the text of each Word file beside its images.
 - No bench measured the cost of the session start note in a subagent.
 - After conversations that packed a report or a brief, the next session gets a summary at session start. With the default receipts setting, the summary is one line that names the file of the totals.
 - Files under 1,000 bytes, files over 1,000,000 bytes and files with a null byte stay text.
+- DensePack packs text only when the image costs fewer tokens than the text. The smallest text that it packs is about 420 tokens for files, Word files and briefs, and about 170 tokens for Bash output. For subagent reports it is about 900 to 10,400 tokens, and it grows with the length of the session.
 - Reads with a limit of 20 lines or fewer stay text. Longer Reads of part of a file get images of those lines only, or text when the text costs less. When those lines need more than one image, the Read returns the first image and a note that names the others.
 - When one Sonnet turn reads more than 32 files, or more than 700,000 bytes of files, most Reads of that turn get text. Opus and Fable have no such limit.
 - Files stay text when the font has no glyph for more than 2% of their non-space characters, for example files in Chinese, Japanese or Korean and files of box-drawing characters.

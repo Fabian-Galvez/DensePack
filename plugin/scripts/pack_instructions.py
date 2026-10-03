@@ -32,6 +32,11 @@ At each session start, for each file:
   stays text, and the code restores the original in place of a pointer.
 
 restore_all() restores each original. /dense-remove runs it.
+
+Session start runs convert_all() in a process of its own, through
+start_background(). The session does not wait for the pack, because the
+images reach the model only from the next session. The next session start
+shows the note of the last pack, through take_background_note().
 """
 import hashlib
 import json
@@ -302,13 +307,84 @@ def convert_one(path, label, what, folder, reader, state):
 
 
 def converted_note(log):
-    """Return one line for the screen when this session start converted a file."""
+    """Return one line for the screen when a pack converted a file."""
     names = [name for name, result in log if result.startswith("converted")]
     if not names:
         return None
     return ("DensePack converted %s into images behind a short pointer, to save tokens on each call. "
-            "Each original is unchanged beside it as <name>.densepack.bak, and the change applies from "
-            "your next session. /dense-remove restores the originals." % ", ".join(names))
+            "Each original is unchanged beside it as <name>.densepack.bak. A session that starts "
+            "after the conversion loads the pointer and the images. /dense-remove restores the "
+            "originals." % ", ".join(names))
+
+
+# The files of the pack that session start runs in its own process. They are
+# in .claude/tmp of the project.
+NOTE_FILE = "densepack-instructions-note.txt"
+LOCK_FILE = "densepack-instructions-lock"
+JOB_PREFIX = "densepack-instructions-job-"
+# A lock older than this belongs to a pack that stopped. A pack of 300 KB
+# took 31 seconds on a 4 core test machine.
+LOCK_STALE_S = 1800
+
+
+def start_background(event):
+    """Start convert_all() for this event in a process of its own, and
+    return at once. The process keeps the environment of the hook, so it
+    finds the same project and the same Python packages."""
+    import subprocess
+    from common import tmp_dir
+    job = tmp_dir() / ("%s%d.json" % (JOB_PREFIX, os.getpid()))
+    job.write_text(json.dumps(event), encoding="utf-8")
+    kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+              "stderr": subprocess.DEVNULL, "close_fds": True,
+              "cwd": str(Path(__file__).resolve().parent)}
+    if os.name == "nt":
+        # DETACHED_PROCESS and CREATE_NEW_PROCESS_GROUP. The pack then
+        # continues after the hook process ends.
+        kwargs["creationflags"] = 0x00000008 | 0x00000200
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "--job", str(job)],
+                     **kwargs)
+
+
+def run_job(job):
+    """The body of the background process. One pack runs at a time for each
+    project. A second session start that finds the lock packs nothing."""
+    from common import ensure_pillow, tmp_dir, write_text_atomic
+    try:
+        event = json.loads(job.read_text(encoding="utf-8"))
+    finally:
+        job.unlink(missing_ok=True)
+    if not ensure_pillow():
+        return
+    import time
+    lock = tmp_dir() / LOCK_FILE
+    try:
+        if lock.exists() and time.time() - lock.stat().st_mtime > LOCK_STALE_S:
+            lock.unlink()
+        fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except OSError:
+        return
+    try:
+        note = converted_note(convert_all(event, "opus"))
+        if note:
+            write_text_atomic(tmp_dir() / NOTE_FILE, note)
+    finally:
+        os.close(fd)
+        lock.unlink(missing_ok=True)
+
+
+def take_background_note():
+    """Return the note of the last background pack and delete it, or None."""
+    from common import tmp_dir
+    path = tmp_dir() / NOTE_FILE
+    try:
+        note = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    path.unlink(missing_ok=True)
+    return note or None
 
 
 def convert_all(event, reader):
@@ -337,7 +413,9 @@ def restore_all():
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["restore"]:
+    if sys.argv[1:2] == ["--job"] and len(sys.argv) > 2:
+        run_job(Path(sys.argv[2]))
+    elif sys.argv[1:] == ["restore"]:
         for name in restore_all():
             print("restored " + name)
     else:

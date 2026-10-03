@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.3 -->
+<!-- DensePack 1.3.4 -->
 # How DensePack works
 
 This file explains each part of DensePack in full. [README.md](README.md) has a short summary of each part.
@@ -51,6 +51,7 @@ DensePack changes some of your files and adds its own folders and packages. The 
 - The `.bak` holds your original text, byte for byte. Claude Code does not load the `.bak` because it loads only the names `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md`.
 - DensePack converts a file only when its images and pointer cost less than its text. Short files stay text.
 - Instruction files over 1,000,000 bytes stay text, the same limit as for a Read.
+- At session start, the pack runs in a process of its own, and the session does not wait for it. The next session start shows a note about the files that it converted.
 - The images can cost one extra turn at the start of a session. DensePack does not count that turn when it compares the costs, and for that reason short sessions can cost more with a converted file.
 - To change your instructions, edit the `.bak`. DensePack converts it again at the next session start.
 - DensePack moves text that you add below the pointer into the `.bak` at the next session start. It moves new lines from auto memory the same way.
@@ -208,7 +209,7 @@ These files and outputs stay text.
 
 - Files under 1,000 bytes or over 1,000,000 bytes stay text.
 - Reads with a limit of 20 lines or fewer stay text. Reads with an offset, or with a limit of more lines, get images of those lines only, or those lines as text when the text costs less.
-- Files stay text when their path holds a `.claude` folder, or a folder or file name with `sandbox` or `scratch` in it.
+- Files stay text when their path holds a `.claude` folder, or when they are in the scratchpad folder of Claude Code.
 - Files stay text when more than 2% of the characters that are not spaces, tabs or line breaks have no glyph in the Inter font, such as Chinese, Japanese, Korean or emoji characters.
 - All files, Bash output, briefs and reports stay text when Pillow, freetype-py or NumPy is missing.
 - Most of the files stay text when a Sonnet agent Reads more than 32 files, or files of more than 700,000 bytes together, in one turn.
@@ -306,7 +307,7 @@ The session note tells the agent to Read the lines it will change with a limit o
 
 ## The image
 
-> `pack_code()` in `plugin/scripts/codepack.py` packs the text of each page. `composite_grid()` in `plugin/scripts/densepack.py` joins the pages of one file into one image, and `composite()` joins the waiting report images, when the joined image fits with no resize.
+> `pack_code()` in `plugin/scripts/codepack.py` packs the text of each page. `composite_grid()` in `plugin/scripts/densepack.py` joins the pages of one file into one image, when the joined image fits with no resize.
 >
 > The image is the same PNG for each model. The renderer tries 8 widths, 700, 728, 756, 784, 812, 840, 896 and 952 pixels, and keeps the width that costs the fewest tokens.
 >
@@ -520,13 +521,13 @@ The hooks read the settings files again on each event, and a change applies at t
 
 To run a verb, open a terminal in the project folder and run the `dpctl.py` of the installed plugin with the verb and its value.
 
-- `1.3.3` in the path is the version of the plugin.
+- `1.3.4` in the path is the version of the plugin.
 - On Windows, run the line in PowerShell and type `python` in place of `python3`.
 
 This line shows a receipt table in the conversation.
 
 ```
-python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/1.3.3/scripts/dpctl.py receipts default
+python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/1.3.4/scripts/dpctl.py receipts default
 ```
 
 `/dense-off` stops only the conversation that ran it and the subagents of that conversation. All other conversations keep packing.
@@ -573,7 +574,7 @@ Claude Code runs a hook at a named event. `plugin/hooks/hooks.json` names the ev
 | SessionStart | None | `bootstrap.py` | It deletes working files older than one day, installs Pillow, freetype-py and NumPy when they are missing, converts the instruction files and sets CLAUDE_CODE_THRIFTY_SONIC in `~/.claude/settings.json` one time. It sends the session start note to the lead when the lead gets images, with one more line that tells the lead to write the task of a subagent the same way as without DensePack. It sends a warning in place of the note when Pillow, freetype-py or NumPy is missing. It shows the totals of the last conversation on screen when receipts are not quiet |
 | UserPromptSubmit | None | `prompt_card.py` | It sends the legend card one time in each session, only with a message that holds a pasted image and only before the session starts a subagent. It packs a Word file that your prompt names. It sends the file names of a folder that your prompt names and starts to pack those files in the background |
 | PreToolUse | Read | `drop_read_gate.py` | It lets a Read run on the real file. Its route for a Word file never runs, because Claude Code rejects a Read of a Word file before this hook runs |
-| PreToolUse | Read | `read_gate.py` | It returns all waiting packed report images in one image on the first Read when they fit in one image with no resize. It does this only in auto and bypassPermissions mode. See [Permission modes](#permission-modes) |
+| PreToolUse | Read | `read_gate.py` | It marks a packed report image delivered when the agent reads it. When the image is gone from `.claude/tmp`, it opens the copy in the vault, only in auto and bypassPermissions mode. See [Permission modes](#permission-modes) |
 | PreToolUse | Edit | `edit_gate.py` | It runs only after Claude Code accepts the Edit, and then it finds the old text in the file. [The Edit check](#the-edit-check) explains why it stops nothing |
 | PreToolUse | Grep, Glob | `grep_gate.py` | It stops a Glob in `.claude/tmp` or `.claude/densepack-vault` that can list the text file of a packed report or brief. It stops a Grep in content mode whose pattern matches each line, such as `^`, on a file that a Read packs, and it tells the agent to Read the file. It also stops that Grep on a folder that holds such a file in its first 500 files, and its message names one such file. That Grep passes when it has a head_limit of 20 or fewer, when it runs in files_with_matches or count mode, when it targets a Word file or when the agent gets text. All other Greps pass. The agent can find the text of an image with one Grep |
 | PreToolUse | Bash | `source_gate.py` | It stops a shell read of the text file of a packed report or brief in `.claude/tmp`, and the agent gets a line that names its image. It blocks the command in all modes, with that line as the reason. Commands with DENSEPACK_SOURCE_OK run as written |
