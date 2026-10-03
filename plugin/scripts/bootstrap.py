@@ -767,7 +767,7 @@ def lead_reads_images(model):
     model is the one that session start names, or the recorded lead when the
     event names none."""
     from common import (READER_SIZES, lead_gets_images, lead_model_name,
-                        reader_gets_images, resolved_reader)
+                        reader_gets_images)
     if isinstance(model, dict):
         model = model.get("id") or model.get("display_name")
     name = str(model or "").lower()
@@ -1011,11 +1011,13 @@ def main():
         # CLAUDE.md, CLAUDE.local.md and MEMORY.md reach each call as text.
         # pack_instructions packs each one into images behind a pointer. The
         # change applies from the next session, because Claude Code loads
-        # them before this hook runs.
+        # them before this hook runs. For this reason the pack runs in a
+        # process of its own, and the session does not wait for it. The note
+        # of the last pack shows now.
         try:
             import pack_instructions
-            packed_note = pack_instructions.converted_note(
-                pack_instructions.convert_all(event, "opus"))
+            packed_note = pack_instructions.take_background_note()
+            pack_instructions.start_background(event)
         except Exception as err:  # noqa: BLE001
             sys.stderr.write("DensePack pack_instructions: %s\n" % err)
     from common import bash_first_off

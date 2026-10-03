@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.3 -->
+<!-- DensePack 1.3.4 -->
 # Install DensePack
 
 Follow the steps for your system in order. Type each command exactly and press Enter after it.
@@ -227,7 +227,7 @@ Raise DensePack's READ_MAX_BYTES to 2000000
 - Files smaller than 1,000 bytes stay text.
 - Files with a null byte stay text.
 - Files stay text when the font has no glyph for more than 2% of the characters that are not spaces, such as files in Chinese, Japanese or Korean.
-- Files in a `.claude` folder and files whose path contains `scratch` or `sandbox` stay text. DensePack still packs Word files in these locations.
+- Files in a `.claude` folder and files in the scratchpad folder of Claude Code stay text. DensePack still packs Word files in these locations.
 - Files stay text when their images and note cost as much as their text or more.
 - All files stay text when Pillow, freetype-py or NumPy is missing.
 

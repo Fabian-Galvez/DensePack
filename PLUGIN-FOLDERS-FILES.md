@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.3 -->
+<!-- DensePack 1.3.4 -->
 # DensePack folders and files
 
 This doc lists the folders and working files that the DensePack plugin writes, what they hold and when the plugin writes them.
@@ -210,7 +210,7 @@ You can delete these files by hand.
 | `densepack-off-<session id>` | It is the off switch of one window. `/dense-off` writes it, and `/densepack` deletes it. |
 | `densepack-queue.jsonl` | It holds the rows of the savings table that `pointer.py` did not show yet. |
 | `densepack-pending.jsonl` and `densepack-delivered.json` | The first file holds the images of packed reports, and the second holds the images that a Read already returned. |
-| `densepack-composite-1.png` | It is one image that holds all waiting report images for one Read. |
+| `densepack-instructions-note.txt`, `densepack-instructions-lock` and `densepack-instructions-job-<pid>.json` | The background pack of the instruction files writes these files at session start. The note holds the names of the converted files, and the next session start shows it and deletes it. |
 | `densepack-delegation.jsonl` and `densepack-card-<session>.jsonl` | They hold one row for each Agent call. |
 | `densepack-agentmodel-agent-<id>` | It holds the model of one subagent. |
 | `densepack-lifecycle.jsonl` | It gets one row when a subagent ends or when the lead stops it. |
@@ -248,7 +248,7 @@ DensePack uses the model name for these things.
 - Fable, Opus and Sonnet get images.
 - Haiku and all other models get the files that they Read, their command output, their briefs and the reports that they receive as plain text. Haiku 4.5 with no earlier context read 1 of 10 packed reports correctly.
 - Some Word files get images for all models when the images cost less than the text. These are the Word files that your message names, the Word files in a folder that your message names by its full path, and the Word files that a Glob, Grep, Bash or LS result names.
-- Main sessions whose model DensePack does not know get text. DensePack reads the model from the transcript, which names it before the first tool call. Subagents whose model DensePack cannot find get the files that they read and their Bash output as text.
+- Main sessions whose model DensePack does not know get text. DensePack reads the newest model from the transcript. Claude Code writes the model there before the first tool call and after a `/model` change. Subagents whose model DensePack cannot find get the files that they read and their Bash output as text.
 - `/maxpack` and `/max-off` apply to Sonnet only. DensePack checks the model name to find Sonnet.
 - Only Sonnet has a limit on the files of one turn. See the note at the end of this file.
 - `report_pack_worth()` in `common.py` uses the dollar rates of the lead model, and for a background subagent also the rates of the subagent model, to decide whether a report packs.
@@ -319,7 +319,7 @@ DensePack uses the model name for these things.
 DensePack never packs these Reads.
 
 - Images, PDFs and notebooks do not pack because Claude Code reads them as images or as structured cells.
-- Files in a `.claude` folder do not pack, and files whose path has `sandbox` or `scratch` in the name of a folder or of the file do not pack. Those folders hold working files and the images of DensePack.
+- Files in a `.claude` folder and files in the scratchpad folder of Claude Code do not pack. Those folders hold working files.
 - Files below 1,000 bytes do not pack because the pack takes time and memory and saves only a few tokens. The pack of a 483-byte file took 2.5 seconds and 469 MB of memory to save 10 tokens.
 - Files over 1,000,000 bytes do not pack because the wait at the first Read grows with the size of the file. The pack of a file of about 300,000 bytes took 14 to 17 seconds.
 - Files with a null byte do not pack because those files are not text.

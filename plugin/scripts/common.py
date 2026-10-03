@@ -377,13 +377,60 @@ def lead_model_name(session=None):
     session = str(session or lead_session()).strip()
     if not session:
         return ""
+    # The newest model comes first. A /model change during a session writes
+    # a new model line in the transcript before the next tool call. Tests on
+    # Claude Code 2.1.288 showed this line after a change from Sonnet to
+    # Haiku. The recorded first model is the fallback.
+    path = transcript_path(session)
+    if path is not None:
+        newest = _newest_model_from_transcript(path)
+        if newest:
+            return newest
     found = read_lead_models().get(session)
     if found:
         return found
-    path = transcript_path(session)
     if path is None:
         return ""
     return _model_from_transcript(path, skip_sidechain=True) or ""
+
+
+def _newest_model_from_transcript(path):
+    """Returns the model of the last lead line of transcript `path` that
+    names one: an assistant line, or the model attachment of Claude Code.
+    The function reads only the end of the file. A transcript can be larger
+    than 100 MB, and one image result can fill the end, so it reads a second,
+    larger end when the first names no model. Returns None when the end
+    names no model."""
+    for tail in (262144, 4194304):
+        try:
+            with open(path, "rb") as fh:
+                fh.seek(0, 2)
+                end = fh.tell()
+                fh.seek(max(0, end - tail))
+                lines = fh.read().split(b"\n")
+        except OSError:
+            return None
+        for raw in reversed(lines):
+            if b'"model' not in raw:
+                continue
+            try:
+                row = json.loads(raw.decode("utf-8", "replace"))
+            except ValueError:
+                continue
+            if not isinstance(row, dict) or row.get("isSidechain"):
+                continue
+            if row.get("type") == "assistant":
+                found = (row.get("message") or {}).get("model")
+                if found and found != "<synthetic>":
+                    return str(found)
+            attachment = row.get("attachment")
+            if isinstance(attachment, dict) and attachment.get("type") == "model":
+                found = (attachment.get("identity") or {}).get("modelId")
+                if found:
+                    return str(found)
+        if end <= tail:
+            return None
+    return None
 
 
 SESSION_FILE = "densepack-session.json"
