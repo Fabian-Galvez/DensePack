@@ -451,7 +451,7 @@ The text of each image stays on disk.
 - For a Read, that text is the file itself.
 - Command output, Word files and the files of `.claude/densepack-vault/to-pack/` have a text copy, and the key row of the image gives its name after `file=`.
 - The briefs and reports of subagents keep their text in a `.txt` file beside the image.
-- The CLAUDE.md, CLAUDE.local.md and MEMORY.md files keep their text in a `.densepack.bak` file beside them.
+- The CLAUDE.md, CLAUDE.local.md, AGENTS.md, rules and MEMORY.md files keep their text in a `.bakpack` file beside them.
 
 The note that DensePack sends at the start of each session tells the model to use that text only for an exact string that the image cannot give.
 
