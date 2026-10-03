@@ -46,8 +46,8 @@ Turns are calls to the model that send the entire conversation that has been wri
 | --- | --- | --- |
 | Permission prompts | In manual mode, a Word file outside the project reached the agent as images with no prompt. | In manual mode, DensePack packs only files that the agent can read with no prompt. |
 | Tool calls before they run | Hooks changed some tool calls before they ran. | Hooks change a call only in auto and bypassPermissions mode, and never when an `ask` rule names the tool. |
-| Packed report text | In auto mode, a `cat` of packed report text became an `echo`, and the agent did not act on it. | DensePack blocks the command in all modes, and the agent reads the image. |
-| Report images | DensePack joined waiting report images into one image. Two packed reports did not fit. | The lead gets each report as its own image. |
+| Packed report text | In auto mode, a `cat` of packed report text became an `echo`. The agent did not act on it. | DensePack blocks the command in all modes. The agent then reads the image. |
+| Report images | DensePack joined the report images that wait for a Read into one image. Two packed reports did not fit. | The lead gets each report as its own image. |
 | Unknown model | A session with an unknown model got images. | It gets text. DensePack reads the model at the first tool call and after a `/model` change. |
 | `/bakpack` limit | 250,000 characters or 6,000 lines. | 1,000,000 bytes, the same as a file Read. |
 | Command names | `/mdpack`, and backups named `.densepack.bak`. | `/bakpack` and `/bakoff`, and backups named `.bakpack`. `/mdpack` and old backups still work. |
@@ -57,7 +57,7 @@ Turns are calls to the model that send the entire conversation that has been wri
 
 - DensePack 1.3.3 and 1.3.4 send no data off your computer. Claude Code checks `deny` rules before the hooks run.
 - [HOW-IT-WORKS.md](HOW-IT-WORKS.md#permission-modes) explains each permission mode.
-- The tests ran on Linux with 4 Intel Xeon cores at 2.1 GHz, 16 GB RAM, Python 3.11, and Claude Code 2.1.288.
+- The tests ran on Linux with 4 Intel Xeon cores at 2.1 GHz and 16 GB RAM. They used Python 3.11 and Claude Code 2.1.288.
 
 <br>
 
@@ -198,7 +198,7 @@ DensePack saves the most in long conversations that read many files, for example
 
 Claude Code loads instruction files at session start and sends them again with each request to the model. DensePack packs them into images, which use about half the tokens of the text.
 
-> **Look at the files of a folder before you run `/bakpack <folder>`.** It converts each of these files that exists in the folder: `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md`. Session start converts the same files in the folder of the session.
+> **Look at the files of a folder before you run `/bakpack <folder>`.** It converts each `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in the folder. Session start converts the same files in the folder of the session.
 
 | File | When Claude Code loads it | What DensePack does |
 | --- | --- | --- |
@@ -212,10 +212,10 @@ Claude Code loads instruction files at session start and sends them again with e
 
 <sub>Tested on Claude Code 2.1.288 with Haiku 4.5, on Linux.</sub>
 
-- A pack at session start helps only the next session. Run `/bakpack <folder>` from a session in another folder, and the first session in that folder reads the images.
+- A pack at session start helps only the next session. Run `/bakpack <folder>` from a session in another folder. The first session in that folder then reads the images.
 - Run `/bakoff <folder>` to restore the original files of one folder. DensePack stays installed.
 - Other tools, such as Codex and Cursor, also read `AGENTS.md`. After a pack, they get the pointer and not the text.
-- Do not run `/bakpack` on a parent folder of your projects. Sessions in its subfolders then get images outside their folder, and in manual mode the agent asks before it reads them.
+- Do not run `/bakpack` on a parent folder of your projects. Sessions in its subfolders then get images outside their folder. In manual mode, the agent asks before it reads them.
 - Open `.claude/tmp/densepack-settings.json` in a folder, and set `"bakpack_files"` to the files that DensePack can pack there, for example `["CLAUDE.md"]`.
 <br>
 
@@ -336,7 +336,7 @@ DensePack also writes the text of each Word file beside its images.
 - No bench measured the cost of the session start note in a subagent.
 - After conversations that packed a report or a brief, the next session gets a summary at session start. With the default receipts setting, the summary is one line that names the file of the totals.
 - Files under 1,000 bytes, files over 1,000,000 bytes and files with a null byte stay text.
-- DensePack packs text only when the image costs fewer tokens than the text. The smallest text that it packs is about 420 tokens for files, Word files and briefs, and about 170 tokens for Bash output. For subagent reports it is about 900 to 10,400 tokens, and it grows with the length of the session.
+- DensePack packs text only when the image costs fewer tokens than the text. The smallest text that it packs is about 420 tokens for files, Word files and briefs, and about 170 tokens for Bash output. For subagent reports it is about 900 to 10,400 tokens. It grows with the length of the session.
 - Reads with a limit of 20 lines or fewer stay text. Longer Reads of part of a file get images of those lines only, or text when the text costs less. When those lines need more than one image, the Read returns the first image and a note that names the others.
 - When one Sonnet turn reads more than 32 files, or more than 700,000 bytes of files, most Reads of that turn get text. Opus and Fable have no such limit.
 - Files stay text when the font has no glyph for more than 2% of their non-space characters, for example files in Chinese, Japanese or Korean and files of box-drawing characters.

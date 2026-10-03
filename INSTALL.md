@@ -261,7 +261,7 @@ Plugins cannot run code during an uninstall, and Claude Code deletes only the da
 
 `/dense-remove` first undoes the changes that DensePack made.
 
-- It restores the original text of each converted `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` from its `.bakpack`. Text that you added below the pointer stays at the end of the file. Then it deletes the `.bak` and the images of that file.
+- It restores the original text of each converted `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/rules/*.md` and `MEMORY.md` from its `.bakpack`. Text that you added below the pointer stays at the end of the file. Then it deletes the `.bakpack` and the images of that file.
 - It removes `CLAUDE_CODE_THRIFTY_SONIC` from the `env` block of `~/.claude/settings.json` when the value is still the `0` that DensePack wrote.
 
 Then it deletes the files and folders below.
