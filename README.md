@@ -45,14 +45,14 @@ Each request to the model reads the whole conversation again from the cache.
 
 | Change | Before | Now |
 | --- | --- | --- |
-| Permission prompts | In manual mode, a Word file outside the project reached the agent as images with no prompt. | In manual mode, DensePack packs only files that the agent can read with no prompt. |
-| Tool calls before they run | Hooks changed some tool calls before they ran. | Hooks change a call only in auto and bypassPermissions mode, and never when an `ask` rule names the tool. |
+| Permission prompts | In manual mode, a Word file outside the project reached the agent as images with no prompt. | In manual mode, DensePack packs a file only when the agent can read it with no prompt. |
+| Tool calls before they run | Hooks changed some tool calls before they ran. | Hooks change a call only in auto and bypassPermissions mode. They never change a call when an `ask` rule names the tool. |
 | Packed report text | In auto mode, a `cat` of packed report text became an `echo`. The agent did not act on it. | DensePack blocks the command in all modes. The agent then reads the image. |
 | Report images | DensePack joined the report images that wait for a Read into one image. Two packed reports did not fit. | The lead gets each report as its own image. |
 | Unknown model | A session with an unknown model got images. | It gets text. DensePack reads the model at the first tool call and after a `/model` change. |
 | `/bakpack` limit | 250,000 characters or 6,000 lines. | 1,000,000 bytes, the same as a file Read. |
 | Command names | `/mdpack`, and backups named `.densepack.bak`. | `/bakpack` and `/bakoff`, and backups named `.bakpack`. `/mdpack` and old backups still work. |
-| Instruction files | `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md`. | Also `AGENTS.md` and `.claude/rules/*.md`, with a list that the user can change. |
+| Instruction files | `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md`. | Also `AGENTS.md` and `.claude/rules/*.md`, with a list that you can change. |
 | Session start | The session waited for the pack of `CLAUDE.md`. | The pack runs in the background. The next session uses the images. |
 | Folders named "scratch" | Files in a folder with "scratch" or "sandbox" in its name stayed text. | Only `.claude` and the scratchpad folder of Claude Code stay text. |
 
@@ -74,12 +74,12 @@ Each request to the model reads the whole conversation again from the cache.
 | Task | What the agent does | Mean saving |
 | --- | --- | --- |
 | Code trace | The agent traces how a Read becomes an image through about 20,000 lines of code | 32.6% |
-| Architecture doc | The agent reads 14 hook scripts, about 8,700 lines, and outputs ARCHITECTURE.md | 31.8% |
+| Architecture doc | The agent reads 14 hook scripts, about 8,700 lines, and writes ARCHITECTURE.md | 31.8% |
 | Five files read whole | The agent reads five scripts whole, 5,586 lines, and writes a 5-line summary | 38.3% |
 
 Each bench is one short task in a new session. In longer sessions, each later turn reads the whole conversation again from the cache. The images of the files that the agent read cost about half the tokens of their text.
 
-<sub>The tasks run on a frozen copy of the DensePack scripts. The suite is in <code>plugin/evals/</code>. [BENCHMARKS.md](BENCHMARKS.md#run-the-benches-yourself) has the command that runs the suite, the price and the turns of each run, and the tasks where DensePack gives no saving.</sub>
+<sub>The tasks run on a frozen copy of the DensePack scripts. The suite is in <code>plugin/evals/</code>. [BENCHMARKS.md](BENCHMARKS.md#run-the-benches-yourself) has the command that runs the suite. It also lists the price and the turns of each run and the tasks where DensePack gives no saving.</sub>
 
 ### Byte identical rebuild
 
@@ -106,13 +106,13 @@ Each bench is one short task in a new session. In longer sessions, each later tu
 
 - The plugin, the right-click tool and the HTML app pack text into images.
 - The plugin and the right-click tool use the same renderer.
-- The HTML app has its own renderer with its own color coding and code mode, but without the line numbers, space counts and tab boxes of the plugin. No bench measured it.
+- The HTML app has its own renderer with its own color coding and code mode. It has no line numbers, space counts or tab boxes. No bench measured it.
 
 | Part | What it does | Who it is for | Where to start |
 | --- | --- | --- | --- |
 | **Plugin** | The plugin packs the files that the agent Reads, Bash output, Word files, instruction files such as `CLAUDE.md`, and the briefs and reports of subagents.<br><br>Two commands install the plugin. | People who use Claude Code | [Install the plugin](#install-the-plugin) |
 | **Right-click tool** | The right-click tool packs a file from your file manager or your shell on Windows, Linux and macOS.<br><br>On Windows only, it also packs selected text with a hotkey or with the Ctrl+Right-click menu in each application.<br><br>The Windows and Linux installers add Pillow, freetype-py and NumPy to your own Python | People who use an AI chat | [INSTALL.md](INSTALL.md#install-the-right-click-tool) and [tools/Tool-README.md](tools/Tool-README.md) |
-| **HTML app** | The HTML app runs in your browser.<br><br>You paste text, and the image updates while you type.<br>You can download or copy the image. | People who want one image without an install | [Use the HTML app](INSTALL.md#use-the-html-app) and [index.html](index.html) |
+| **HTML app** | The HTML app runs in your browser.<br><br>You paste text. The image updates while you type.<br>You can download or copy the image. | People who want one image without an install | [Use the HTML app](INSTALL.md#use-the-html-app) and [index.html](index.html) |
 
 [tools/Tool-README.md](tools/Tool-README.md) lists the changes that the right-click tool makes, how to install it without the hotkeys and how to remove it.
 
@@ -167,7 +167,7 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 | `/bakpack <folder>` | It packs the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of that folder into images. It puts a pointer in each file and keeps the original as `<name>.bakpack`. Run it from a session in another folder. The first session in the packed folder then reads the images and never the text |
 | `/bakoff <folder>` | It restores the original files of that folder from their `.bakpack` copies and deletes their images. DensePack stays installed |
 | <strong>Coming soon</strong> | |
-| `/dashpack` | It shows the saving of each conversation while the conversation runs. It calculates the text price of each image that the agents read and of each later turn that reads the image again |
+| `/dashpack` | It shows the saving of each conversation while the conversation runs. It calculates the text price of each image that the agents read. It does the same for each later turn that reads the image again |
 
 <br>
 
@@ -180,11 +180,11 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 DensePack saves the most in long conversations that read many files, for example an audit of a repository.
 
 - Read files with the Read tool. DensePack also packs Bash output of 400 characters or more. Bash reads save less.
-- Keep working in the same session, because each later turn reads the smaller images again.
+- Stay in the same session. Each later turn reads the smaller images again.
 - Open Claude Code in an empty folder next to the repository. Then give the agent the full path of the repository.
   - DensePack sends the names of the files directly in that folder with your prompt. It also packs those files in the background when they hold 700,000 bytes or fewer in total.
   - DensePack does neither of these steps when the folder has more than 200 files.
-  - DensePack sends each file that the agent reads with the Read tool as images when the images cost less than the text, except in the cases that [Limits](#limits) lists.
+  - DensePack sends each file that the agent reads with the Read tool as images when the images cost less than the text. [Limits](#limits) lists the exceptions.
 
 [INSTALL.md](INSTALL.md#save-the-most) has the numbered steps for a repository with a `CLAUDE.md`, for an audit and for each session.
 
@@ -198,7 +198,7 @@ DensePack saves the most in long conversations that read many files, for example
 
 Claude Code loads instruction files at session start and sends them again with each request to the model. DensePack packs them into images, which use about half the tokens of the text.
 
-> **Look at the files of a folder before you run `/bakpack <folder>`.** It converts each `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in the folder. Session start converts the same files in the folder of the session.
+> **Before you run `/bakpack <folder>`, look at the files of that folder.** It converts each `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in the folder. Session start converts the same files in the folder of the session.
 
 | File | When Claude Code loads it | What DensePack does |
 | --- | --- | --- |
@@ -214,7 +214,7 @@ Claude Code loads instruction files at session start and sends them again with e
 - Run `/bakoff <folder>` to restore the original files of one folder. DensePack stays installed.
 - Other tools, such as Codex and Cursor, also read `AGENTS.md`. After a pack, they get the pointer and not the text.
 - Do not run `/bakpack` on a parent folder of your projects. Each session in a subfolder then gets images from outside its folder. In manual mode, the agent asks before it reads them.
-- Open `.claude/tmp/densepack-settings.json` in a folder, and set `"bakpack_files"` to the files that DensePack can pack there, for example `["CLAUDE.md"]`.
+- Open `.claude/tmp/densepack-settings.json` in a folder. Set `"bakpack_files"` to the files that DensePack can pack there, for example `["CLAUDE.md"]`.
 
 <br>
 
@@ -225,14 +225,14 @@ Claude Code loads instruction files at session start and sends them again with e
 ## Changes to your computer
 
 - DensePack changes some of your files and adds its own folders and packages.
-- `/dense-remove` undoes the changes to your files and deletes the DensePack folders of the projects that the transcripts in `~/.claude/projects` name, except `.claude/tmp/` and the files that [Remove DensePack](INSTALL.md#remove-densepack) lists as kept.
+- `/dense-remove` undoes the changes to your files. It deletes the DensePack folders of the projects that the transcripts in `~/.claude/projects` name. It keeps `.claude/tmp/` and the files that [Remove DensePack](INSTALL.md#remove-densepack) lists as kept.
 - `/plugin uninstall` deletes the packages.
 
 | What it changes | What DensePack does |
 | --- | --- |
 | `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in a project, your `~/.claude/CLAUDE.md` and the `MEMORY.md` of the project | DensePack copies each one to `<name>.bakpack`, packs the text into images and puts a short pointer in the file. Files stay text unless their images and pointer cost less than their text |
 | `~/.claude/settings.json` | DensePack adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` one time when the key is not there. From the next session on, Claude Code auto mode no longer tells the agent to read files with Bash. DensePack shows a note on screen about this change |
-| `.gitignore` files in `.claude/tmp/` and `.claude/densepack-vault/` | DensePack writes one line, `*`, and Git then does not commit those folders |
+| `.gitignore` files in `.claude/tmp/` and `.claude/densepack-vault/` | DensePack writes one line, `*`. Git then does not commit those folders |
 | `.claude/tmp/` and `.claude/densepack-vault/` in each project | DensePack creates these folders. `.claude/tmp/` holds the settings and the working files. The vault holds the images, their text copies and one folder for each conversation. At session start, DensePack deletes working files and images older than 24 hours. DensePack deletes the oldest conversation folders when those folders pass the default limit of 200 MB |
 | `~/.claude/densepack-state` | DensePack creates this folder. The folder holds the path of the Python that DensePack found, the key that seals the image records, the list of converted instruction files and the images of your `~/.claude/CLAUDE.md` and `MEMORY.md` |
 | Pillow, freetype-py and NumPy | DensePack installs them into the data folder of the plugin and does not change your own Python |
@@ -254,7 +254,7 @@ DensePack has four parts.
 | The swap | The agent calls Read. The Read runs on the real file. Then `read_image.py` packs the file into an image and puts the image in the result in place of the text.<br><br>Bash output of 400 characters or more goes through the same steps. Bash results return one image. When the output needs more than one image, the result holds the first image and a note that names the others. DensePack puts exact text beside the image for lines that a model can misread. One example is a random ID with a capital I and a small l. DensePack keeps the exact text of each packed output in `.claude/densepack-vault/images/` |
 | The packing | DensePack packs files, Bash output, briefs for subagents and reports from subagents, but only when the plugin calculates that the images cost less than the text.<br><br>In auto and bypassPermissions mode, DensePack packs briefs of 1,000 characters or more. In other modes, briefs stay text.<br><br>Agents write their briefs and reports as text. DensePack replaces that text with images. The receiving agent opens them with one Read. [HOW-IT-WORKS.md](HOW-IT-WORKS.md#subagent-images) explains each step |
 | The image | One function, `pack_code()`, packs the text into each image. In the image, a green number starts each line, a red number gives a count of spaces and a `\t` box gives a count of tabs. In files with tab indents, the band color shows the tab count |
-| Exact lines | When an Edit fails after the agent copied its text from an image, a Read of 20 lines or fewer gives the exact lines as text, and the agent sends the Edit again |
+| Exact lines | When an Edit fails after the agent copied its text from an image, a Read of 20 lines or fewer gives the exact lines as text. The agent then sends the Edit again |
 
 - DensePack sends images to Fable, Opus and Sonnet models, such as Fable 5.1, Opus 5.5 and Sonnet 5.5.
   - All these models get the same image with 17 px characters.
@@ -274,12 +274,12 @@ DensePack has four parts.
 ## Word files
 
 - DensePack packs `.doc` and `.docx` files into images before the agent reads them, because the Read tool of Claude Code cannot open Word files.
-- Doc and docx files get no images when their text is under 1,000 bytes or over 1,000,000 bytes, or when the images cost more than the text.
+- Doc and docx files get no images when their text is under 1,000 bytes or over 1,000,000 bytes. They also get no images when the images cost more than the text.
 - The agent can read the text of these files with a shell command.
 
 DensePack also writes the text of each Word file beside its images.
 
-`.docx` files are ZIP files of XML, and `.doc` files are OLE2 containers. DensePack reads the two formats with the Python standard library and does not need Word.
+`.docx` files are ZIP files of XML. `.doc` files are OLE2 containers. DensePack reads the two formats with the Python standard library and does not need Word.
 
 - The Edit and Write tools of Claude Code do not work on Word files.
 - Use a shell command to change a Word file.
@@ -318,7 +318,7 @@ DensePack also writes the text of each Word file beside its images.
 - When a Word file that your prompt names gets no images, DensePack tells the agent the reason and tells it to read the text with a shell command.
 - Short tasks can cost more with DensePack. The session note and the extra steps of some runs cost more than the images save. In a task that copies 6 lines of a Python file on Opus 5.5, runs with DensePack cost $0.0915 to $0.1082. Runs without it cost $0.0827 to $0.0839. [BENCHMARKS.md](BENCHMARKS.md#why-some-short-tasks-cost-more) gives the price of each run and each cause.
 - Edit and Write work on files that arrived as images. They do not work on Word files because Claude Code does not Read Word files. See [Word files](#word-files).<br>
-  <sub>DensePack tells this to the agents that get images. The lead agent gets it at session start, and each subagent gets it when the subagent starts.</sub>
+  <sub>DensePack tells this to the agents that get images. The lead agent gets it at session start. Each subagent gets it when the subagent starts.</sub>
 - On Opus 5.5, DensePack adds about 569 tokens for the session start note and the command list to the first turn of a session. Each later turn reads these tokens again at the cache read price. The other hooks add nothing to messages that have no pasted image and name no folder and no Word file.<br>
   <sub>This count comes from two `claude -p` sessions with no tool call, one with DensePack off and one with DensePack on.</sub>
 - No bench measured the cost of the session start note in a subagent.
@@ -328,11 +328,11 @@ DensePack also writes the text of each Word file beside its images.
 - Reads with a limit of 20 lines or fewer stay text. Longer Reads of part of a file get images of those lines only, or text when the text costs less. When those lines need more than one image, the Read returns the first image and a note that names the others.
 - When one Sonnet turn reads more than 32 files, or more than 700,000 bytes of files, most Reads of that turn get text. Opus and Fable have no such limit.
 - Files stay text when the font has no glyph for more than 2% of their non-space characters, for example files in Chinese, Japanese or Korean and files of box-drawing characters.
-- On Windows without Git for Windows, the hooks run through a PowerShell script. Claude Code then runs commands in PowerShell, and DensePack packs no command output, because it packs only Bash output.<br>
+- On Windows without Git for Windows, the hooks run through a PowerShell script. Claude Code then runs commands in PowerShell. DensePack packs no command output, because it packs only Bash output.<br>
   <sub>DensePack will not run if a company policy blocks PowerShell scripts.</sub>
 - The benches measure the renderer of the plugin, which the right-click tool also uses. The HTML app uses its own renderer.
 - When one Sonnet turn gets many images, the reply can hold thousands of output tokens. More output lowers the saving because Anthropic bills output at 5x the input price.
-- Sonnet 5.5 and Opus 5.5 each copied a 116-line Python file from its image 10 times at medium effort. Sonnet 5.5 wrote the code correctly in 8 copies. Opus 5.5 did this in all 10 copies. Run `/max-off` for work that must copy text exactly. [BENCHMARKS.md](BENCHMARKS.md#python-rebuild-28-september-2026) has the results.
+- Sonnet 5.5 and Opus 5.5 each copied a 116-line Python file from its image 10 times at medium effort. Sonnet 5.5 wrote the code correctly in 8 copies. Opus 5.5 wrote the code correctly in all 10 copies. Run `/max-off` for work that must copy text exactly. [BENCHMARKS.md](BENCHMARKS.md#python-rebuild-28-september-2026) has the results.
 
 <br>
 
