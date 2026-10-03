@@ -556,7 +556,7 @@ A PreToolUse hook can change a tool call before it runs. Claude Code then checks
 
 - Files still arrive as images in each mode. The Read runs on the real file, with the normal permission check. Then `read_image.py` replaces the result with the image.
 - A Read that you or a rule refuse gets no image. DensePack does not pack that file.
-- Some images reach the agent with no Read of the file. These are Word files that your message or a tool result names, and the files of a folder that your message names. In the modes that ask, DensePack packs these files only inside the project. It also packs them only when no `ask` rule for Read exists. The agent gets a note for a named Word file that DensePack skips.
+- Some images reach the agent with no Read of the file. These are Word files that your message or a tool result names, and the files of a folder that your message names. In the modes that ask, DensePack packs these files only inside the project. It also packs them only when no `ask` rule for Read exists. In each mode, a `deny` rule for Read stops these packs. The agent gets a note for a named Word file that DensePack skips.
 - A `deny` rule holds in each mode, because Claude Code checks it before the hooks run.
 - `REWRITE_MODES` and `may_rewrite()` in `plugin/scripts/common.py` hold this rule.
 

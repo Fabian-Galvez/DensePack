@@ -896,7 +896,11 @@ def prefetch(event, paths):
     # The images go into the project vault, where a Read asks nothing. In a
     # mode that asks before a Read, the code packs only files whose Read
     # asks nothing: files in the project, with no "ask" rule for Read. See
-    # THE PERMISSION RULE in common.py.
+    # THE PERMISSION RULE in common.py. A "deny" rule for Read stops the
+    # pack in each mode. Claude Code checks a deny rule only on a tool call.
+    # This pack is not a tool call.
+    if ask_rule_names("Read", "deny"):
+        return
     if not may_rewrite(event, "Read"):
         if ask_rule_names("Read"):
             return
