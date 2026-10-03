@@ -296,7 +296,7 @@ Some DensePack files can stay after `/dense-remove`.
 
 ## Save the most
 
-DensePack saves the most in long sessions, for example an audit of a repository. In these sessions, the agent reads many files or long command output. Short tasks can cost more. The DensePack session note adds about 569 tokens to the first turn of an Opus 5.5 session. Short tasks also give DensePack little text to pack.
+DensePack saves the most in long sessions, for example an audit of a repository. In these sessions, the agent reads many files or long command output. Short tasks can cost more. The DensePack session note adds about 603 tokens to the first turn of an Opus 5.5 session. Short tasks also give DensePack little text to pack.
 
 **Repositories with `CLAUDE.md`**
 

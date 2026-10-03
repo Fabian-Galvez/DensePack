@@ -233,19 +233,19 @@ The table shows the tokens that each part adds. The image is not in the table be
 
 | Part | How often | The turn that sends it | Each later turn |
 | --- | --- | --- | --- |
-| The session start note and the command list | It goes to the model one time at each session start, which also runs after a resume, `/clear` or `/compact` | It adds 569 tokens at the cache write price | It adds the same 569 tokens at the cache read price |
+| The session start note and the command list | It goes to the model one time at each session start, which also runs after a resume, `/clear` or `/compact` | It adds 603 tokens at the cache write price | It adds the same 603 tokens at the cache read price |
 | The file names of a folder | They go with each prompt that names a folder | They added about 80 tokens in one test and 187 in another, at the cache write price | They add the same tokens at the cache read price |
 | The session start note in a subagent | It goes one time to each subagent | No test measured it | No test measured it |
 | Reads of files that fit one image | They happen on each Read | They add nothing, because the hook replaces the result and adds no text | They add nothing |
 | Bash output packed as images | It happens on each packed output | One image adds nothing. More images add a short note that names them. Lines that a model can misread add the exact text of those lines | It adds nothing when the hook adds no note. Otherwise it adds the same note at the cache read price |
 
-The session start note added 569 tokens on Opus 5.5. At that count, it costs this much in the 1-hour cache.
+The session start note added 603 tokens on Opus 5.5. At that count, it costs this much in the 1-hour cache.
 
 | Model | The first turn | Each later turn |
 | --- | --- | --- |
-| Opus 5.5 | $0.0046 | $0.0001 |
-| Sonnet 5.5 | $0.0023 | $0.0001 |
-| Fable 5.1 | $0.011 | $0.00014 |
+| Opus 5.5 | $0.0048 | $0.0001 |
+| Sonnet 5.5 | $0.0024 | $0.0001 |
+| Fable 5.1 | $0.012 | $0.00015 |
 
 When a part goes to the model a second time, Anthropic bills it as new again.
 
