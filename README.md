@@ -6,7 +6,7 @@
 <p align="center">
 DensePack packs text into the smallest image that Fable, Opus and Sonnet models can read. The image uses about half the input tokens of the text.<br>
 <br>
-<strong>Anthropic's <code>claude plugin eval</code> ran three coding tasks on Opus 5.5. DensePack saved 31.8% to 38.3% of the price on average, and all runs passed their checks.</strong><br>
+<strong>Anthropic's <code>claude plugin eval</code> ran three coding tasks on Opus 5.5. DensePack saved 31.8% to 38.3% of the price on average. All runs passed their checks.</strong><br>
 <br>
 Each request to the model reads the whole conversation again from the cache.
 </p>
@@ -77,7 +77,7 @@ Each request to the model reads the whole conversation again from the cache.
 | Architecture doc | The agent reads 14 hook scripts, about 8,700 lines, and outputs ARCHITECTURE.md | 31.8% |
 | Five files read whole | The agent reads five scripts whole, 5,586 lines, and writes a 5-line summary | 38.3% |
 
-Each bench is one short task in a new session. In longer sessions, each later turn reads the whole conversation again from the cache, and the images of the files that the agent read cost about half the tokens of their text.
+Each bench is one short task in a new session. In longer sessions, each later turn reads the whole conversation again from the cache. The images of the files that the agent read cost about half the tokens of their text.
 
 <sub>The tasks run on a frozen copy of the DensePack scripts. The suite is in <code>plugin/evals/</code>. [BENCHMARKS.md](BENCHMARKS.md#run-the-benches-yourself) has the command that runs the suite, the price and the turns of each run, and the tasks where DensePack gives no saving.</sub>
 
@@ -179,7 +179,7 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 
 DensePack saves the most in long conversations that read many files, for example an audit of a repository.
 
-- Read files with the Read tool. DensePack also packs Bash output of 400 characters or more, but Bash reads save less.
+- Read files with the Read tool. DensePack also packs Bash output of 400 characters or more. Bash reads save less.
 - Keep working in the same session, because each later turn reads the smaller images again.
 - Open Claude Code in an empty folder next to the repository. Then give the agent the full path of the repository.
   - DensePack sends the names of the files directly in that folder with your prompt. It also packs those files in the background when they hold 700,000 bytes or fewer in total.
@@ -213,7 +213,7 @@ Claude Code loads instruction files at session start and sends them again with e
 - A pack at session start helps only the next session. Run `/bakpack <folder>` from a session in another folder. The first session in that folder then reads the images.
 - Run `/bakoff <folder>` to restore the original files of one folder. DensePack stays installed.
 - Other tools, such as Codex and Cursor, also read `AGENTS.md`. After a pack, they get the pointer and not the text.
-- Do not run `/bakpack` on a parent folder of your projects. Sessions in its subfolders then get images outside their folder. In manual mode, the agent asks before it reads them.
+- Do not run `/bakpack` on a parent folder of your projects. Each session in a subfolder then gets images from outside its folder. In manual mode, the agent asks before it reads them.
 - Open `.claude/tmp/densepack-settings.json` in a folder, and set `"bakpack_files"` to the files that DensePack can pack there, for example `["CLAUDE.md"]`.
 
 <br>
@@ -251,8 +251,8 @@ DensePack has four parts.
 
 | Part | What happens |
 | --- | --- |
-| The swap | The agent calls Read, and the Read runs on the real file. Then `read_image.py` packs the file into an image and puts the image in the result in place of the text, and the model receives the image.<br><br>Bash output of 400 characters or more goes through the same steps. Bash results return one image. When the output needs more than one image, the result holds the first image and a note that names the others. DensePack puts lines that a model can misread beside the image as exact text, for example random IDs that mix capital and small letters and hold a capital I or a small l. DensePack keeps the exact text of each packed output in `.claude/densepack-vault/images/` |
-| The packing | DensePack packs files, Bash output, briefs for subagents and reports from subagents, but only when the plugin calculates that the images cost less than the text.<br><br>In auto and bypassPermissions mode, DensePack packs briefs of 1,000 characters or more. In other modes, briefs stay text.<br><br>Agents still write their briefs and reports as text, and DensePack replaces that text with images that the receiving agent opens with one Read. [HOW-IT-WORKS.md](HOW-IT-WORKS.md#subagent-images) explains each step |
+| The swap | The agent calls Read. The Read runs on the real file. Then `read_image.py` packs the file into an image and puts the image in the result in place of the text.<br><br>Bash output of 400 characters or more goes through the same steps. Bash results return one image. When the output needs more than one image, the result holds the first image and a note that names the others. DensePack puts exact text beside the image for lines that a model can misread. One example is a random ID with a capital I and a small l. DensePack keeps the exact text of each packed output in `.claude/densepack-vault/images/` |
+| The packing | DensePack packs files, Bash output, briefs for subagents and reports from subagents, but only when the plugin calculates that the images cost less than the text.<br><br>In auto and bypassPermissions mode, DensePack packs briefs of 1,000 characters or more. In other modes, briefs stay text.<br><br>Agents write their briefs and reports as text. DensePack replaces that text with images. The receiving agent opens them with one Read. [HOW-IT-WORKS.md](HOW-IT-WORKS.md#subagent-images) explains each step |
 | The image | One function, `pack_code()`, packs the text into each image. In the image, a green number starts each line, a red number gives a count of spaces and a `\t` box gives a count of tabs. In files with tab indents, the band color shows the tab count |
 | Exact lines | When an Edit fails after the agent copied its text from an image, a Read of 20 lines or fewer gives the exact lines as text, and the agent sends the Edit again |
 
@@ -261,7 +261,7 @@ DensePack has four parts.
   - Sonnet gets images while `/maxpack` is on, which is the default.
   - Haiku and all other models get text.
 - The lead agent and each subagent get a note that explains how to read the images.
-- DensePack stops Greps that print each line of a file as text when a Read of that file gives images, and it lets all other Greps pass. DensePack also stops Bash reads, such as `cat`, of the text file of a packed report or brief.
+- DensePack stops a Grep that prints each line of a file when a Read of that file gives images. Other Greps pass. DensePack also stops Bash reads, such as `cat`, of the text file of a packed report or brief.
 
 [HOW-IT-WORKS.md](HOW-IT-WORKS.md) explains the four parts, the slash commands, the hooks and each script.
 
@@ -313,10 +313,10 @@ DensePack also writes the text of each Word file beside its images.
 
 ## Limits
 
-- DensePack sends Haiku text only, because in a test Haiku 4.5 scored 1 of 10 on a packed report and gave wrong numbers with no warning.
+- DensePack sends Haiku text only. In a test, Haiku 4.5 scored 1 of 10 on a packed report. It gave wrong numbers with no warning.
 - DensePack packs `.doc` and `.docx` files only in the cases that [Word files](#word-files) lists.
 - When a Word file that your prompt names gets no images, DensePack tells the agent the reason and tells it to read the text with a shell command.
-- Short tasks can cost more with DensePack, because the session note and the extra steps of some runs cost more than the images save. In the task that copies 6 lines of a Python file on Opus 5.5, each run with DensePack cost $0.0915 to $0.1082, and each run without it cost $0.0827 to $0.0839. [BENCHMARKS.md](BENCHMARKS.md#why-some-short-tasks-cost-more) gives the price of each run and each cause.
+- Short tasks can cost more with DensePack. The session note and the extra steps of some runs cost more than the images save. In a task that copies 6 lines of a Python file on Opus 5.5, runs with DensePack cost $0.0915 to $0.1082. Runs without it cost $0.0827 to $0.0839. [BENCHMARKS.md](BENCHMARKS.md#why-some-short-tasks-cost-more) gives the price of each run and each cause.
 - Edit and Write work on files that arrived as images. They do not work on Word files because Claude Code does not Read Word files. See [Word files](#word-files).<br>
   <sub>DensePack tells this to the agents that get images. The lead agent gets it at session start, and each subagent gets it when the subagent starts.</sub>
 - On Opus 5.5, DensePack adds about 569 tokens for the session start note and the command list to the first turn of a session. Each later turn reads these tokens again at the cache read price. The other hooks add nothing to messages that have no pasted image and name no folder and no Word file.<br>
@@ -332,7 +332,7 @@ DensePack also writes the text of each Word file beside its images.
   <sub>DensePack will not run if a company policy blocks PowerShell scripts.</sub>
 - The benches measure the renderer of the plugin, which the right-click tool also uses. The HTML app uses its own renderer.
 - When one Sonnet turn gets many images, the reply can hold thousands of output tokens. More output lowers the saving because Anthropic bills output at 5x the input price.
-- Sonnet 5.5 and Opus 5.5 each copied one Python file of 116 lines from its image 10 times at medium effort. Sonnet 5.5 wrote all words correctly, with code that runs the same as the source, in 8 copies, and Opus 5.5 did this in all 10 copies. Run `/max-off` for work that must copy text exactly. [BENCHMARKS.md](BENCHMARKS.md#python-rebuild-28-september-2026) has the results.
+- Sonnet 5.5 and Opus 5.5 each copied a 116-line Python file from its image 10 times at medium effort. Sonnet 5.5 wrote the code correctly in 8 copies. Opus 5.5 did this in all 10 copies. Run `/max-off` for work that must copy text exactly. [BENCHMARKS.md](BENCHMARKS.md#python-rebuild-28-september-2026) has the results.
 
 <br>
 
