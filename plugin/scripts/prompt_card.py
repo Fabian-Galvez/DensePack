@@ -298,7 +298,10 @@ def _word_file_result(path, event, dp, gate, pointer, pack_images,
     # The images reach the agent with no Read of the file. In a mode that
     # asks before a Read, the code packs only a file whose Read asks
     # nothing: a file in the project, with no "ask" rule for Read. See THE
-    # PERMISSION RULE in common.py.
+    # PERMISSION RULE in common.py. A "deny" rule for Read stops the pack in
+    # each mode, because this pack is not a tool call.
+    if ask_rule_names("Read", "deny"):
+        return None, "permission"
     if not may_rewrite(event, "Read"):
         try:
             inside = path.resolve().is_relative_to(project_dir().resolve())
