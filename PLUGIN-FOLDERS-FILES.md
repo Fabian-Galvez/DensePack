@@ -248,7 +248,7 @@ DensePack uses the model name for these things.
 - Fable, Opus and Sonnet get images.
 - Haiku and all other models get the files that they Read, their command output, their briefs and the reports that they receive as plain text. Haiku 4.5 with no earlier context read 1 of 10 packed reports correctly.
 - Some Word files get images for all models when the images cost less than the text. These are the Word files that your message names, the Word files in a folder that your message names by its full path, and the Word files that a Glob, Grep, Bash or LS result names.
-- Main sessions whose model DensePack did not record yet get images, the same as Opus. Subagents whose model DensePack cannot find get the files that they read and their Bash output as text.
+- Main sessions whose model DensePack does not know get text. DensePack reads the model from the transcript, which names it before the first tool call. Subagents whose model DensePack cannot find get the files that they read and their Bash output as text.
 - `/maxpack` and `/max-off` apply to Sonnet only. DensePack checks the model name to find Sonnet.
 - Only Sonnet has a limit on the files of one turn. See the note at the end of this file.
 - `report_pack_worth()` in `common.py` uses the dollar rates of the lead model, and for a background subagent also the rates of the subagent model, to decide whether a report packs.
