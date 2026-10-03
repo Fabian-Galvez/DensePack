@@ -41,12 +41,10 @@ keeps no private copy of the pairing rule that a new source name can miss.
 
 import hashlib
 import re
-import shlex
 import sys
 import time
 
-from common import (disabled, emit, may_rewrite, read_event, sibling_image,
-                    tmp_dir)
+from common import disabled, emit, read_event, sibling_image, tmp_dir
 from subagent_stop import manifest_write
 
 # The basename of each source-text sidecar that this plugin writes. It is
@@ -70,7 +68,7 @@ OVERRIDE = "DENSEPACK_SOURCE_OK"
 # same each time, and the gate sends it on the first block of a session
 # only. The fixed text then costs characters once and not on each block.
 ACTION = (
-    "DensePack replaced this command. Read this with the Read tool instead: "
+    "DensePack blocked this command. Read this with the Read tool instead: "
     "%s . To read the words themselves, put DENSEPACK_SOURCE_OK in the "
     "command and run it again. This is the plugin's normal delivery, not an "
     "intrusion."
@@ -299,29 +297,18 @@ def main():
         images = images_for(command)
         if not images:
             return 0
-        # The gate changes the command and never rejects it. A rejection
-        # returns as a tool result, and the model must answer it. A
-        # rejection costs the same turn as the command. The command costs
-        # one turn with or without the gate. A change to what it prints
-        # costs nothing more and keeps the text out of the prefix.
+        # The gate blocks the command and sends the path of the image as the
+        # reason. A block costs the same turn as the command. Tests on Claude
+        # Code 2.1.288 showed that the earlier rewrite to an echo failed in
+        # auto mode. The auto mode classifier refused the echo, or the agent
+        # read the echo output as text from the file and did not act on it.
+        # After a block, the agent read the image. A block also changes no
+        # call, see THE PERMISSION RULE in common.py.
         #
-        # updatedInput REPLACES the whole input object and does not merge
-        # into it. The gate returns each field of the event input. A
-        # partial object fails validation with "the required parameter is
-        # missing". The gate removes shell metacharacters from the path
-        # BEFORE it quotes the path. Quoting is not enough here. Git Bash can
-        # run a backtick inside SINGLE quotes.
-        #
-        #   echo 'read this: proj`whoami`x .'   printed   read this: projrootx .
-        #
-        # The name of a project folder can hold a backtick, a dollar sign
-        # or a backslash, and each image path in this message starts with
-        # that folder. json.dumps is worse, because it uses double quotes,
-        # and each shell expands them. The gate removes those characters,
-        # and the risk is gone. The path shows an underscore in place of
-        # each such character. The id still finds the file, because
-        # FILENAME matches only letters, digits and dashes in the id.
-        replacement = dict(event.get("tool_input") or {})
+        # The gate removes shell metacharacters from the path. The path
+        # shows an underscore in place of each such character. The id still
+        # finds the file, because FILENAME matches only letters, digits and
+        # dashes in the id.
         safe = " , ".join(_no_metacharacters(p) for p in images[:3])
         # The gate sends the reason on the first block of this session and
         # on no later block. It sends the path and the override token each
@@ -329,26 +316,11 @@ def main():
         text = ACTION % safe
         if not why_already_sent(event.get("session_id")):
             text += WHY
-        # In a mode that asks before a command, the gate refuses the
-        # command and sends the same text as the reason. It changes no call.
-        # See THE PERMISSION RULE in common.py. The model gets the same
-        # words in the same turn, and the command does not run.
-        if not may_rewrite(event, "Bash"):
-            text = text.replace("DensePack replaced this command.",
-                                "DensePack blocked this command.", 1)
-            emit({
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": text,
-                }
-            })
-            return 0
-        replacement["command"] = "echo %s" % shlex.quote(text)
         emit({
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
-                "updatedInput": replacement,
+                "permissionDecision": "deny",
+                "permissionDecisionReason": text,
             }
         })
     except Exception:  # noqa: BLE001
