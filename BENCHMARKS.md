@@ -135,7 +135,7 @@ The same `claude plugin eval` command ran 15 short tasks on Opus 5.5.
 | Copy 6 lines of a Python file exactly | $0.1082, $0.1064, $0.0976, $0.0915, $0.0992 | $0.0833, $0.0827, $0.0831, $0.0839, $0.0828 |
 | Copy an HTML file with one change | $0.1108, $0.1093, $0.1087, $0.3128, $0.1217 | $0.1077, $0.1114, $0.1096, $0.1177, $0.1104 |
 
-DensePack sends text as an image only when it estimates that the image costs fewer tokens than the text. It packs the files that the agent Reads, Bash output of 400 characters or more, Word files, the CLAUDE.md, CLAUDE.local.md and MEMORY.md files, and the briefs and reports of subagents. The saving grows with the length of that text.
+DensePack sends text as an image only when it estimates that the image costs fewer tokens than the text. It packs the files that the agent Reads, Bash output of 400 characters or more, Word files, instruction files such as CLAUDE.md, AGENTS.md and MEMORY.md, and the briefs and reports of subagents. The saving grows with the length of that text.
 
 The runs in the task on the Python file of 94 KB had these results.
 
@@ -154,8 +154,8 @@ The extra cost occurs in seven short tasks.
 
 The extra cost has three causes.
 
-- **The session note.** The note adds 569 tokens to the first turn of each session.
-  - On Opus 5.5, the note costs $0.0046 in the first turn and $0.0001 in each later turn.
+- **The session note.** In these runs, the note added 569 tokens to the first turn of each session.
+  - On Opus 5.5, the note cost $0.0046 in the first turn and $0.0001 in each later turn. The note of DensePack 1.3.4 adds 603 tokens.
   - In six runs with DensePack, the agent took the same steps as in the runs without it. DensePack added only its note. These are run 3 of the task that lists calls, run 3 of the rename, runs 2 and 5 of the GDScript copy, run 5 of the HTML copy and run 4 of the 6-line copy.
 - **Extra steps with DensePack.** Some runs with DensePack took extra steps.
   - In the task that copies 6 lines of a Python file, 4 of the 5 runs with DensePack read 10 or 20 lines with the Read tool. Each run without DensePack used one `sed` command. Those Reads saved nothing, because DensePack keeps Reads of 20 lines or fewer as text.
@@ -281,7 +281,7 @@ The Grep result stays text in the two runs. The cause of the 74 extra tokens wit
 
 ## How DensePack saves
 
-Claude Code sends your messages, the CLAUDE.md, CLAUDE.local.md and MEMORY.md files, the files that the agent reads, Bash output, and the briefs and reports of subagents to the model as input tokens. Anthropic bills those tokens and writes them to the cache. Each later turn reads them again from the cache.
+Claude Code sends your messages, instruction files such as CLAUDE.md, AGENTS.md and MEMORY.md, the files that the agent reads, Bash output, and the briefs and reports of subagents to the model as input tokens. Anthropic bills those tokens and writes them to the cache. Each later turn reads them again from the cache.
 
 When the agent reads a text file, DensePack packs the file into an image. The agent gets the image only when DensePack estimates that the image costs fewer tokens than the text. The agent reads and caches the image in place of the text.
 
@@ -289,7 +289,7 @@ DensePack keeps these files as text.
 
 - Files of less than 1,000 bytes, files of more than 1,000,000 bytes and files with a null byte stay text.
 - Files stay text when the font has no glyph for more than 2% of their non-space characters, such as files in Chinese, Japanese or Korean.
-- Files in a `.claude` folder or in a folder with sandbox or scratch in its name stay text.
+- Files in a `.claude` folder or in the scratchpad folder of Claude Code stay text.
 
 DensePack does not trim or compress the text. The image uses about half the tokens of the text. In the byte identical rebuild, each image uses 49% to 55% fewer tokens than the text of its file.
 
@@ -353,10 +353,11 @@ In another test, Opus 5.5 typed 33 of 34 packed Bash outputs from the image with
 
 ### Subagents
 
-- At the start of each session, DensePack sends its session note to the lead when the lead gets images.
+- At the start of each session, DensePack sends its session note to the lead.
 - DensePack also sends the note to each subagent when the subagent starts, except to a Sonnet subagent after /max-off.
 - Haiku subagents get the note too. Their Reads, their Bash output and their briefs stay text.
-- DensePack packs subagent reports when the image costs less than the text. It packs briefs of 1,000 characters or more the same way. It does this only in auto and bypassPermissions mode.
+- DensePack packs subagent reports when the image costs less than the text.
+- It packs briefs of 1,000 characters or more the same way, but only in auto and bypassPermissions mode.
 
 The lead opens a packed report with one Read, because the result of the Agent tool cannot carry an image. Read results and Bash results can carry an image.
 
