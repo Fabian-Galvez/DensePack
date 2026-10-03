@@ -60,8 +60,9 @@ from pathlib import Path
 from common import (READER_SIZES, agent_type_model, append_delegation,
                     append_queue, brief_chars, card_in_text, disabled, emit,
                     ensure_pillow, event_reader, font_size, keep_copy,
-                    lead_model_name, reader_gets_images, reader_key_for_model,
-                    reader_override, read_event, record_card,
+                    lead_model_name, may_rewrite, reader_gets_images,
+                    reader_key_for_model, reader_override, read_event,
+                    record_card,
                     resolved_reader, session_map_exists, settings,
                     size_for_model, tmp_dir)
 from subagent_stop import manifest_write
@@ -255,6 +256,14 @@ def main():
     # BRIEF_FLOOR, and a second pass then packs an image of a sentence about
     # an image.
     if brief.lstrip().startswith(POINTER_OPENING):
+        return passthrough()
+
+    # The swap below changes the call before it runs. It is for the modes
+    # that ask before no tool call. See THE PERMISSION RULE in common.py. In
+    # the other modes the subagent gets the brief as the lead wrote it. Any
+    # "ask" rule for the subagent tool, under either name, also leaves it.
+    if not may_rewrite(event) or not may_rewrite(event, "Task") \
+            or not may_rewrite(event, "Agent"):
         return passthrough()
 
     current = settings()
