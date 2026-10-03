@@ -162,7 +162,7 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 | `/maxpack` | It sends images to Sonnet and is the default |
 | `/max-off` | It sends text to Sonnet |
 | `/helppack` | It prints all commands |
-| `/dense-remove` | It restores the original text of each converted `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` and removes `CLAUDE_CODE_THRIFTY_SONIC` when its value is still `0`. It also deletes the trust entry of the marketplace folder in `~/.claude.json` and the DensePack files that `/plugin uninstall` does not delete, except the files that [Remove DensePack](INSTALL.md#remove-densepack) lists as kept. Run it before the uninstall |
+| `/dense-remove` | It restores the original text of each converted instruction file and removes `CLAUDE_CODE_THRIFTY_SONIC` when its value is still `0`. It also deletes the trust entry of the marketplace folder in `~/.claude.json` and the DensePack files that `/plugin uninstall` does not delete, except the files that [Remove DensePack](INSTALL.md#remove-densepack) lists as kept. Run it before the uninstall |
 | `/bakpack <folder>` | It packs the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of that folder into images. It puts a pointer in each file and keeps the original as `<name>.bakpack`. Run it from a session in another folder. The first session in the packed folder then reads the images and never the text |
 | `/bakoff <folder>` | It restores the original files of that folder from their `.bakpack` copies and deletes their images. DensePack stays installed |
 | <strong>Coming soon</strong> | |

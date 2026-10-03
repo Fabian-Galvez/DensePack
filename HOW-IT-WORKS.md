@@ -48,17 +48,17 @@ DensePack changes some of your files and adds its own folders and packages. The 
   1. Run `/bakpack <folder>` from an empty folder next to the folder with the files. The agent does not read their text.
   2. Start Claude Code in that folder. Claude Code reads the short pointer and the images, not the text.
 - Each converted file becomes three kinds of files, the pointer, the `.bakpack` and the images.
-- The `.bak` holds your original text, byte for byte. Claude Code does not load the `.bak` because it loads only the names `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md`.
+- The `.bakpack` holds your original text, byte for byte. Claude Code does not load it, because its name does not end in `.md`.
 - DensePack converts a file only when its images and pointer cost less than its text. Short files stay text.
 - Instruction files over 1,000,000 bytes stay text, the same limit as for a Read.
 - At session start, the pack runs in a process of its own. The session does not wait for it. The next session start shows a note about the files that it converted.
 - The images can cost one extra turn at the start of a session. DensePack does not count that turn when it compares the costs, and for that reason short sessions can cost more with a converted file.
-- To change your instructions, edit the `.bak`. DensePack converts it again at the next session start.
-- DensePack moves text that you add below the pointer into the `.bak` at the next session start. It moves new lines from auto memory the same way.
+- To change your instructions, edit the `.bakpack`. DensePack converts it again at the next session start.
+- DensePack moves text that you add below the pointer into the `.bakpack` at the next session start. It moves new lines from auto memory the same way.
 - When you replace a pointer with a new file, DensePack converts the new file and renames the old `.bakpack` to `.bakpack.old-N`, where N is the first free number.
-- Haiku sessions read the `.bak` as text because Haiku does not read the text in an image correctly.
+- Haiku sessions read the `.bakpack` as text because Haiku does not read the text in an image correctly.
 - Auto memory keeps working. DensePack sets no flag that stops it.
-- In a shared repository, commit the `.bak` with the pointer. Teammates without DensePack get the pointer but not its images, because the images are in `.claude/densepack-vault/`, which Git does not commit. No test shows whether their model then reads the `.bak`.
+- In a shared repository, commit the `.bakpack` with the pointer. Teammates without DensePack get the pointer but not its images, because the images are in `.claude/densepack-vault/`, which Git does not commit. No test shows whether their model then reads the `.bakpack`.
 
 ### Working file cleanup
 
@@ -501,7 +501,7 @@ The hooks read the settings files again on each event, and a change applies at t
 - `/dense-off` writes the file `.claude/tmp/densepack-off-<session id>`.
 - `/maxpack` and `/max-off` start or stop images for Sonnet at the next tool call.
 - The session start note follows the setting only at the next session start, which also runs after a resume, `/clear` or `/compact`. Until then, Sonnet sessions get images with no note after `/maxpack`, and they keep the note that says files arrive as images after `/max-off`.
-- `/max-off` does not change the converted `CLAUDE.md` and `MEMORY.md` files. Sonnet sessions still get their pointer, which names the images. One line of the pointer tells models that get text from DensePack, such as Haiku, to read the `.bak` instead.
+- `/max-off` does not change the converted `CLAUDE.md` and `MEMORY.md` files. Sonnet sessions still get their pointer, which names the images. One line of the pointer tells models that get text from DensePack, such as Haiku, to read the `.bakpack` instead.
 
 `dpctl.py` also takes verbs that have no slash command. Each verb that changes a setting also prints the status line.
 
@@ -620,7 +620,7 @@ All scripts are in `plugin/scripts/`. The table above names the scripts that a h
 | `freetype_glyph.py` | It renders one character as a gray mask with FreeType. Pillow writes the PNG |
 | `densepack.py` | It is the command line tool. It packs one file, or the text on standard input, with its own layout and prints the token comparison. The hooks use its helpers, such as `image_cost()` and `composite_grid()`, and not its layout |
 | `dpctl.py` | It runs all slash commands and prints the `/helppack` tables |
-| `pack_instructions.py` | It turns one instruction file into a pointer, images and a `.bak` of the original |
+| `pack_instructions.py` | It turns one instruction file into a pointer, images and a `.bakpack` of the original |
 | `run_once.py` | It is the lock that stops the plugin from packing each file two times when the plugin loads two times |
 | `run_hook.sh`, `run_hook.ps1` | They find a Python 3.10 or newer and then run the script that the hook names with it |
 | `ensure_python.sh`, `ensure_python.ps1` | They find a Python 3.10 or newer and save its path. On Windows with no Python, they install Python 3.13 with winget. `bootstrap.py` installs Pillow, freetype-py and NumPy into the data folder of the plugin |
