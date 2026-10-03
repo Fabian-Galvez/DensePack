@@ -25,6 +25,7 @@ Turns are calls to the model that send the entire conversation that has been wri
 - [Parts](#parts)
 - [Install the plugin](#install-the-plugin)
 - [Save the most](#save-the-most)
+- [Instruction files](#instruction-files)
 - [Changes to your computer](#changes-to-your-computer)
 - [How it works](#how-it-works)
 - [Word files](#word-files)
@@ -48,7 +49,9 @@ Turns are calls to the model that send the entire conversation that has been wri
 | Packed report text | In auto mode, a `cat` of packed report text became an `echo`, and the agent did not act on it. | DensePack blocks the command in all modes, and the agent reads the image. |
 | Report images | DensePack joined waiting report images into one image. Two packed reports did not fit. | The lead gets each report as its own image. |
 | Unknown model | A session with an unknown model got images. | It gets text. DensePack reads the model at the first tool call and after a `/model` change. |
-| `/mdpack` limit | 250,000 characters or 6,000 lines. | 1,000,000 bytes, the same as a file Read. |
+| `/bakpack` limit | 250,000 characters or 6,000 lines. | 1,000,000 bytes, the same as a file Read. |
+| Command names | `/mdpack`, and backups named `.densepack.bak`. | `/bakpack` and `/bakoff`, and backups named `.bakpack`. `/mdpack` and old backups still work. |
+| Instruction files | `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md`. | Also `AGENTS.md` and `.claude/rules/*.md`, with a list that the user can change. |
 | Session start | The session waited for the pack of `CLAUDE.md`. | The pack runs in the background. The next session uses the images. |
 | Folders named "scratch" | Files in a folder with "scratch" or "sandbox" in its name stayed text. | Only `.claude` and the scratchpad folder of Claude Code stay text. |
 
@@ -160,7 +163,8 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 | `/max-off` | It sends text to Sonnet |
 | `/helppack` | It prints all commands |
 | `/dense-remove` | It restores the original text of each converted `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` and removes `CLAUDE_CODE_THRIFTY_SONIC` when its value is still `0`. It also deletes the trust entry of the marketplace folder in `~/.claude.json` and the DensePack files that `/plugin uninstall` does not delete, except the files that [Remove DensePack](INSTALL.md#remove-densepack) lists as kept. Run it before the uninstall |
-| `/mdpack <folder>` | It packs the `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` of that folder into images and puts a pointer in their place, and the agent does not read these files. Run it from a folder next to that folder, and then open a new session in that folder. The new session reads the images and never the text |
+| `/bakpack <folder>` | It packs the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of that folder into images. It puts a pointer in each file and keeps the original as `<name>.bakpack`. Run it from a session in another folder. The first session in the packed folder then reads the images and never the text |
+| `/bakoff <folder>` | It restores the original files of that folder from their `.bakpack` copies and deletes their images. DensePack stays installed |
 | <strong>Coming soon</strong> | |
 | `/dashpack` | It shows the saving of each conversation while the conversation runs. It calculates the text price of each image that the agents read and of each later turn that reads the image again |
 
@@ -190,6 +194,33 @@ DensePack saves the most in long conversations that read many files, for example
 
 <br>
 
+## Instruction files
+
+Claude Code sends each loaded instruction file again with each request to the model. A packed file costs its images, which use about half the tokens of its text.
+
+| File | When Claude Code loads it | DensePack 1.3.4 |
+| --- | --- | --- |
+| `CLAUDE.md` in the folder of the session | At session start | Packs it |
+| `CLAUDE.md` in a parent folder | At session start | Packs it after `/bakpack <parent folder>`. The images are outside the folder of the session, so in manual mode the agent asks before it reads them. |
+| `.claude/rules/*.md` | At session start | Packs it |
+| `CLAUDE.md` in a subfolder | When the agent reads a file in that subfolder | Packs it after `/bakpack <subfolder>` |
+| `AGENTS.md` beside a `CLAUDE.md` | Never | Leaves it |
+| `AGENTS.md` with no `CLAUDE.md` | At session start | Packs it |
+| An edit of `CLAUDE.md` during a session | At the next session start | Packs it at the next session start |
+
+<sub>Tested on Claude Code 2.1.288 with Haiku 4.5, on Linux.</sub>
+
+- Claude Code loads these files only at the times in the table. A pack at session start helps only the next session.
+- `/bakpack <folder>` packs a folder from a session in another folder. The first session in the packed folder then reads the images.
+- `/bakoff <folder>` restores the original files of one folder.
+- Other tools, such as Codex and Cursor, also read `AGENTS.md`. They get the pointer and not the text.
+- To choose the files that DensePack packs in a folder, put a `"bakpack_files"` list, such as `["CLAUDE.md"]`, in `.claude/tmp/densepack-settings.json` of that folder.
+<br>
+
+---
+
+<br>
+
 ## Changes to your computer
 
 - DensePack changes some of your files and adds its own folders and packages.
@@ -198,7 +229,7 @@ DensePack saves the most in long conversations that read many files, for example
 
 | What it changes | What DensePack does |
 | --- | --- |
-| `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in a project, your `~/.claude/CLAUDE.md` and the `MEMORY.md` of the project | DensePack copies each one to `<name>.densepack.bak`, packs the text into images and puts a short pointer in the file. Files stay text unless their images and pointer cost less than their text |
+| `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in a project, your `~/.claude/CLAUDE.md` and the `MEMORY.md` of the project | DensePack copies each one to `<name>.bakpack`, packs the text into images and puts a short pointer in the file. Files stay text unless their images and pointer cost less than their text |
 | `~/.claude/settings.json` | DensePack adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` one time when the key is not there. From the next session on, Claude Code auto mode no longer tells the agent to read files with Bash. DensePack shows a note on screen about this change |
 | `.gitignore` files in `.claude/tmp/` and `.claude/densepack-vault/` | DensePack writes one line, `*`, and Git then does not commit those folders |
 | `.claude/tmp/` and `.claude/densepack-vault/` in each project | DensePack creates these folders. `.claude/tmp/` holds the settings and the working files. The vault holds the images, their text copies and one folder for each conversation. At session start, DensePack deletes working files and images older than 24 hours. DensePack deletes the oldest conversation folders when those folders pass the default limit of 200 MB |

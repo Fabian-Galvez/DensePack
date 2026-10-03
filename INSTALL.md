@@ -261,7 +261,7 @@ Plugins cannot run code during an uninstall, and Claude Code deletes only the da
 
 `/dense-remove` first undoes the changes that DensePack made.
 
-- It restores the original text of each converted `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` from its `.densepack.bak`. Text that you added below the pointer stays at the end of the file. Then it deletes the `.bak` and the images of that file.
+- It restores the original text of each converted `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` from its `.bakpack`. Text that you added below the pointer stays at the end of the file. Then it deletes the `.bak` and the images of that file.
 - It removes `CLAUDE_CODE_THRIFTY_SONIC` from the `env` block of `~/.claude/settings.json` when the value is still the `0` that DensePack wrote.
 
 Then it deletes the files and folders below.
@@ -277,7 +277,7 @@ It keeps all other files. The list below gives examples.
 
 - It keeps your settings and your transcripts.
 - It keeps your own files in `.claude/tmp` and the `.gitignore` that DensePack wrote in `.claude/tmp`.
-- It keeps each older `<name>.densepack.bak.old-N` copy and the `densepack-archive` folder that `dpctl.py keep <conversation>` makes.
+- It keeps each older `<name>.bakpack.old-N` copy and the `densepack-archive` folder that `dpctl.py keep <conversation>` makes.
 
 Claude Code can write the trust entry again when you close the session that ran `/dense-remove`.
 
@@ -301,10 +301,10 @@ DensePack saves the most in long sessions in which the agent reads many files or
 **Repositories with `CLAUDE.md`**
 
 1. Start Claude Code in a folder next to the repository, not in the repository. In that folder, Claude Code does not load the `CLAUDE.md` of the repository.
-2. Run `/mdpack <path to the repository>`.
-   - DensePack packs the `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` of the repository into images and puts a pointer in the place of each file.
+2. Run `/bakpack <path to the repository>`.
+   - DensePack packs the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of the repository into images and puts a pointer in the place of each file.
    - Files stay text when their images and pointer cost as much as their text or more, or when they are over 1,000,000 bytes.
-   - DensePack keeps the original text next to each file as `<name>.densepack.bak`.
+   - DensePack keeps the original text next to each file as `<name>.bakpack`.
    - The agent reads none of the text.
 3. Close Claude Code and start a new session in the repository. In the new session, Claude Code loads the pointer and the agent reads the images. Claude Code never sends the text.
 
@@ -324,7 +324,7 @@ The benches in [BENCHMARKS.md](BENCHMARKS.md) ran the same way. `claude plugin e
 - DensePack puts some lines of Bash output beside the image as exact text. These are lines with a `git --stat` bar, a `pip list` rule, a number of 18 or more digits, or a random ID that mixes capital and small letters and contains a capital I or a small l. Lines with only spaces or tabs, and lines with a tab inside the line other than the tab after a line number, also go beside the image as exact text.
 - In two tests on Opus 5.5, a Bash `cat` of a file added more tokens than a Read of the same file. The `cat` of a 157-line file added 1,444 tokens against 1,348 for the Read, and the `cat` of a 507-line file added 1,819 tokens against 1,378 for the Read.
 - Keep working in the same session. Each later turn sends the smaller images again at the cache read price. The saving increases with the length of the conversation.
-- At session start, DensePack converts the `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` of the project, your `~/.claude/CLAUDE.md` and the `MEMORY.md` of the project the same way as `/mdpack`. Claude Code still sends their text one time in the session that converts them.
+- At session start, DensePack converts the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of the project, your `~/.claude/CLAUDE.md` and the `MEMORY.md` of the project the same way as `/bakpack`. Claude Code still sends their text one time in the session that converts them.
 - At session start, DensePack sets `CLAUDE_CODE_THRIFTY_SONIC` to `0` in the `env` block of `~/.claude/settings.json` when the key is not there. With this value, Claude Code stops sending the message that tells Claude to read files with Bash in auto mode and bypassPermissions mode. The change applies from the next session.
 - Subagents also get the DensePack session note, except Sonnet subagents after `/max-off`. Haiku subagents get the note, but their Reads, their Bash output and their briefs stay text.
 - DensePack packs a subagent report into images only when it calculates that the saving is more than the cost of the extra Read that the lead makes. For a background subagent, that cost also includes the extra turn of the subagent. The lead opens a packed report with the Read tool.

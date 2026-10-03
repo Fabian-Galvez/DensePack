@@ -27,12 +27,12 @@ DensePack changes some of your files and adds its own folders and packages. The 
 
 - The `.gitignore` in `.claude/tmp/` stays.
 - Pillow, freetype-py and NumPy stay in the data folder of the plugin until `/plugin uninstall` deletes that folder.
-- Older `<name>.densepack.bak.old-N` copies and the conversation copies that `dpctl.py keep` makes stay.
+- Older `<name>.bakpack.old-N` copies and the conversation copies that `dpctl.py keep` makes stay.
 - `.claude/densepack-vault/` and the DensePack files in `.claude/tmp/` stay in folders that no Claude Code transcript in `~/.claude/projects` names as its working folder.
 
 | What it changes | What DensePack does | Why |
 | --- | --- | --- |
-| `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in a project, your `~/.claude/CLAUDE.md` and the auto memory index `MEMORY.md` of the project | At session start, DensePack copies the file to `<name>.densepack.bak`, packs the text into images and replaces the file with a short pointer that names each image. It converts a file only when the images and the pointer cost less than the text | Claude Code sends these files as text on each turn |
+| `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in a project, your `~/.claude/CLAUDE.md` and the auto memory index `MEMORY.md` of the project | At session start, DensePack copies the file to `<name>.bakpack`, packs the text into images and replaces the file with a short pointer that names each image. It converts a file only when the images and the pointer cost less than the text | Claude Code sends these files as text on each turn |
 | `~/.claude/settings.json` | DensePack adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` to the `env` block one time when the key is not there | Auto mode and bypassPermissions mode tell the agent to read files with cat, head or sed in Bash. Bash reads save less than Reads |
 | `.gitignore` files in `.claude/tmp/` and `.claude/densepack-vault/` | DensePack writes one line, `*` | Those folders hold copies of your files and of command output, and the `*` line keeps Git from committing them |
 | `~/.claude/densepack-state` | DensePack creates the folder. It holds the path of the Python that DensePack found, the seal key `sidecar.key`, the list of the instruction files that DensePack converted and the images of your `~/.claude/CLAUDE.md`. It also holds the images of each `MEMORY.md`, in one folder for each project | DensePack reads its own notes to find the files that it converted. Cloned repositories can hold a fake copy of those notes. DensePack keeps the real notes in your home folder, where a clone cannot write |
@@ -43,11 +43,11 @@ DensePack changes some of your files and adds its own folders and packages. The 
 
 ### How the conversion works
 
-- Claude Code loads `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in a project, your `~/.claude/CLAUDE.md` and the auto memory index `MEMORY.md` of the project before DensePack runs.
+- Claude Code loads `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in a project, your `~/.claude/CLAUDE.md` and the auto memory index `MEMORY.md` of the project before DensePack runs.
 - When you start in a folder that holds one of these files, Claude Code reads that file as text and caches it before the conversion. These steps prevent this.
-  1. Run `/mdpack <folder>` from an empty folder next to the folder with the files. The command converts them without reading them as text.
+  1. Run `/bakpack <folder>` from an empty folder next to the folder with the files. The command converts them without reading them as text.
   2. Start Claude Code in that folder. Claude Code reads the short pointer and the images, not the text.
-- Each converted file becomes three kinds of files, the pointer, the `.densepack.bak` and the images.
+- Each converted file becomes three kinds of files, the pointer, the `.bakpack` and the images.
 - The `.bak` holds your original text, byte for byte. Claude Code does not load the `.bak` because it loads only the names `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md`.
 - DensePack converts a file only when its images and pointer cost less than its text. Short files stay text.
 - Instruction files over 1,000,000 bytes stay text, the same limit as for a Read.
@@ -55,7 +55,7 @@ DensePack changes some of your files and adds its own folders and packages. The 
 - The images can cost one extra turn at the start of a session. DensePack does not count that turn when it compares the costs, and for that reason short sessions can cost more with a converted file.
 - To change your instructions, edit the `.bak`. DensePack converts it again at the next session start.
 - DensePack moves text that you add below the pointer into the `.bak` at the next session start. It moves new lines from auto memory the same way.
-- When you replace a pointer with a new file, DensePack converts the new file and renames the old `.bak` to `.densepack.bak.old-N`, where N is the first free number.
+- When you replace a pointer with a new file, DensePack converts the new file and renames the old `.bak` to `.bakpack.old-N`, where N is the first free number.
 - Haiku sessions read the `.bak` as text because Haiku does not read the text in an image correctly.
 - Auto memory keeps working. DensePack sets no flag that stops it.
 - In a shared repository, commit the `.bak` with the pointer. Teammates without DensePack get the pointer but not its images, because the images are in `.claude/densepack-vault/`, which Git does not commit. No test shows whether their model then reads the `.bak`.
@@ -487,11 +487,11 @@ The plugin has seven commands, and each one is a Markdown file in `plugin/comman
 | `/maxpack` | Sonnet gets images. This is the default | It applies to all conversations in this project |
 | `/max-off` | Sonnet gets plain text. Fable and Opus still get images | It applies to all conversations in this project |
 | `/helppack` | It sets nothing. It prints all commands and the behaviors that only `/dense-off` stops | It changes nothing |
-| `/mdpack <folder>` | It sets nothing. It converts the instruction files of that folder | It applies to that folder |
+| `/bakpack <folder>` | It sets nothing. It converts the instruction files of that folder | It applies to that folder |
 | `/dense-remove` | It sets nothing. It restores the converted instruction files and deletes the DensePack files that `/plugin uninstall` does not delete | It applies to your computer |
 
 - `/helppack` prints two fixed tables and no current values. The first table names the behaviors that only `/dense-off` stops, and the second names each command, what it sets and whether that is the default.
-- `/mdpack` takes a folder path and converts the `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in it without reading them.
+- `/bakpack` takes a folder path and converts the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in it without reading them.
 - `/densepack`, `/dense-off`, `/maxpack` and `/max-off` end with a status line that shows the current values of packing, the reader, receipts, totals, keep, the style card and images for Sonnet.
 - `/densepack` also sets the keep folder and the vault cap to their defaults.
 
