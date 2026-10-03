@@ -243,7 +243,7 @@ Raise DensePack's READ_MAX_BYTES to 2000000
    `claude`
 2. Delete the DensePack files that the uninstall does not delete.
    `/dense-remove`
-   - `/dense-remove` restores each converted `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` to its original text.
+   - `/dense-remove` restores each converted instruction file to its original text.
    - It deletes the images in each project folder that a transcript in `~/.claude/projects` names.
    - It deletes the DensePack files in your home folder.
    - It deletes the trust entry of the marketplace folder.
