@@ -45,17 +45,17 @@ DensePack changes some of your files and adds its own folders and packages. The 
 
 - Claude Code loads `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in a project, your `~/.claude/CLAUDE.md` and the auto memory index `MEMORY.md` of the project before DensePack runs.
 - When you start in a folder that holds one of these files, Claude Code reads that file as text and caches it before the conversion. These steps prevent this.
-  1. Run `/bakpack <folder>` from an empty folder next to the folder with the files. The command converts them without reading them as text.
+  1. Run `/bakpack <folder>` from an empty folder next to the folder with the files. The agent does not read their text.
   2. Start Claude Code in that folder. Claude Code reads the short pointer and the images, not the text.
 - Each converted file becomes three kinds of files, the pointer, the `.bakpack` and the images.
 - The `.bak` holds your original text, byte for byte. Claude Code does not load the `.bak` because it loads only the names `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md`.
 - DensePack converts a file only when its images and pointer cost less than its text. Short files stay text.
 - Instruction files over 1,000,000 bytes stay text, the same limit as for a Read.
-- At session start, the pack runs in a process of its own, and the session does not wait for it. The next session start shows a note about the files that it converted.
+- At session start, the pack runs in a process of its own. The session does not wait for it. The next session start shows a note about the files that it converted.
 - The images can cost one extra turn at the start of a session. DensePack does not count that turn when it compares the costs, and for that reason short sessions can cost more with a converted file.
 - To change your instructions, edit the `.bak`. DensePack converts it again at the next session start.
 - DensePack moves text that you add below the pointer into the `.bak` at the next session start. It moves new lines from auto memory the same way.
-- When you replace a pointer with a new file, DensePack converts the new file and renames the old `.bak` to `.bakpack.old-N`, where N is the first free number.
+- When you replace a pointer with a new file, DensePack converts the new file and renames the old `.bakpack` to `.bakpack.old-N`, where N is the first free number.
 - Haiku sessions read the `.bak` as text because Haiku does not read the text in an image correctly.
 - Auto memory keeps working. DensePack sets no flag that stops it.
 - In a shared repository, commit the `.bak` with the pointer. Teammates without DensePack get the pointer but not its images, because the images are in `.claude/densepack-vault/`, which Git does not commit. No test shows whether their model then reads the `.bak`.
@@ -491,7 +491,7 @@ The plugin has seven commands, and each one is a Markdown file in `plugin/comman
 | `/dense-remove` | It sets nothing. It restores the converted instruction files and deletes the DensePack files that `/plugin uninstall` does not delete | It applies to your computer |
 
 - `/helppack` prints two fixed tables and no current values. The first table names the behaviors that only `/dense-off` stops, and the second names each command, what it sets and whether that is the default.
-- `/bakpack` takes a folder path and converts the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in it without reading them.
+- `/bakpack` takes a folder path and converts the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in it. The agent does not read them.
 - `/densepack`, `/dense-off`, `/maxpack` and `/max-off` end with a status line that shows the current values of packing, the reader, receipts, totals, keep, the style card and images for Sonnet.
 - `/densepack` also sets the keep folder and the vault cap to their defaults.
 
@@ -542,7 +542,7 @@ Run `/dense-remove` before `/plugin uninstall densepack`, because no hooks run d
 
 ## Permission modes
 
-DensePack never approves a tool call. No hook returns `allow`, and no setting turns on bypassPermissions.
+DensePack never approves a tool call. No hook returns `allow`. No setting turns on bypassPermissions.
 
 A PreToolUse hook can change a tool call before it runs. Claude Code then checks the permission of the changed call, not of the call that the agent made. For that reason DensePack changes a call before it runs only in the modes that ask before no Read.
 
@@ -552,9 +552,9 @@ A PreToolUse hook can change a tool call before it runs. Claude Code then checks
 | `default`, `acceptEdits`, `plan`, `dontAsk`, or no mode | No hook changes a call before it runs. `brief_pack.py` and `read_gate.py` leave the call as the agent wrote it. |
 | Any mode with an `ask` rule for the tool | No hook changes a call to that tool before it runs. Any `ask` rule for Read in a settings file counts, whatever path it names. |
 
-- Files still arrive as images in each mode. The Read runs on the real file, with the normal permission check, and `read_image.py` replaces the result after the Read.
-- A Read that you or a rule refuse gets no image, and DensePack does not pack that file.
-- Some images reach the agent with no Read of the file: Word files that your message or a tool result names, and files that DensePack packs ahead from a folder that your message names. In the modes that ask, DensePack packs these only for files inside the project and only when no `ask` rule for Read exists. The agent gets a note for a named Word file that it skips.
+- Files still arrive as images in each mode. The Read runs on the real file, with the normal permission check. Then `read_image.py` replaces the result with the image.
+- A Read that you or a rule refuse gets no image. DensePack does not pack that file.
+- Some images reach the agent with no Read of the file. These are Word files that your message or a tool result names, and the files of a folder that your message names. In the modes that ask, DensePack packs these files only inside the project. It also packs them only when no `ask` rule for Read exists. The agent gets a note for a named Word file that DensePack skips.
 - A `deny` rule holds in each mode, because Claude Code checks it before the hooks run.
 - `REWRITE_MODES` and `may_rewrite()` in `plugin/scripts/common.py` hold this rule.
 
@@ -577,7 +577,7 @@ Claude Code runs a hook at a named event. `plugin/hooks/hooks.json` names the ev
 | PreToolUse | Read | `read_gate.py` | It marks a packed report image delivered when the agent reads it. When the image is gone from `.claude/tmp`, it opens the copy in the vault, only in auto and bypassPermissions mode. See [Permission modes](#permission-modes) |
 | PreToolUse | Edit | `edit_gate.py` | It runs only after Claude Code accepts the Edit, and then it finds the old text in the file. [The Edit check](#the-edit-check) explains why it stops nothing |
 | PreToolUse | Grep, Glob | `grep_gate.py` | It stops a Glob in `.claude/tmp` or `.claude/densepack-vault` that can list the text file of a packed report or brief. It stops a Grep in content mode whose pattern matches each line, such as `^`, on a file that a Read packs, and it tells the agent to Read the file. It also stops that Grep on a folder that holds such a file in its first 500 files, and its message names one such file. That Grep passes when it has a head_limit of 20 or fewer, when it runs in files_with_matches or count mode, when it targets a Word file or when the agent gets text. All other Greps pass. The agent can find the text of an image with one Grep |
-| PreToolUse | Bash | `source_gate.py` | It stops a shell read of the text file of a packed report or brief in `.claude/tmp`, and the agent gets a line that names its image. It blocks the command in all modes, with that line as the reason. Commands with DENSEPACK_SOURCE_OK run as written |
+| PreToolUse | Bash | `source_gate.py` | It stops a shell read of the text file of a packed report or brief in `.claude/tmp`. It blocks the command in all modes. The reason names the image. Commands with DENSEPACK_SOURCE_OK run as written |
 | PreToolUse | Agent, Task | `brief_pack.py` | It packs a brief of 1,000 characters or more into images before the subagent starts, when the images save more than they cost. It does this only in auto and bypassPermissions mode |
 | SubagentStart | None | `subagent_start.py` | It sends the session start note to each subagent when it starts. Subagents on Sonnet after `/max-off` get no note when DensePack knows their model at the start |
 | SubagentStop | None | `subagent_stop.py` | It packs the finished report into images when `report_pack_worth()` calculates that they will save more than the Read of the lead costs, and it writes the report to a file. When the images also save more than one more answer costs, it asks a background subagent one time for an answer that names that file |
