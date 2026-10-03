@@ -79,7 +79,7 @@ The hooks make the swap before and after the tool call.
 1. The agent calls the Read tool on a file.
 2. The Read runs on the real file. Claude Code records the Read. A later Edit of the file works.
 3. `read_image.py` runs after the Read. It packs the file into images, or it uses the saved images of the same bytes. It puts the images in the tool result in place of the text. It does this only when they cost fewer tokens than the text.
-   - Files of more than one image return one image when it fits with no resize. The image holds all the pages, side by side or one below the other.
+   - Files of more than one image return one image when it fits with no resize. The image holds all the pages, one page below the other.
    - Otherwise the result contains the first image and a note. The note names the other images and their lines. The model needs at least one more turn to Read the other images.
    - Files of two full pages do not fit in one image.
 4. The model receives the image, not the text. Anthropic bills only what reaches the model.
@@ -116,7 +116,7 @@ These steps run when the lead gives a task to a subagent.
 
 1. The lead writes the task as text in the Agent call.
 2. Before the subagent starts, `brief_pack.py` finds the model of the subagent. It uses the model field of the Agent call first. Then it uses the model line of `.claude/agents/<type>.md`. A general-purpose subagent with neither gets the model of the agent that calls it.
-3. The task stays text when that model gets text, such as Haiku or Sonnet after `/max-off`. It also stays text when a custom agent type names no model that DensePack can find. It also stays text when it has fewer than 1,000 characters or when code blocks are more than half of it.
+3. The task stays text when that model gets text, such as Haiku or Sonnet after `/max-off`. It also stays text when a custom agent type names no model that DensePack can find, when it has fewer than 1,000 characters, or when code blocks are more than half of it. In modes other than auto and bypassPermissions, the task always stays text.
 4. Otherwise `brief_pack.py` packs the task into images and moves its code blocks to a numbered text file beside the images. It puts a short line that names the image in place of the task. It does this only when the plugin calculates that the images save more than they cost.
 5. The subagent receives the DensePack session note first and that line second.
 6. When the task names files that exist, up to 5 files of 100 KB or less, the line tells the subagent to Read the image in the same message as those files. The image then adds no turn. When the task names no such file, the subagent spends one turn on the Read of the image. `brief_pack.py` packs the task only when the images save more than that turn costs.
@@ -126,7 +126,7 @@ These steps run when a subagent returns its report to the lead.
 1. The subagent writes its report as text in its last answer. It takes no extra turn for DensePack unless it runs in the background.
 2. When the subagent stops, `subagent_stop.py` packs the report into images. It does this only when `report_pack_worth()` in `common.py` calculates that the images will save more than the Read of the lead costs. Reports stay text when the lead gets text, when code blocks fill more than half of the report, or when the images do not save more than that Read.
 3. After the Agent call, `report_swap.py` replaces the report in the Agent result with one line that names the report file, and `pointer.py` adds a note that names the images and says that each image is the full report.
-4. The lead opens the images with the Read tool. The lead opens each report image with its own Read call. It can read all of them in one turn.
+4. The lead opens each report image with its own Read call. It can read all of them in one turn.
 
 When Claude Code changes the text of the Agent result, `report_swap.py` does not replace the result. One example is a note in front of the report. The lead then keeps the report as text, with a note that tells it not to Read the image.
 
@@ -257,11 +257,11 @@ When a part goes to the model a second time, Anthropic bills it as new again.
 
 | What DensePack packs | When |
 | --- | --- |
-| Briefs that go to subagents | DensePack packs them before the subagent starts |
+| Briefs that go to subagents | DensePack packs them before the subagent starts, only in auto and bypassPermissions mode |
 | Subagent reports | DensePack packs them when the subagent finishes |
 | Files that the Read tool reads | DensePack packs them after the Read runs |
 | Bash output of 400 characters or more | DensePack packs it after the Bash command runs |
-| The instruction files, such as `CLAUDE.md` and `MEMORY.md` | DensePack packs them at session start |
+| The instruction files, such as `CLAUDE.md` and `MEMORY.md` | DensePack packs them in the background at session start. The next session uses the images |
 | Files that you copy into `.claude/densepack-vault/to-pack/` | DensePack packs them after the next tool call. The file and its images then move to `to-pack/packed/` |
 
 | File type | Reads as an image |
@@ -488,6 +488,8 @@ The plugin has nine commands. Each one is a Markdown file in `plugin/commands/`,
 | `/max-off` | Sonnet gets plain text. Fable and Opus still get images | It applies to all conversations in this project |
 | `/helppack` | It sets nothing. It prints all commands and the behaviors that only `/dense-off` stops | It changes nothing |
 | `/bakpack <folder>` | It sets nothing. It converts the instruction files of that folder | It applies to that folder |
+| `/bakoff <folder>` | It sets nothing. It restores the original instruction files of that folder | It applies to that folder |
+| `/mdpack <folder>` | The old name of `/bakpack` | It applies to that folder |
 | `/dense-remove` | It sets nothing. It restores the converted instruction files and deletes the DensePack files that `/plugin uninstall` does not delete | It applies to your computer |
 
 - `/helppack` prints two fixed tables and no current values. The first table names the behaviors that only `/dense-off` stops. The second table names each command, what it sets and whether that is the default.
@@ -500,7 +502,7 @@ The hooks read the settings files again on each event. A change applies at the n
 - `dpctl.py` runs the commands and writes all settings to one file in the project, `.claude/tmp/densepack-settings.json`.
 - `/dense-off` writes the file `.claude/tmp/densepack-off-<session id>`.
 - `/maxpack` and `/max-off` start or stop images for Sonnet at the next tool call.
-- The session start note follows the setting only at the next session start, which also runs after a resume, `/clear` or `/compact`. Until then, Sonnet sessions get images with no note after `/maxpack`. After `/max-off`, they keep the note that says files arrive as images.
+- The session start note follows the setting only at the next session start, which also runs after a resume, `/clear` or `/compact`. Until then, the note from the last session start stays in the conversation.
 - `/max-off` does not change the converted `CLAUDE.md` and `MEMORY.md` files. Sonnet sessions still get their pointer, which names the images. One line of the pointer tells models that get text from DensePack, such as Haiku, to read the `.bakpack` instead.
 
 `dpctl.py` also takes verbs that have no slash command. Each verb that changes a setting also prints the status line.
@@ -571,7 +573,7 @@ Claude Code runs a hook at a named event. `plugin/hooks/hooks.json` names the ev
 | Event | Tool | Script | What it does |
 | --- | --- | --- | --- |
 | SessionStart | None | `ensure_python.sh`, `ensure_python.ps1` | It finds a Python 3.10 or newer and saves its path in `~/.claude/densepack-state`. On Windows with no Python, it installs Python 3.13 with winget, one time. On Linux and macOS, it installs nothing and shows the install command on screen |
-| SessionStart | None | `bootstrap.py` | It deletes working files older than one day, installs Pillow, freetype-py and NumPy when they are missing, converts the instruction files in the background and sets CLAUDE_CODE_THRIFTY_SONIC in `~/.claude/settings.json` one time. It sends the session start note to the lead when the lead gets images, with one more line that tells the lead to write the task of a subagent the same way as without DensePack. It sends a warning in place of the note when Pillow, freetype-py or NumPy is missing. It shows the totals of the last conversation on screen when receipts are not quiet |
+| SessionStart | None | `bootstrap.py` | It deletes working files older than one day, installs Pillow, freetype-py and NumPy when they are missing, converts the instruction files in the background and sets CLAUDE_CODE_THRIFTY_SONIC in `~/.claude/settings.json` one time. It sends the session start note to the lead, with one more line that tells the lead to write the task of a subagent the same way as without DensePack. It sends a warning in place of the note when Pillow, freetype-py or NumPy is missing. It shows the totals of the last conversation on screen when receipts are not quiet |
 | UserPromptSubmit | None | `prompt_card.py` | It sends the legend card one time in each session, only with a message that holds a pasted image and only before the session starts a subagent. It packs a Word file that your prompt names. It sends the file names of a folder that your prompt names and starts to pack those files in the background |
 | PreToolUse | Read | `drop_read_gate.py` | It lets a Read run on the real file. Its route for a Word file never runs, because Claude Code rejects a Read of a Word file before this hook runs |
 | PreToolUse | Read | `read_gate.py` | It marks a packed report image delivered when the agent reads it. When the image is gone from `.claude/tmp`, it opens the copy in the vault, only in auto and bypassPermissions mode. See [Permission modes](#permission-modes) |
