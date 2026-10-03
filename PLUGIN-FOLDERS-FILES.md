@@ -11,7 +11,7 @@ DensePack writes files in these places.
 | `<project>/.claude/tmp/` | It holds the working files of the current sessions. |
 | `~/.claude/densepack-state/` and the data folder of the plugin | They hold files outside the project, such as the seal key and the savings table of the last session. |
 | Your system temp folder | It holds the copy of a file while DensePack packs it, and the job files of each pack. |
-| Each `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` that DensePack converts | DensePack replaces the file with a pointer to the images and keeps the original text beside it in `<name>.densepack.bak`. |
+| Each `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` that DensePack converts | DensePack replaces the file with a pointer to the images and keeps the original text beside it in `<name>.bakpack`. |
 | `~/.claude/settings.json` | DensePack sets `CLAUDE_CODE_THRIFTY_SONIC` to `0` in this file. |
 
 DensePack saves all of these files on your computer and sends none of them to a service.
@@ -118,9 +118,9 @@ These steps run inside the same tool call, and the agent uses no extra turn.
 
 ### `instruction-images/`
 
-This folder holds the images of the `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` of the project. The images of your `~/.claude/CLAUDE.md` and of the memory index `MEMORY.md` are in `~/.claude/densepack-state/instruction-images/`. See [HOW-IT-WORKS.md](HOW-IT-WORKS.md#what-densepack-changes) for that conversion.
+This folder holds the images of the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of the project. The images of your `~/.claude/CLAUDE.md` and of the memory index `MEMORY.md` are in `~/.claude/densepack-state/instruction-images/`. See [HOW-IT-WORKS.md](HOW-IT-WORKS.md#what-densepack-changes) for that conversion.
 
-`/mdpack <folder>` converts the `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` of another folder.
+`/bakpack <folder>` converts the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of another folder.
 
 - It writes their images to the `instruction-images/` folder in the vault of that folder and writes a `.gitignore` in that vault.
 - `/dense-remove` restores these files and deletes their images.
@@ -268,7 +268,7 @@ DensePack uses the model name for these things.
 | `~/.claude/densepack-state/` | It holds the key that seals the image records and the queue records. It also holds the list of converted instruction files and the images of your own `CLAUDE.md` and memory index. The files `python-path` and `python-path-win` hold the path of the Python that the hooks start. Session start writes each path first to a part file, such as `python-path.<number>`, and then renames the part file. When the rename fails, the part file stays here, and you can delete it. The plugin writes no style file. When you write a style file here, `projects/<hash>/style.json`, DensePack reads it and uses it in place of the default settings. The images then differ from the images in [BENCHMARKS.md](BENCHMARKS.md). |
 | `~/.claude/plugins/data/densepack-densepack-marketplace/`, the data folder of the plugin | It holds the savings table of the last session in `projects/<hash>/`. It holds Pillow, freetype-py and NumPy in `pylibs/` when your Python does not have them, and the hooks and the slash commands load them from there. It holds the file `python-install-tried` when session start found no Python 3.10 or newer. On Windows, this file stops a second winget install, and when you delete it, the next session start tries winget again. On macOS and Linux, when you delete it, the next session start shows the install command again. Without this folder, the savings table goes to `~/.claude/densepack-state/projects/<hash>/`, and `python-install-tried` goes to `~/.densepack/` or `%LOCALAPPDATA%\densepack\`. |
 | `~/.claude/settings.json` | It holds `CLAUDE_CODE_THRIFTY_SONIC` set to `0` in the `env` block. Session start adds this value when the `env` block does not have it, and it does not change values that you set. The value stops the message that tells Claude to read files with Bash in auto mode and `bypassPermissions` mode. |
-| `~/.claude/CLAUDE.md` and the `MEMORY.md` of each project in `~/.claude/projects/` | When DensePack converts the file, it replaces the file with a pointer to the images and keeps the original text beside it in `<name>.densepack.bak`. DensePack renames an older `.bak` to `<name>.densepack.bak.old-N`. |
+| `~/.claude/CLAUDE.md` and the `MEMORY.md` of each project in `~/.claude/projects/` | When DensePack converts the file, it replaces the file with a pointer to the images and keeps the original text beside it in `<name>.bakpack`. DensePack renames an older `.bak` to `<name>.bakpack.old-N`. |
 | `~/.claude/plugins/cache/densepack-marketplace/densepack/<version>/` | It holds the plugin. |
 | Your system temp folder | It holds the copy of a file for a Read in a `densepack-stage-*` folder. It also holds the work folders `densepack-bashimg-*`, `densepack-bashsmall-*`, `densepack-plan-*`, `densepack-widths-*` and `densepack-warm-*`, and the job files `densepack-pack-*`, `densepack-plan-*`, `densepack-trial-*` and `densepack-prepack-*`. Each pack deletes its folders when it ends and its job file when it reads it. Session start deletes the `densepack-stage-*` folders that are older than one hour. |
 

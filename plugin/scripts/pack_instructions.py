@@ -8,7 +8,7 @@ Each file becomes three parts. The pointer and the .bak stay side by side,
 and the images go into the images folder of that file.
 
     CLAUDE.md                  a short pointer, the only text Claude Code loads
-    CLAUDE.md.densepack.bak    the original text, byte for byte, which Claude
+    CLAUDE.md.bakpack          the original text, byte for byte, which Claude
                                Code never loads because of its name
     <images folder>/<label>-image-N-of-M-DensePack.png
                                the text packed as images, which the pointer
@@ -27,7 +27,7 @@ At each session start, for each file:
   MEMORY.md, and you can add a rule to CLAUDE.md.
 - A .bak that changed. The code packs the images again.
 - A file that is not a pointer. It is the new original. The code keeps an
-  older .bak as .densepack.bak.old-N and converts the file.
+  older .bakpack as .bakpack.old-N and converts the file.
 - A file whose images cost more than its text, with the pointer counted. It
   stays text, and the code restores the original in place of a pointer.
 
@@ -49,7 +49,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 OPEN = "<!-- densepack-pointer: DensePack wrote this block -->"
 CLOSE = "<!-- /densepack-pointer -->"
-BAK = ".densepack.bak"
+BAK = ".bakpack"
+# The name of the backup in DensePack 1.3.3 and earlier. bak_path() moves an
+# old backup to the new name the first time it finds one.
+OLD_BAK = ".densepack.bak"
+# The files that /bakpack and session start pack in each folder, relative to
+# the folder. The "bakpack_files" list in .claude/tmp/densepack-settings.json
+# of a folder replaces this list for that folder.
+DEFAULT_FILES = ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md", "AGENTS.md",
+                 ".claude/rules/*.md"]
+# The image labels of DensePack 1.3.3, which the code keeps.
+OLD_LABELS = {"CLAUDE.md": "project-CLAUDE.md",
+              ".claude/CLAUDE.md": "project-dot-claude-CLAUDE.md",
+              "CLAUDE.local.md": "project-CLAUDE.local.md"}
 IMAGE_NAME = re.compile(r"-image-\d+-of-\d+-DensePack\.png$")
 PRIVATE_MARKS = ("\ue000", "\ue001", "\ue002", "\ue003")
 
@@ -106,15 +118,61 @@ def targets(event):
     return found
 
 
+def bakpack_files(project):
+    """Return the file patterns that DensePack packs in `project`: the
+    "bakpack_files" list in .claude/tmp/densepack-settings.json of that
+    folder, or DEFAULT_FILES."""
+    try:
+        data = json.loads((project / ".claude" / "tmp" / "densepack-settings.json")
+                          .read_text(encoding="utf-8"))
+        found = data.get("bakpack_files") if isinstance(data, dict) else None
+        if isinstance(found, list) and all(isinstance(p, str) for p in found):
+            return found
+    except (OSError, ValueError):
+        pass
+    return list(DEFAULT_FILES)
+
+
 def folder_targets(project):
-    """Return the three project instruction files of one folder."""
+    """Return the instruction files of one folder that bakpack_files() names
+    and that exist. Claude Code loads AGENTS.md only when the folder has no
+    CLAUDE.md. A pack of AGENTS.md beside a CLAUDE.md saves nothing, and the
+    code then leaves it."""
     images = project / ".claude" / "densepack-vault" / "instruction-images"
-    return [
-        (project / "CLAUDE.md", "project-CLAUDE.md", "this project's CLAUDE.md", images),
-        (project / ".claude" / "CLAUDE.md", "project-dot-claude-CLAUDE.md",
-         "this project's .claude/CLAUDE.md", images),
-        (project / "CLAUDE.local.md", "project-CLAUDE.local.md", "this project's CLAUDE.local.md", images),
-    ]
+    found, seen = [], set()
+    for pattern in bakpack_files(project):
+        rel = pattern.replace("\\", "/").strip("/")
+        if not rel or ".." in rel.split("/"):
+            continue
+        paths = sorted(project.glob(rel)) if any(c in rel for c in "*?[") else [project / rel]
+        for path in paths:
+            if path in seen or path.name.endswith((BAK, OLD_BAK)):
+                continue
+            seen.add(path)
+            name = path.relative_to(project).as_posix()
+            if name == "AGENTS.md" and (project / "CLAUDE.md").exists():
+                continue
+            label = OLD_LABELS.get(name) or "project-" + name.replace(".claude/", "dot-claude-").replace("/", "-")
+            found.append((path, label, "this project's %s" % name, images))
+    return found
+
+
+def restore_folder(folder):
+    """Restore each packed instruction file of one folder, for /bakoff.
+    Returns the restored file names."""
+    project = str(Path(folder).resolve())
+    state = load_state()
+    done = []
+    for name in list(state):
+        if name == project or not name.startswith(project.rstrip(os.sep) + os.sep):
+            continue
+        try:
+            if restore(Path(name), state):
+                done.append(name)
+        except Exception as exc:  # noqa: BLE001
+            print("Could not restore %s: %s" % (name, exc))
+    save_state(state)
+    return done
 
 
 def convert_folder(folder, reader="opus"):
@@ -144,13 +202,42 @@ def convert_folder(folder, reader="opus"):
     return log
 
 
+def bak_path(path):
+    """Return the backup of `path`. An old .densepack.bak moves to the new
+    name when no .bakpack exists."""
+    bak = path.with_name(path.name + BAK)
+    old = path.with_name(path.name + OLD_BAK)
+    if not bak.exists() and old.is_file():
+        try:
+            os.replace(str(old), str(bak))
+        except OSError:
+            return old
+    return bak
+
+
+def frontmatter(text):
+    """Return the YAML block at the top of `text`, or "". A rules file keeps
+    its block above the pointer, because Claude Code reads its paths."""
+    if not text.startswith("---"):
+        return ""
+    end = text.find("\n---", 3)
+    if end < 0:
+        return ""
+    stop = text.find("\n", end + 4)
+    return text[:len(text) if stop < 0 else stop + 1]
+
+
 def split_pointer(text):
-    """Return (is a pointer, text outside the pointer block)."""
+    """Return (is a pointer, text outside the pointer block). The YAML block
+    that convert_one() copies above the pointer does not count as added
+    text."""
     start = text.find(OPEN)
     end = text.find(CLOSE)
     if start < 0 or end < start:
         return False, text
-    outside = text[:start] + text[end + len(CLOSE):]
+    head = text[:start]
+    block = frontmatter(head)
+    outside = head[len(block):] + text[end + len(CLOSE):]
     return True, outside.strip("\r\n \t")
 
 
@@ -224,7 +311,7 @@ def keep_old_bak(bak):
 def restore(path, state):
     """Restore one original from its .bak, with the text added below the pointer."""
     from common import write_text_atomic
-    bak = path.with_name(path.name + BAK)
+    bak = bak_path(path)
     entry = state.pop(str(path), None)
     try:
         current = read(path)
@@ -251,7 +338,7 @@ def convert_one(path, label, what, folder, reader, state):
     from common import write_text_atomic
     if not path.is_file():
         return "absent"
-    bak = path.with_name(path.name + BAK)
+    bak = bak_path(path)
     current = read(path)
     is_pointer, added = split_pointer(current)
     if is_pointer:
@@ -278,7 +365,7 @@ def convert_one(path, label, what, folder, reader, state):
         cost = entry.get("cost", 0)
     else:
         images, cost = draw(plain(original), label, folder, reader)
-    pointer = pointer_text(what, bak, images)
+    pointer = frontmatter(original) + pointer_text(what, bak, images)
     if cost + text_tokens(pointer) >= text_tokens(plain(original)):
         for image in images:
             try:
@@ -312,7 +399,7 @@ def converted_note(log):
     if not names:
         return None
     return ("DensePack converted %s into images behind a short pointer, to save tokens on each call. "
-            "Each original is unchanged beside it as <name>.densepack.bak. A session that starts "
+            "Each original is unchanged beside it as <name>.bakpack. A session that starts "
             "after the conversion loads the pointer and the images. /dense-remove restores the "
             "originals." % ", ".join(names))
 
