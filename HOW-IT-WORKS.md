@@ -544,11 +544,11 @@ Run `/dense-remove` before `/plugin uninstall densepack`, because no hooks run d
 
 DensePack never approves a tool call. No hook returns `allow`. No setting turns on bypassPermissions.
 
-A PreToolUse hook can change a tool call before it runs. Claude Code then checks the permission of the changed call, not of the call that the agent made. For that reason DensePack changes a call before it runs only in the modes that ask before no Read.
+A PreToolUse hook can change a tool call before it runs. Claude Code then checks the permission of the changed call, not of the call that the agent made. For that reason DensePack changes a call before it runs only in auto and bypassPermissions mode.
 
 | Mode | What DensePack does |
 | --- | --- |
-| `auto`, `bypassPermissions` | It works as in earlier versions. |
+| `auto`, `bypassPermissions` | Hooks can change a call before it runs, except a call to a tool that an `ask` rule names. |
 | `default`, `acceptEdits`, `plan`, `dontAsk`, or no mode | No hook changes a call before it runs. `brief_pack.py` and `read_gate.py` leave the call as the agent wrote it. |
 | Any mode with an `ask` rule for the tool | No hook changes a call to that tool before it runs. Any `ask` rule for Read in a settings file counts, whatever path it names. |
 

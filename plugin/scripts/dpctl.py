@@ -150,30 +150,12 @@ Only /dense-off stops them all.
 | /bakoff <folder> | Restores the originals of that folder from their .bakpack copies and deletes their images | Sets nothing |
 | /maxpack | Sonnet gets images too | YES |
 | /max-off | Sonnet gets plain text | No |
-| /stylepack | DensePack checks each Write and Edit against the writing rules | No |
-| /stylepack-off | No writing rule check | YES |
-| /dashboard | Opens the live page with the bill, each pack and each agent, per conversation | Sets nothing |
 | /helppack | Nothing. Prints this table | Sets nothing |
-| /setpack | Takes a verb and a value and sets that one thing | Sets nothing on its own |
 
 Every other setting is one /setpack argument, and needs no command of its
 own. DensePack saves the last receipt table in
 .claude/tmp/densepack-receipt-last.md. A look at it costs the conversation
 nothing.
-
-| /setpack argument | What it sets | Is this the default |
-| --- | --- | --- |
-| receipts default | One 6 column receipt table per batch, always ending in a BATCH TOTALS row | No |
-| receipts verbose | The arithmetic split into columns, plus image sizes | No |
-| receipts light | The compact 6 column table, no totals row of any kind, ever | No |
-| receipts quiet | No receipt table in the reply. DensePack saves the last table in .claude/tmp/densepack-receipt-last.md | YES |
-| totals on | A CONVERSATION TOTALS row under each table too, below BATCH TOTALS | No |
-| totals off | CONVERSATION TOTALS only in the wrap-up | No |
-| totals auto | The row follows the receipt mode, wrap-up only in default, each table in verbose | YES |
-| keep both | DensePack keeps copies of images and report text | YES |
-| keep off | No copies kept | No |
-| agents | Nothing. Prints the agents that started in this session and their models | Sets nothing |
-| vault | Nothing. Lists the vault, or sets its cap in megabytes | Sets nothing |
 
 The reader setting is the one setting that belongs to a single
 conversation. Run dpctl.py reader inside the conversation that it is for.
