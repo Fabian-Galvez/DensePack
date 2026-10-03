@@ -196,25 +196,27 @@ DensePack saves the most in long conversations that read many files, for example
 
 ## Instruction files
 
-Claude Code sends each loaded instruction file again with each request to the model. A packed file costs its images, which use about half the tokens of its text.
+Claude Code loads instruction files at session start and sends them again with each request to the model. DensePack packs them into images, which use about half the tokens of the text.
 
-| File | When Claude Code loads it | DensePack 1.3.4 |
+> **Look at the files of a folder before you run `/bakpack <folder>`.** It converts each of these files that exists in the folder: `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md`. Session start converts the same files in the folder of the session.
+
+| File | When Claude Code loads it | What DensePack does |
 | --- | --- | --- |
-| `CLAUDE.md` in the folder of the session | At session start | Packs it |
-| `CLAUDE.md` in a parent folder | At session start | Packs it after `/bakpack <parent folder>`. The images are outside the folder of the session, so in manual mode the agent asks before it reads them. |
+| `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in the folder of the session | At session start | Packs it |
 | `.claude/rules/*.md` | At session start | Packs it |
-| `CLAUDE.md` in a subfolder | When the agent reads a file in that subfolder | Packs it after `/bakpack <subfolder>` |
-| `AGENTS.md` beside a `CLAUDE.md` | Never | Leaves it |
 | `AGENTS.md` with no `CLAUDE.md` | At session start | Packs it |
+| `AGENTS.md` beside a `CLAUDE.md` | Never | Leaves it as text |
+| `CLAUDE.md` in a parent folder | At session start | Leaves it as text |
+| `CLAUDE.md` in a subfolder | When the agent reads a file in that subfolder | Leaves it as text |
 | An edit of `CLAUDE.md` during a session | At the next session start | Packs it at the next session start |
 
 <sub>Tested on Claude Code 2.1.288 with Haiku 4.5, on Linux.</sub>
 
-- Claude Code loads these files only at the times in the table. A pack at session start helps only the next session.
-- `/bakpack <folder>` packs a folder from a session in another folder. The first session in the packed folder then reads the images.
-- `/bakoff <folder>` restores the original files of one folder.
-- Other tools, such as Codex and Cursor, also read `AGENTS.md`. They get the pointer and not the text.
-- To choose the files that DensePack packs in a folder, put a `"bakpack_files"` list, such as `["CLAUDE.md"]`, in `.claude/tmp/densepack-settings.json` of that folder.
+- A pack at session start helps only the next session. Run `/bakpack <folder>` from a session in another folder, and the first session in that folder reads the images.
+- Run `/bakoff <folder>` to restore the original files of one folder. DensePack stays installed.
+- Other tools, such as Codex and Cursor, also read `AGENTS.md`. After a pack, they get the pointer and not the text.
+- Do not run `/bakpack` on a parent folder of your projects. Sessions in its subfolders then get images outside their folder, and in manual mode the agent asks before it reads them.
+- Open `.claude/tmp/densepack-settings.json` in a folder, and set `"bakpack_files"` to the files that DensePack can pack there, for example `["CLAUDE.md"]`.
 <br>
 
 ---
