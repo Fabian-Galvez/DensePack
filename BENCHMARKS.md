@@ -1,6 +1,6 @@
 # DensePack benchmarks
 
-Each bench gives the same task to the same model two times, one time with DensePack and one time without it. The price of each run is the amount that Anthropic bills for the whole conversation.
+Each bench runs the same task on the same model twice, once with DensePack and once without it. The price of a run is what Anthropic bills for the whole conversation.
 
 <br>
 
@@ -17,7 +17,7 @@ The three tasks below use the same setup.
 - Each pair has one run with DensePack and one run without it.
 - The runs used Opus 5.5 and Claude Code 2.1.284 in WSL2 and ran one session at a time.
 - All DensePack runs passed with a score of 1.00.
-- The suite is part of the plugin in [plugin/evals/](plugin/evals/), and you can run it again.
+- The suite is part of the plugin in [plugin/evals/](plugin/evals/). You can run it again.
 
 ![The mean price of the DensePack runs as a share of the runs without it, for the three benches](images/savings-benchmarks.svg)
 
@@ -43,7 +43,7 @@ Images do not make the output smaller.
 
 ### The architecture doc
 
-The agent reads 14 hook scripts, about 8,700 lines, and outputs ARCHITECTURE.md.
+The agent reads 14 hook scripts, about 8,700 lines, and writes ARCHITECTURE.md.
 
 - The doc has one entry for each script with its hook event, its function and the scripts that it imports.
 - 18 regex checks grade the doc.
@@ -77,7 +77,7 @@ The agent reads five whole scripts, 5,586 lines in total, and writes a 5-line su
 | 4 | $0.6215, 4 turns, 69 s | $0.9979, 4 turns, 32 s | 37.7% saving |
 | 5 | $0.6243, 4 turns, 72 s | $1.0058, 4 turns, 34 s | 37.9% saving |
 
-All runs read the five files and took 4 turns, and all summaries passed the six checks.
+All runs read the five files and took 4 turns. All summaries passed the six checks.
 
 | Tokens | With DensePack | Without DensePack |
 | --- | --- | --- |
@@ -96,10 +96,10 @@ claude plugin eval ./plugin --tag bench --runs 5 --scaffold --allow-tools Bash W
 
 - `--scaffold` runs the `setup.sh` of each case, which copies the frozen scripts into the empty workspace.
 - `--allow-tools Bash Write Edit` grants the tools that the tasks need.
-- `-j 1` runs one session at a time. Each DensePack session uses several processes to pack the 28 scripts, and on a computer with 8 GB for WSL, two of these sessions at the same time caused the eval to lose runs.
-- The first run asks you to trust the `plugin` folder because the eval runs the hooks of the plugin and the `setup.sh` of each case on your computer. Claude Code asks for this trust separately for each folder, and trust in an installed copy of DensePack does not apply to this folder. In a script or in CI, add `--trust-plugin` to the command to trust the folder.
+- `-j 1` runs one session at a time. Each DensePack session uses several processes to pack the 28 scripts. On a computer with 8 GB for WSL, two sessions at the same time caused the eval to lose runs.
+- The first run asks you to trust the `plugin` folder. The eval runs the hooks of the plugin and the `setup.sh` of each case on your computer. Claude Code asks for trust separately for each folder. Trust in an installed copy of DensePack does not apply to this folder. In a script or in CI, add `--trust-plugin` to the command.
 
-The report lists the score and the price of each run with and without DensePack. Because prices change from run to run, compare each pair and run each task 5 or more times with and without DensePack.
+The report lists the score and the price of each run with and without DensePack. Prices change from run to run. Compare each pair, and run each task 5 or more times with and without DensePack.
 
 <br>
 
@@ -135,7 +135,7 @@ The same `claude plugin eval` command ran 15 short tasks on Opus 5.5.
 | Copy 6 lines of a Python file exactly | $0.1082, $0.1064, $0.0976, $0.0915, $0.0992 | $0.0833, $0.0827, $0.0831, $0.0839, $0.0828 |
 | Copy an HTML file with one change | $0.1108, $0.1093, $0.1087, $0.3128, $0.1217 | $0.1077, $0.1114, $0.1096, $0.1177, $0.1104 |
 
-DensePack sends text as an image only when it estimates that the image costs fewer tokens than the text. It packs the files that the agent Reads, Bash output of 400 characters or more, Word files, the CLAUDE.md, CLAUDE.local.md and MEMORY.md files, and the briefs and reports of subagents. The saving grows with the length of that text.
+DensePack sends text as an image only when it estimates that the image costs fewer tokens than the text. It packs the files that the agent Reads, Bash output of 400 characters or more, Word files, instruction files such as CLAUDE.md, AGENTS.md and MEMORY.md, and the briefs and reports of subagents. The saving grows with the length of that text.
 
 The runs in the task on the Python file of 94 KB had these results.
 
@@ -150,31 +150,31 @@ The extra cost occurs in seven short tasks.
 - In the task that copies 6 lines of a Python file and in the task that finds 2 values in the Python file of 116 lines, each run with DensePack cost more than each run without it.
 - In the tasks that find 3 values in a Markdown file, copy a GDScript function, copy an HTML file, rename a function and list each call of a function, the prices of the runs with DensePack and without it overlap.
 - Each of these seven tasks needs only 6 lines, 2 or 3 values, 17 lines, one button, one rename or one list of calls.
-- These tasks end after 2 to 7 turns, and five of them work on one file of 25 to 222 lines.
+- These tasks end after 2 to 7 turns. Five of them work on one file of 25 to 222 lines.
 
 The extra cost has three causes.
 
-- **The session note.** The note adds 569 tokens to the first turn of each session.
-  - On Opus 5.5, the note costs $0.0046 in the first turn and $0.0001 in each later turn.
-  - In six runs with DensePack, the agent took the same steps as in the runs without it, and DensePack added only its note. These are run 3 of the task that lists calls, run 3 of the rename, runs 2 and 5 of the GDScript copy, run 5 of the HTML copy and run 4 of the 6-line copy.
+- **The session note.** In these runs, the note added 569 tokens to the first turn of each session.
+  - On Opus 5.5, the note cost $0.0046 in the first turn and $0.0001 in each later turn. The note of DensePack 1.3.4 adds 603 tokens.
+  - In six runs with DensePack, the agent took the same steps as in the runs without it. DensePack added only its note. These are run 3 of the task that lists calls, run 3 of the rename, runs 2 and 5 of the GDScript copy, run 5 of the HTML copy and run 4 of the 6-line copy.
 - **Extra steps with DensePack.** Some runs with DensePack took extra steps.
-  - In the task that copies 6 lines of a Python file, 4 of the 5 runs with DensePack read 10 or 20 lines with the Read tool, and each run without DensePack used one `sed` command. Those Reads saved nothing, because DensePack keeps Reads of 20 lines or fewer as text.
+  - In the task that copies 6 lines of a Python file, 4 of the 5 runs with DensePack read 10 or 20 lines with the Read tool. Each run without DensePack used one `sed` command. Those Reads saved nothing, because DensePack keeps Reads of 20 lines or fewer as text.
   - In the task that lists each call of a function, runs 1 and 2 with DensePack printed code ranges with `sed`.
   - In the task that finds 2 values in the Python file of 116 lines, each run with DensePack read the image and then ran `grep` for the 2 values. That check added one turn and about $0.0065 to each run.
 - **Causes outside DensePack.** Some runs with DensePack cost more for reasons outside DensePack.
-  - In the HTML task, Claude Code denied the `sed` and `cp` commands of run 4 with DensePack, and the agent wrote the whole file with Write. That run cost $0.3128.
+  - In the HTML task, Claude Code denied the `sed` and `cp` commands of run 4 with DensePack. The agent wrote the whole file with Write. That run cost $0.3128.
   - In the rename task, run 4 with DensePack deleted the `__pycache__` folder that its own `py_compile` check made.
-  - In the Markdown task, runs 1, 4 and 5 with DensePack searched the DensePack code, because the Markdown file contains a statement that it is out of date, and the runs without DensePack searched only the task folder.
+  - In the Markdown task, runs 1, 4 and 5 with DensePack searched the DensePack code, because the Markdown file says that it is out of date. The runs without DensePack searched only the task folder.
 
 ### Bug hunts and edits, 29 September 2026
 
-DensePack can cost more when the agent hunts a subtle bug or makes many Edits. The model writes more output when it reasons over code in images, and Anthropic bills output at 5x the input price.
+DensePack can cost more when the agent hunts a subtle bug or makes many Edits. The model writes more output when it works on code in images. Anthropic bills output at 5x the input price.
 
 - In a bug hunt of one Python file of 587 lines, all 10 runs found the bug.
   - The 5 runs with DensePack wrote 6,844 to 10,762 output tokens and cost $0.3072 to $0.3972.
   - The 5 runs without it wrote 3,669 to 5,833 output tokens and cost $0.2561 to $0.3454.
   - At a text size of 24 px in place of 17 px, the runs with DensePack still wrote 4,388 to 8,615 output tokens.
-- In a pre-release review of 10 hook scripts with 3 planted bugs, the runs with DensePack wrote 19,743 to 35,550 output tokens, and the runs without it wrote 11,848 to 17,046. The runs with DensePack cost more in 5 of the 10 pairs from two batches of 5 runs.
+- In a pre-release review of 10 hook scripts with 3 planted bugs, the runs with DensePack wrote 19,743 to 35,550 output tokens. The runs without it wrote 11,848 to 17,046. The runs with DensePack cost more in 5 of the 10 pairs from two batches of 5 runs.
 - Edits can fail when the agent copies a block of several lines from an image and puts a line break in the wrong place.
   - In five bug-fix and feature tasks, 12 of 103 lines that Opus 5.5 copied from images into Edits were wrong, and 0 of 44 lines that it copied from text were wrong.
   - The session note now tells the agent to Read the lines it will change as text before an Edit.
@@ -187,7 +187,7 @@ DensePack can cost more when the agent hunts a subtle bug or makes many Edits. T
 
 ## Accuracy
 
-Sonnet 5.5 answered 15 of 15 questions from images at high effort and 15 of 15 at medium effort, and Opus 5.5 had the same result.
+Sonnet 5.5 answered 15 of 15 questions from images at high effort and 15 of 15 at medium effort. Opus 5.5 had the same result.
 
 ### Python rebuild, 28 September 2026
 
@@ -200,9 +200,9 @@ The model reads the Python script of the [byte identical rebuild](#file-rebuilds
 | Character match | 98.8% to 100% | 98.5% to 100% |
 
 - The `difflib` module of Python measures the character match, which is the similarity of the new file to the source file.
-- In the runs that have each word right but are not byte identical, the only differences are line breaks that moved inside the docstring at the top of the file.
-- In one Sonnet 5.5 run, the model changed the words of one `print` line. In another run, it put the end of a comment on a new line without its `#`, and that line is a syntax error.
-- In one more Sonnet 5.5 run at high effort, the only error is a line that ends 2 words early, and the character match is 99.96%.
+- Some runs have each word right but are not byte identical. Their only differences are line breaks that moved inside the docstring at the top of the file.
+- In one Sonnet 5.5 run, the model changed the words of one `print` line. In another run, it put the end of a comment on a new line without its `#`. That line is a syntax error.
+- In one more Sonnet 5.5 run at high effort, the only error is a line that ends 2 words early. The character match is 99.96%.
 
 For work that copies whole files exactly, type /max-off to send Sonnet text.
 
@@ -256,7 +256,7 @@ In the two misses, the subagent typed "stalled agent" in place of "stalled subag
 
 ### Cost of each action, 28 September 2026
 
-Opus 5.5 ran each action in two `claude -p` sessions, one with DensePack and one without it. Each number is the cache write of the turn after the action, which is the count of tokens that the action added to the conversation.
+Opus 5.5 ran each action in two `claude -p` sessions, one with DensePack and one without it. Each number is the cache write of the turn after the action. It is the count of tokens that the action added to the conversation.
 
 | Action | With DensePack | Without DensePack |
 | --- | --- | --- |
@@ -271,7 +271,7 @@ Opus 5.5 ran each action in two `claude -p` sessions, one with DensePack and one
 | Bash `grep -n`, small output | 334 | 381 |
 | Grep tool | 463 (text) | 389 |
 
-The Grep result stays text in the two runs, and the cause of the 74 extra tokens with DensePack is unknown. One Read of 72 lines and 2,794 characters saved 666 tokens, which is more than the 569 tokens of the session note.
+The Grep result stays text in the two runs. The cause of the 74 extra tokens with DensePack is unknown. One Read of 72 lines and 2,794 characters saved 666 tokens, which is more than the 569 tokens of the session note.
 
 <br>
 
@@ -281,17 +281,17 @@ The Grep result stays text in the two runs, and the cause of the 74 extra tokens
 
 ## How DensePack saves
 
-Claude Code sends your messages, the CLAUDE.md, CLAUDE.local.md and MEMORY.md files, the files that the agent reads, Bash output, and the briefs and reports of subagents to the model as input tokens. Anthropic bills those tokens and writes them to the cache, and each later turn reads them again from the cache.
+Claude Code sends your messages, instruction files such as CLAUDE.md, AGENTS.md and MEMORY.md, the files that the agent reads, Bash output, and the briefs and reports of subagents to the model as input tokens. Anthropic bills those tokens and writes them to the cache. Each later turn reads them again from the cache.
 
-When the agent reads a text file, DensePack packs the file into an image, and the agent gets the image only when DensePack estimates that the image costs fewer tokens than the text. The agent reads and caches the image in place of the text.
+When the agent reads a text file, DensePack packs the file into an image. The agent gets the image only when DensePack estimates that the image costs fewer tokens than the text. The agent reads and caches the image in place of the text.
 
 DensePack keeps these files as text.
 
 - Files of less than 1,000 bytes, files of more than 1,000,000 bytes and files with a null byte stay text.
 - Files stay text when the font has no glyph for more than 2% of their non-space characters, such as files in Chinese, Japanese or Korean.
-- Files in a `.claude` folder or in a folder with sandbox or scratch in its name stay text.
+- Files in a `.claude` folder or in the scratchpad folder of Claude Code stay text.
 
-DensePack does not trim or compress the text, and the image still uses about half the tokens of the text. In the byte identical rebuild, each image uses 49% to 55% fewer tokens than the text of its file.
+DensePack does not trim or compress the text. The image uses about half the tokens of the text. In the byte identical rebuild, each image uses 49% to 55% fewer tokens than the text of its file.
 
 - You pay the cache write one time, on the smaller image.
 - Each later turn reads the smaller cache at the cache read price. That price is 0.1x of the input price on Sonnet 5.5, 0.05x on Opus 5.5 and 0.025x on Fable 5.1.
@@ -337,7 +337,7 @@ Opus 5.5 misreads some kinds of lines in images of Bash output. In a copy of the
 
 On that day, the rule matched a line in 597 of 8,274 Bash outputs of 400 characters or more from real sessions, which is 7%.
 
-In another test, Opus 5.5 typed 33 of 34 packed Bash outputs from the image with each character correct apart from a final newline, and the one miss was a lost space at the end of a row. Opus 5.5 also answered questions that ask for an exact string of packed output.
+In another test, Opus 5.5 typed 33 of 34 packed Bash outputs from the image with each character correct apart from a final newline. The one miss was a lost space at the end of a row. Opus 5.5 also answered questions that ask for an exact string of packed output.
 
 | Input | Questions answered correctly |
 | --- | --- |
@@ -353,10 +353,11 @@ In another test, Opus 5.5 typed 33 of 34 packed Bash outputs from the image with
 
 ### Subagents
 
-- At the start of each session, DensePack sends its session note to the lead when the lead gets images.
+- At the start of each session, DensePack sends its session note to the lead.
 - DensePack also sends the note to each subagent when the subagent starts, except to a Sonnet subagent after /max-off.
-- Haiku subagents get the note too, but their Reads, their Bash output and their briefs stay text.
-- DensePack packs briefs of 1,000 characters or more and subagent reports only when it calculates that the image costs less than the text.
+- Haiku subagents get the note too. Their Reads, their Bash output and their briefs stay text.
+- DensePack packs subagent reports when the image costs less than the text.
+- It packs briefs of 1,000 characters or more the same way, but only in auto and bypassPermissions mode.
 
 The lead opens a packed report with one Read, because the result of the Agent tool cannot carry an image. Read results and Bash results can carry an image.
 
@@ -374,14 +375,14 @@ One test used a hook on the Agent tool.
 
 ### More turns can cost less
 
-Each turn reads the whole conversation again from the cache. Because images cost fewer tokens than their text, each later turn reads a smaller cache, and image runs can take more turns and still cost less.
+Each turn reads the whole conversation again from the cache. Images cost fewer tokens than their text. Each later turn then reads a smaller cache. Image runs can take more turns and still cost less.
 
-In the [code trace](#the-code-trace), 4 of the 5 runs with DensePack took 58 to 78 turns, more than the 45 to 53 turns of their pairs, and those 4 runs still cost less.
+In the [code trace](#the-code-trace), 4 of the 5 runs with DensePack took 58 to 78 turns, more than the 45 to 53 turns of their pairs. Those 4 runs still cost less.
 
 Image runs can also read less than text runs.
 
 - When a file needs more than one image and the stack of those images fits in the largest image that the API does not shrink, a Read of the whole file returns the stack as one image.
-- Otherwise, the Read returns the first image and a note that names the other images, and the model can then open only the images it needs.
+- Otherwise, the Read returns the first image and a note that names the other images. The model can then open only the images it needs.
 - Text runs read each file in full.
 
 <br>
@@ -410,7 +411,7 @@ This example uses these values.
 
 The cache read grows with each message because each message reads all the earlier messages. In this example, DensePack halves each cache write and each cache read after it.
 
-Agents often take more than one turn for one prompt, and each turn adds one more cache read. In the [code trace](#the-code-trace), the runs with DensePack read 4.6 to 6.7 million tokens from the cache, and the runs without it read 7.0 to 10.6 million.
+Agents often take more than one turn for one prompt. Each turn adds one more cache read. In the [code trace](#the-code-trace), the runs with DensePack read 4.6 to 6.7 million tokens from the cache, and the runs without it read 7.0 to 10.6 million.
 
 <br>
 
@@ -432,8 +433,8 @@ Anthropic bills per million tokens (MTok). Each model has its own price.
 
 - The multipliers apply to the base input price. The cache read price is not a part of the 2x cache write price.
 - `cache_creation_input_tokens` are the input tokens that Claude Code writes to the cache. A 1-hour cache write costs 2x the base input price, and a 5-minute cache write costs 1.25x.
-- In the Opus 5.5 runs, Claude Code wrote the main conversation to the 1-hour cache, and in the Sonnet 5.5 subagent runs it wrote the conversation of each subagent to the 5-minute cache.
-- Claude Code sends the whole conversation on each turn, and the cache holds the part that repeats. Anthropic bills that part at the `cache_read_input_tokens` price.
+- In the Opus 5.5 runs, Claude Code wrote the main conversation to the 1-hour cache. In the Sonnet 5.5 subagent runs, it wrote the conversation of each subagent to the 5-minute cache.
+- Claude Code sends the whole conversation on each turn. The cache holds the part that repeats. Anthropic bills that part at the `cache_read_input_tokens` price.
 - Without a cache, Anthropic bills the whole conversation at the base input price on each turn.
 
 <br>
@@ -451,7 +452,7 @@ The text of each image stays on disk.
 - For a Read, that text is the file itself.
 - Command output, Word files and the files of `.claude/densepack-vault/to-pack/` have a text copy, and the key row of the image gives its name after `file=`.
 - The briefs and reports of subagents keep their text in a `.txt` file beside the image.
-- The CLAUDE.md, CLAUDE.local.md and MEMORY.md files keep their text in a `.densepack.bak` file beside them.
+- The CLAUDE.md, CLAUDE.local.md, AGENTS.md, rules and MEMORY.md files keep their text in a `.bakpack` file beside them.
 
 The note that DensePack sends at the start of each session tells the model to use that text only for an exact string that the image cannot give.
 

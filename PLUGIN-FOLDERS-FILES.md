@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.3 -->
+<!-- DensePack 1.3.4 -->
 # DensePack folders and files
 
 This doc lists the folders and working files that the DensePack plugin writes, what they hold and when the plugin writes them.
@@ -11,7 +11,7 @@ DensePack writes files in these places.
 | `<project>/.claude/tmp/` | It holds the working files of the current sessions. |
 | `~/.claude/densepack-state/` and the data folder of the plugin | They hold files outside the project, such as the seal key and the savings table of the last session. |
 | Your system temp folder | It holds the copy of a file while DensePack packs it, and the job files of each pack. |
-| Each `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md` that DensePack converts | DensePack replaces the file with a pointer to the images and keeps the original text beside it in `<name>.densepack.bak`. |
+| Each `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/rules/*.md` and `MEMORY.md` that DensePack converts | DensePack replaces the file with a pointer to the images and keeps the original text beside it in `<name>.bakpack`. |
 | `~/.claude/settings.json` | DensePack sets `CLAUDE_CODE_THRIFTY_SONIC` to `0` in this file. |
 
 DensePack saves all of these files on your computer and sends none of them to a service.
@@ -118,9 +118,9 @@ These steps run inside the same tool call, and the agent uses no extra turn.
 
 ### `instruction-images/`
 
-This folder holds the images of the `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` of the project. The images of your `~/.claude/CLAUDE.md` and of the memory index `MEMORY.md` are in `~/.claude/densepack-state/instruction-images/`. See [HOW-IT-WORKS.md](HOW-IT-WORKS.md#what-densepack-changes) for that conversion.
+This folder holds the images of the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of the project. The images of your `~/.claude/CLAUDE.md` and of the memory index `MEMORY.md` are in `~/.claude/densepack-state/instruction-images/`. See [HOW-IT-WORKS.md](HOW-IT-WORKS.md#what-densepack-changes) for that conversion.
 
-`/mdpack <folder>` converts the `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` of another folder.
+`/bakpack <folder>` converts the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of another folder.
 
 - It writes their images to the `instruction-images/` folder in the vault of that folder and writes a `.gitignore` in that vault.
 - `/dense-remove` restores these files and deletes their images.
@@ -210,7 +210,7 @@ You can delete these files by hand.
 | `densepack-off-<session id>` | It is the off switch of one window. `/dense-off` writes it, and `/densepack` deletes it. |
 | `densepack-queue.jsonl` | It holds the rows of the savings table that `pointer.py` did not show yet. |
 | `densepack-pending.jsonl` and `densepack-delivered.json` | The first file holds the images of packed reports, and the second holds the images that a Read already returned. |
-| `densepack-composite-1.png` | It is one image that holds all waiting report images for one Read. |
+| `densepack-instructions-note.txt`, `densepack-instructions-lock` and `densepack-instructions-job-<pid>.json` | The background pack of the instruction files writes these files at session start. The note holds the names of the converted files. The next session start shows the note and deletes it. |
 | `densepack-delegation.jsonl` and `densepack-card-<session>.jsonl` | They hold one row for each Agent call. |
 | `densepack-agentmodel-agent-<id>` | It holds the model of one subagent. |
 | `densepack-lifecycle.jsonl` | It gets one row when a subagent ends or when the lead stops it. |
@@ -222,7 +222,7 @@ You can delete these files by hand.
 | `densepack-word-<12 hex>.docx` or `.doc` | DensePack copies a Word file here and packs this copy. It does this when your message or a tool result names the Word file, or when the Word file is in a folder that your message names. The 12 hex characters come from a hash of the path of the Word file. |
 | `densepack-reply-<agent id>.txt` | DensePack writes the subagent report to this file when a pack saves too little and the report stays text. |
 | `densepack-report-swap-<agent id>.json` and `densepack-report-background-<agent id>` | The first file holds the line that replaces the report of a subagent in the Agent result, and the second file marks a background subagent. |
-| `densepack-sourcewhy-<session>` | DensePack writes this file after `source_gate.py` sends the reason for a changed command in this session. Only `/dense-remove` deletes it. |
+| `densepack-sourcewhy-<session>` | DensePack writes this file after `source_gate.py` sends the reason for a blocked command in this session. Only `/dense-remove` deletes it. |
 | `densepack-rangeonce-<session>-<hash>` | DensePack writes this file after `source_gate.py` checks one `sed -n` range of this report or brief text in this session. Later ranges of the same text run as written. Only `/dense-remove` deletes it. |
 
 At session start, `bootstrap.py` deletes the files in this folder that are older than 24 hours and whose names start with these parts.
@@ -248,7 +248,7 @@ DensePack uses the model name for these things.
 - Fable, Opus and Sonnet get images.
 - Haiku and all other models get the files that they Read, their command output, their briefs and the reports that they receive as plain text. Haiku 4.5 with no earlier context read 1 of 10 packed reports correctly.
 - Some Word files get images for all models when the images cost less than the text. These are the Word files that your message names, the Word files in a folder that your message names by its full path, and the Word files that a Glob, Grep, Bash or LS result names.
-- Main sessions whose model DensePack did not record yet get images, the same as Opus. Subagents whose model DensePack cannot find get the files that they read and their Bash output as text.
+- Main sessions whose model DensePack does not know get text. DensePack reads the newest model from the transcript. Claude Code writes the model there before the first tool call and after a `/model` change. Subagents whose model DensePack cannot find get the files that they read and their Bash output as text.
 - `/maxpack` and `/max-off` apply to Sonnet only. DensePack checks the model name to find Sonnet.
 - Only Sonnet has a limit on the files of one turn. See the note at the end of this file.
 - `report_pack_worth()` in `common.py` uses the dollar rates of the lead model, and for a background subagent also the rates of the subagent model, to decide whether a report packs.
@@ -268,13 +268,13 @@ DensePack uses the model name for these things.
 | `~/.claude/densepack-state/` | It holds the key that seals the image records and the queue records. It also holds the list of converted instruction files and the images of your own `CLAUDE.md` and memory index. The files `python-path` and `python-path-win` hold the path of the Python that the hooks start. Session start writes each path first to a part file, such as `python-path.<number>`, and then renames the part file. When the rename fails, the part file stays here, and you can delete it. The plugin writes no style file. When you write a style file here, `projects/<hash>/style.json`, DensePack reads it and uses it in place of the default settings. The images then differ from the images in [BENCHMARKS.md](BENCHMARKS.md). |
 | `~/.claude/plugins/data/densepack-densepack-marketplace/`, the data folder of the plugin | It holds the savings table of the last session in `projects/<hash>/`. It holds Pillow, freetype-py and NumPy in `pylibs/` when your Python does not have them, and the hooks and the slash commands load them from there. It holds the file `python-install-tried` when session start found no Python 3.10 or newer. On Windows, this file stops a second winget install, and when you delete it, the next session start tries winget again. On macOS and Linux, when you delete it, the next session start shows the install command again. Without this folder, the savings table goes to `~/.claude/densepack-state/projects/<hash>/`, and `python-install-tried` goes to `~/.densepack/` or `%LOCALAPPDATA%\densepack\`. |
 | `~/.claude/settings.json` | It holds `CLAUDE_CODE_THRIFTY_SONIC` set to `0` in the `env` block. Session start adds this value when the `env` block does not have it, and it does not change values that you set. The value stops the message that tells Claude to read files with Bash in auto mode and `bypassPermissions` mode. |
-| `~/.claude/CLAUDE.md` and the `MEMORY.md` of each project in `~/.claude/projects/` | When DensePack converts the file, it replaces the file with a pointer to the images and keeps the original text beside it in `<name>.densepack.bak`. DensePack renames an older `.bak` to `<name>.densepack.bak.old-N`. |
+| `~/.claude/CLAUDE.md` and the `MEMORY.md` of each project in `~/.claude/projects/` | When DensePack converts the file, it replaces the file with a pointer to the images and keeps the original text beside it in `<name>.bakpack`. DensePack renames an older `.bakpack` to `<name>.bakpack.old-N`. |
 | `~/.claude/plugins/cache/densepack-marketplace/densepack/<version>/` | It holds the plugin. |
 | Your system temp folder | It holds the copy of a file for a Read in a `densepack-stage-*` folder. It also holds the work folders `densepack-bashimg-*`, `densepack-bashsmall-*`, `densepack-plan-*`, `densepack-widths-*` and `densepack-warm-*`, and the job files `densepack-pack-*`, `densepack-plan-*`, `densepack-trial-*` and `densepack-prepack-*`. Each pack deletes its folders when it ends and its job file when it reads it. Session start deletes the `densepack-stage-*` folders that are older than one hour. |
 
 <sub>Run `/dense-remove` before you uninstall. The command makes these changes.</sub>
 
-- <sub>It restores the original text of each converted `CLAUDE.md`, `CLAUDE.local.md` and `MEMORY.md`.</sub>
+- <sub>It restores the original text of each converted instruction file.</sub>
 - <sub>It deletes `~/.claude/densepack-cards/`, `~/.claude/densepack-state/`, and the vault and the `densepack-` and `.densepack-` files in `.claude/tmp/` of each project folder that a conversation file in `~/.claude/projects/` names.</sub>
 - <sub>It also deletes `~/.densepack`, the `python-install-tried` file in `%LOCALAPPDATA%\densepack` and the `densepack-trial-*.pkl` files in your temp folder.</sub>
 - <sub>It deletes `~/.claude/densepack-tracker.json`, which only versions before DensePack 1.0 wrote.</sub>
@@ -295,8 +295,8 @@ DensePack uses the model name for these things.
 | --- | --- |
 | You Read a file of 1,000 bytes or more | The file arrives as images when the images and the note cost less than the text. When the file needs more than one image, the result holds image 1, and a note names the others. Reads with a `limit` of 20 lines or fewer stay text. |
 | You run a command that prints 400 characters or more | The output arrives as images when the images and the exact lines cost less than the text. The result holds the first image, and a note names the others. DensePack puts some lines beside the image as exact text. These are lines with a `git --stat` bar, a `pip list` rule, a number of 18 or more digits or a random ID with a capital I or a small l. Lines of only spaces or tabs, and lines with a tab inside the line, also go beside the image. The tab after a line number does not count. Only the output of the Bash tool packs, and the output of the PowerShell tool stays text. |
-| You run a command that prints the text of a packed report or brief in `.claude/tmp/` | The command prints a line that names the image in place of the text. The command runs as written when it prints one line with `sed -n 'Np'`, when it is the second or a later `sed -n 'N,Mp'` range of the same file in this session, or when it holds the word `DENSEPACK_SOURCE_OK`. DensePack does not change commands that print the text copy of a Bash output in the vault. |
-| You start a subagent with a brief of 1,000 characters or more | The subagent gets a line that names an image of the brief, and it Reads that image. This happens only when the subagent gets images, code blocks fill half of the brief or less, and the saving pays for the extra Read. |
+| You run a command that prints the text of a packed report or brief in `.claude/tmp/` | DensePack blocks the command, and the reason names the image. The command runs as written when it prints one line with `sed -n 'Np'`, when it is the second or a later `sed -n 'N,Mp'` range of the same file in this session, or when it holds the word `DENSEPACK_SOURCE_OK`. DensePack does not block commands that print the text copy of a Bash output in the vault. |
+| You start a subagent with a brief of 1,000 characters or more | The subagent gets a line that names an image of the brief, and it Reads that image. This happens only in auto and bypassPermissions mode, when the subagent gets images, code blocks fill half of the brief or less, and the saving pays for the extra Read. |
 | Subagents start | `subagent_start.py` sends each subagent the session start note. It sends no note when DensePack knows that the subagent gets text, such as Sonnet after `/max-off`. Haiku subagents get the note too, but their Reads, their Bash output and their brief stay text. |
 | Subagents finish their report | The report arrives as an image only when the lead gets images, code blocks fill half of the report or less, and `report_pack_worth()` calculates that the image saves more than the extra Read of the lead costs. Claude Code cannot put an image in the result of the Agent tool, and for that reason the lead gets a line that names the image and then Reads the image. For a background subagent, DensePack also asks the subagent one time to reply with only the line that names the report file, and the saving must pay for that extra turn too. Otherwise the report arrives as text. |
 | You Edit a file that arrived as an image | The Edit works. |
@@ -319,7 +319,7 @@ DensePack uses the model name for these things.
 DensePack never packs these Reads.
 
 - Images, PDFs and notebooks do not pack because Claude Code reads them as images or as structured cells.
-- Files in a `.claude` folder do not pack, and files whose path has `sandbox` or `scratch` in the name of a folder or of the file do not pack. Those folders hold working files and the images of DensePack.
+- Files in a `.claude` folder and files in the scratchpad folder of Claude Code do not pack. Those folders hold working files.
 - Files below 1,000 bytes do not pack because the pack takes time and memory and saves only a few tokens. The pack of a 483-byte file took 2.5 seconds and 469 MB of memory to save 10 tokens.
 - Files over 1,000,000 bytes do not pack because the wait at the first Read grows with the size of the file. The pack of a file of about 300,000 bytes took 14 to 17 seconds.
 - Files with a null byte do not pack because those files are not text.
