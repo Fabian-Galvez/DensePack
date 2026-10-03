@@ -157,7 +157,7 @@ Session start runs when a session starts, and again after a resume, `/clear` or 
 
 The lead also gets one more line, which says that subagents get the same note and tells the lead to write the task of a subagent the same way as without DensePack.
 
-- The lead gets no note when its model gets text, such as Haiku or Sonnet after `/max-off`.
+- Claude Code does not name the model at session start. For this reason, each lead gets the note. The note says that Haiku, and Sonnet after `/max-off`, get text.
 - When Pillow, freetype-py or NumPy is missing, the lead gets a warning in place of the note, in its context and on screen. The warning says that DensePack packs nothing and names the pip command that installs the three libraries.
 - Subagents still get the note then, but their files and command output stay text.
 

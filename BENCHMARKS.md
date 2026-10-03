@@ -356,7 +356,7 @@ In another test, Opus 5.5 typed 33 of 34 packed Bash outputs from the image with
 - At the start of each session, DensePack sends its session note to the lead when the lead gets images.
 - DensePack also sends the note to each subagent when the subagent starts, except to a Sonnet subagent after /max-off.
 - Haiku subagents get the note too, but their Reads, their Bash output and their briefs stay text.
-- DensePack packs briefs of 1,000 characters or more and subagent reports only when it calculates that the image costs less than the text.
+- DensePack packs subagent reports when the image costs less than the text. It packs briefs of 1,000 characters or more the same way, but only in auto and bypassPermissions mode.
 
 The lead opens a packed report with one Read, because the result of the Agent tool cannot carry an image. Read results and Bash results can carry an image.
 

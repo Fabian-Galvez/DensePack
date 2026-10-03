@@ -8,7 +8,7 @@ DensePack packs text into the smallest image that Fable, Opus and Sonnet models 
 <br>
 <strong>Anthropic's <code>claude plugin eval</code> ran three coding tasks on Opus 5.5. DensePack saved 31.8% to 38.3% of the price on average, and all runs passed their checks.</strong><br>
 <br>
-Turns are calls to the model that send the entire conversation that has been written to cache at cache read price.
+Each request to the model reads the whole conversation again from the cache.
 </p>
 
 <p align="center">
@@ -34,6 +34,7 @@ Turns are calls to the model that send the entire conversation that has been wri
 - [Thank you](#thank-you)
 - [Files](#files)
 </details>
+
 <br>
 
 ---
@@ -57,7 +58,6 @@ Turns are calls to the model that send the entire conversation that has been wri
 
 - DensePack 1.3.3 and 1.3.4 send no data off your computer. Claude Code checks `deny` rules before the hooks run.
 - [HOW-IT-WORKS.md](HOW-IT-WORKS.md#permission-modes) explains each permission mode.
-- The tests ran on Linux with 4 Intel Xeon cores at 2.1 GHz and 16 GB RAM. They used Python 3.11 and Claude Code 2.1.288.
 
 <br>
 
@@ -95,6 +95,7 @@ Each bench is one short task in a new session. In longer sessions, each later tu
 | GDScript game code, 222 lines, tabs | 2,790 | 1,430 | 49% | 65 of 100 |
 
 <sub>Most failed runs have a wrong count of spaces or tabs. [BENCHMARKS.md](BENCHMARKS.md#file-rebuilds-25-september-2026) lists the errors.</sub>
+
 <br>
 
 ---
@@ -109,11 +110,12 @@ Each bench is one short task in a new session. In longer sessions, each later tu
 
 | Part | What it does | Who it is for | Where to start |
 | --- | --- | --- | --- |
-| **Plugin** | The plugin packs the files that the agent Reads, Bash output, Word files, `CLAUDE.md` and `MEMORY.md`, and the briefs and reports of subagents inside Claude Code with no extra step.<br><br>Two commands install the plugin. | People who use Claude Code | [Install the plugin](#install-the-plugin) |
+| **Plugin** | The plugin packs the files that the agent Reads, Bash output, Word files, instruction files such as `CLAUDE.md`, and the briefs and reports of subagents.<br><br>Two commands install the plugin. | People who use Claude Code | [Install the plugin](#install-the-plugin) |
 | **Right-click tool** | The right-click tool packs a file from your file manager or your shell on Windows, Linux and macOS.<br><br>On Windows only, it also packs selected text with a hotkey or with the Ctrl+Right-click menu in each application.<br><br>The Windows and Linux installers add Pillow, freetype-py and NumPy to your own Python | People who use an AI chat | [INSTALL.md](INSTALL.md#install-the-right-click-tool) and [tools/Tool-README.md](tools/Tool-README.md) |
 | **HTML app** | The HTML app runs in your browser.<br><br>You paste text, and the image updates while you type.<br>You can download or copy the image. | People who want one image without an install | [Use the HTML app](INSTALL.md#use-the-html-app) and [index.html](index.html) |
 
 [tools/Tool-README.md](tools/Tool-README.md) lists the changes that the right-click tool makes, how to install it without the hotkeys and how to remove it.
+
 <br>
 
 ---
@@ -135,7 +137,6 @@ Each bench is one short task in a new session. In longer sessions, each later tu
 - On macOS and Linux, the plugin prints the command that installs Python.
 - The plugin then installs <strong>Pillow, freetype-py and NumPy</strong> into its own data folder.
 - On Windows, the hooks run through Git Bash, or through PowerShell when the computer has no Git for Windows.
-- The tests ran on Claude Code 2.1.283 and 2.1.284.
 
 | System | Python | Pillow, freetype-py and NumPy |
 | --- | --- | --- |
@@ -162,13 +163,12 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 | `/maxpack` | It sends images to Sonnet and is the default |
 | `/max-off` | It sends text to Sonnet |
 | `/helppack` | It prints all commands |
-| `/dense-remove` | It restores the original text of each converted instruction file and removes `CLAUDE_CODE_THRIFTY_SONIC` when its value is still `0`. It also deletes the trust entry of the marketplace folder in `~/.claude.json` and the DensePack files that `/plugin uninstall` does not delete, except the files that [Remove DensePack](INSTALL.md#remove-densepack) lists as kept. Run it before the uninstall |
+| `/dense-remove` | It restores each converted instruction file and deletes the DensePack files. Run it before the uninstall. [Remove DensePack](INSTALL.md#remove-densepack) has the details |
 | `/bakpack <folder>` | It packs the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of that folder into images. It puts a pointer in each file and keeps the original as `<name>.bakpack`. Run it from a session in another folder. The first session in the packed folder then reads the images and never the text |
 | `/bakoff <folder>` | It restores the original files of that folder from their `.bakpack` copies and deletes their images. DensePack stays installed |
 | <strong>Coming soon</strong> | |
 | `/dashpack` | It shows the saving of each conversation while the conversation runs. It calculates the text price of each image that the agents read and of each later turn that reads the image again |
 
-<br>
 <br>
 
 ---
@@ -187,7 +187,7 @@ DensePack saves the most in long conversations that read many files, for example
   - DensePack sends each file that the agent reads with the Read tool as images when the images cost less than the text, except in the cases that [Limits](#limits) lists.
 
 [INSTALL.md](INSTALL.md#save-the-most) has the numbered steps for a repository with a `CLAUDE.md`, for an audit and for each session.
-<br>
+
 <br>
 
 ---
@@ -210,13 +210,12 @@ Claude Code loads instruction files at session start and sends them again with e
 | `CLAUDE.md` in a subfolder | When the agent reads a file in that subfolder | Leaves it as text |
 | An edit of `CLAUDE.md` during a session | At the next session start | Packs it at the next session start |
 
-<sub>Tested on Claude Code 2.1.288 with Haiku 4.5, on Linux.</sub>
-
 - A pack at session start helps only the next session. Run `/bakpack <folder>` from a session in another folder. The first session in that folder then reads the images.
 - Run `/bakoff <folder>` to restore the original files of one folder. DensePack stays installed.
 - Other tools, such as Codex and Cursor, also read `AGENTS.md`. After a pack, they get the pointer and not the text.
 - Do not run `/bakpack` on a parent folder of your projects. Sessions in its subfolders then get images outside their folder. In manual mode, the agent asks before it reads them.
 - Open `.claude/tmp/densepack-settings.json` in a folder, and set `"bakpack_files"` to the files that DensePack can pack there, for example `["CLAUDE.md"]`.
+
 <br>
 
 ---
@@ -239,7 +238,7 @@ Claude Code loads instruction files at session start and sends them again with e
 | Pillow, freetype-py and NumPy | DensePack installs them into the data folder of the plugin and does not change your own Python |
 
 [HOW-IT-WORKS.md](HOW-IT-WORKS.md#what-densepack-changes) has the full table and the rules to read, edit and share a converted file. [PLUGIN-FOLDERS-FILES.md](PLUGIN-FOLDERS-FILES.md) lists each folder and working file.
-<br>
+
 <br>
 
 ---
@@ -253,7 +252,7 @@ DensePack has four parts.
 | Part | What happens |
 | --- | --- |
 | The swap | The agent calls Read, and the Read runs on the real file. Then `read_image.py` packs the file into an image and puts the image in the result in place of the text, and the model receives the image.<br><br>Bash output of 400 characters or more goes through the same steps. Bash results return one image. When the output needs more than one image, the result holds the first image and a note that names the others. DensePack puts lines that a model can misread beside the image as exact text, for example random IDs that mix capital and small letters and hold a capital I or a small l. DensePack keeps the exact text of each packed output in `.claude/densepack-vault/images/` |
-| The packing | DensePack packs files, Bash output, briefs for subagents and reports from subagents, but only when the plugin calculates that the images cost less than the text.<br><br>DensePack packs briefs only when they have 1,000 characters or more.<br><br>Agents still write their briefs and reports as text, and DensePack replaces that text with images that the receiving agent opens with one Read. [HOW-IT-WORKS.md](HOW-IT-WORKS.md#subagent-images) explains each step |
+| The packing | DensePack packs files, Bash output, briefs for subagents and reports from subagents, but only when the plugin calculates that the images cost less than the text.<br><br>In auto and bypassPermissions mode, DensePack packs briefs of 1,000 characters or more. In other modes, briefs stay text.<br><br>Agents still write their briefs and reports as text, and DensePack replaces that text with images that the receiving agent opens with one Read. [HOW-IT-WORKS.md](HOW-IT-WORKS.md#subagent-images) explains each step |
 | The image | One function, `pack_code()`, packs the text into each image. In the image, a green number starts each line, a red number gives a count of spaces and a `\t` box gives a count of tabs. In files with tab indents, the band color shows the tab count |
 | Exact lines | When an Edit fails after the agent copied its text from an image, a Read of 20 lines or fewer gives the exact lines as text, and the agent sends the Edit again |
 
@@ -261,14 +260,11 @@ DensePack has four parts.
   - All these models get the same image with 17 px characters.
   - Sonnet gets images while `/maxpack` is on, which is the default.
   - Haiku and all other models get text.
-- The lead agent gets a note at session start that explains how to read the images, and a SubagentStart hook sends the same note to each subagent.
-  - Haiku leads get no note, and Sonnet leads and subagents get none after `/max-off`.
-  - Haiku subagents get the note, but their files stay text.
-  - Only the lead agent also gets one line that tells it to write subagent tasks the same way as without DensePack.
+- The lead agent and each subagent get a note that explains how to read the images.
 - DensePack stops Greps that print each line of a file as text when a Read of that file gives images, and it lets all other Greps pass. DensePack also stops Bash reads, such as `cat`, of the text file of a packed report or brief.
 
-[HOW-IT-WORKS.md](HOW-IT-WORKS.md) explains the four parts, the seven slash commands, the hooks and each script.
-<br>
+[HOW-IT-WORKS.md](HOW-IT-WORKS.md) explains the four parts, the slash commands, the hooks and each script.
+
 <br>
 
 ---
@@ -283,11 +279,6 @@ DensePack has four parts.
 
 DensePack also writes the text of each Word file beside its images.
 
-- The text copy holds the exact text of the images, with one line for each paragraph, list item and table row.
-- The key row of each image shows the name of the text copy after `file=`.
-- Word files that your prompt names or that a Glob, Grep or Bash listing shows get a text copy in `.claude/densepack-vault/images/`. DensePack names the text copy after the working copy in `.claude/tmp`, for example `.claude-tmp-densepack_word_8d36c710126a.docx.txt` beside `.claude-tmp-densepack_word_8d36c710126a.docx.txt-image-1-of-3-DensePack.png`.
-- Word files that you copy into `.claude/densepack-vault/to-pack/` get text copies with their own names, for example `report.docx.txt` beside `report.docx.txt-image-1-of-3-DensePack.png` in `to-pack/packed/`.
-
 `.docx` files are ZIP files of XML, and `.doc` files are OLE2 containers. DensePack reads the two formats with the Python standard library and does not need Word.
 
 - The Edit and Write tools of Claude Code do not work on Word files.
@@ -295,7 +286,7 @@ DensePack also writes the text of each Word file beside its images.
 - To change a `.docx`, unzip it, edit `word/document.xml` and zip it again.
 
 [HOW-IT-WORKS.md](HOW-IT-WORKS.md#word-files) has the format table, the three ways that DensePack packs a Word file automatically and the three steps that keep the scan fast.
-<br>
+
 <br>
 
 ---
@@ -304,15 +295,16 @@ DensePack also writes the text of each Word file beside its images.
 
 ## Speed and memory
 
-| Text size | Old renderer | New renderer |
-| --- | --- | --- |
-| 11 KB | 3.2 s, 528 MB, 16 processes | 0.9 s, 55 MB, 1 process |
-| 21 KB | 5.4 s, 630 MB, 15 processes | 1.8 s, 76 MB, 1 process |
-| 228 KB | 29.6 s, 3.3 GB, 16 processes | 8.2 s, 243 MB, 1 process |
+| Text size | Time, memory and processes of one pack |
+| --- | --- |
+| 11 KB | 0.9 s, 55 MB, 1 process |
+| 21 KB | 1.8 s, 76 MB, 1 process |
+| 228 KB | 8.2 s, 243 MB, 1 process |
 
 - When DensePack packs a named folder in the background, it starts one process for each file, up to the number of CPU cores.
 - Files of 60,000 bytes or more also start their own render processes.
 - In one test, the first Bash call took 9.4 s during the background pack and 2.7 s without DensePack.
+
 <br>
 
 ---
@@ -322,11 +314,7 @@ DensePack also writes the text of each Word file beside its images.
 ## Limits
 
 - DensePack sends Haiku text only, because in a test Haiku 4.5 scored 1 of 10 on a packed report and gave wrong numbers with no warning.
-- DensePack packs `.doc` and `.docx` files in four cases. See [Word files](#word-files).
-  - Your prompt names the file.
-  - Your prompt names the folder of the file by its full path. DensePack then packs up to 8 Word files of that folder before your message goes to the model.
-  - The agent finds the file with Glob, Grep or a Bash listing.
-  - You copy the file into `.claude/densepack-vault/to-pack/`.
+- DensePack packs `.doc` and `.docx` files only in the cases that [Word files](#word-files) lists.
 - When a Word file that your prompt names gets no images, DensePack tells the agent the reason and tells it to read the text with a shell command.
 - Short tasks can cost more with DensePack, because the session note and the extra steps of some runs cost more than the images save. In the task that copies 6 lines of a Python file on Opus 5.5, each run with DensePack cost $0.0915 to $0.1082, and each run without it cost $0.0827 to $0.0839. [BENCHMARKS.md](BENCHMARKS.md#why-some-short-tasks-cost-more) gives the price of each run and each cause.
 - Edit and Write work on files that arrived as images. They do not work on Word files because Claude Code does not Read Word files. See [Word files](#word-files).<br>
@@ -345,6 +333,7 @@ DensePack also writes the text of each Word file beside its images.
 - The benches measure the renderer of the plugin, which the right-click tool also uses. The HTML app uses its own renderer.
 - When one Sonnet turn gets many images, the reply can hold thousands of output tokens. More output lowers the saving because Anthropic bills output at 5x the input price.
 - Sonnet 5.5 and Opus 5.5 each copied one Python file of 116 lines from its image 10 times at medium effort. Sonnet 5.5 wrote all words correctly, with code that runs the same as the source, in 8 copies, and Opus 5.5 did this in all 10 copies. Run `/max-off` for work that must copy text exactly. [BENCHMARKS.md](BENCHMARKS.md#python-rebuild-28-september-2026) has the results.
+
 <br>
 
 ---
@@ -356,6 +345,7 @@ DensePack also writes the text of each Word file beside its images.
 The DensePack plugin renders each character with [FreeType](https://freetype.org) and the [Inter](https://rsms.me/inter/) font family. These two projects gave DensePack a good font from the first day. Thank you both.
 
 Fonts for AI models to read are a later project.
+
 <br>
 
 ---
