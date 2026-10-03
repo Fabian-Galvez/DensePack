@@ -3023,12 +3023,12 @@ def _managed_settings_paths():
     return [Path("/etc/claude-code/managed-settings.json")]
 
 
-def ask_rule_names(tool):
+def ask_rule_names(tool, kind="ask"):
     """True when a settings file holds an "ask" rule for `tool`, such as
     "Read" or "Read(./notes.txt)". The code does not match the pattern of
     the rule against a path. Any ask rule for the tool counts. A settings
     file that exists but does not parse also counts, because its rules are
-    unknown."""
+    unknown. With kind="deny", the function checks the "deny" rules."""
     files = [Path.home() / ".claude" / "settings.json"]
     try:
         root = project_dir()
@@ -3047,7 +3047,7 @@ def ask_rule_names(tool):
             return True
         if not isinstance(data, dict):
             return True
-        rules = (data.get("permissions") or {}).get("ask") or []
+        rules = (data.get("permissions") or {}).get(kind) or []
         if not isinstance(rules, list):
             return True
         for rule in rules:
