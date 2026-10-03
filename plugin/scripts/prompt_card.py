@@ -32,8 +32,9 @@ import sys
 import time
 from pathlib import Path
 
-from common import (delegation_path, disabled, emit, lead_model_name,
-                    read_event, read_totals, resolved_reader, tmp_dir)
+from common import (ask_rule_names, delegation_path, disabled, emit,
+                    lead_model_name, may_rewrite, project_dir, read_event,
+                    read_totals, resolved_reader, tmp_dir)
 
 import style
 
@@ -273,6 +274,7 @@ def skip_note(path, why, gate):
         "worse": "the images cost more tokens than the text",
         "failed": "the pack failed",
         "time": "the pack did not have enough time left in this prompt",
+        "permission": "this permission mode asks before a read of that file",
     }
     return ("DensePack did not pack %s into images, because %s. Claude Code's "
             "Read rejects Word files. Read the text of %s with a shell "
@@ -293,6 +295,17 @@ def _word_file_result(path, event, dp, gate, pointer, pack_images,
     # The text that a Read returns. The code compares the pages against this
     # text. The size of the container shows nothing. A .docx is a zip and a
     # .doc is an OLE2 filesystem, and the two are mostly structure.
+    # The images reach the agent with no Read of the file. In a mode that
+    # asks before a Read, the code packs only a file whose Read asks
+    # nothing: a file in the project, with no "ask" rule for Read. See THE
+    # PERMISSION RULE in common.py.
+    if not may_rewrite(event, "Read"):
+        try:
+            inside = path.resolve().is_relative_to(project_dir().resolve())
+        except (OSError, ValueError, AttributeError):
+            inside = False
+        if not inside or ask_rule_names("Read"):
+            return None, "permission"
     suffix = path.suffix.lower()
     try:
         words = (pointer.docx_text(str(path)) if suffix == ".docx"

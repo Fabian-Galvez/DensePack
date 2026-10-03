@@ -84,8 +84,8 @@ import sys
 
 from common import (BURST_BYTES, actor_key, actor_reader, line_pull,
                     burst_cap, claim_once, disabled, emit, gets_images,
-                    no_metacharacters, over_cap, queue_cap_row, quoted_path,
-                    read_event, sibling_image, tmp_dir, turn_reads, vault_dir)
+                    may_rewrite, no_metacharacters, over_cap, queue_cap_row,
+                    quoted_path, read_event, sibling_image, tmp_dir, turn_reads, vault_dir)
 
 # The largest file that a Read converts. A single line of 3 MB held the hook
 # for minutes. A bigger file, or one with a null byte, stays text. There is
@@ -867,6 +867,13 @@ def prefetch_one(args):
     route(ev, prefetch=True)
 
 
+def _inside(path, root):
+    try:
+        return path.resolve().is_relative_to(root)
+    except (OSError, ValueError):
+        return False
+
+
 def prefetch(event, paths):
     """Pack these files at once, split across processes, before the model
     names them in a Read. prompt_card.py calls this for the files of a folder
@@ -876,7 +883,17 @@ def prefetch(event, paths):
     BURST_BYTES. route() skips each other file that the Read keeps as
     text."""
     import os
-    from common import BURST_BYTES
+    from common import BURST_BYTES, ask_rule_names, project_dir
+    from pathlib import Path
+    # The images go into the project vault, where a Read asks nothing. In a
+    # mode that asks before a Read, the code packs only files whose Read
+    # asks nothing: files in the project, with no "ask" rule for Read. See
+    # THE PERMISSION RULE in common.py.
+    if not may_rewrite(event, "Read"):
+        if ask_rule_names("Read"):
+            return
+        root = project_dir().resolve()
+        paths = [p for p in paths if _inside(Path(p), root)]
     jobs = []
     total = 0
     for n, path in enumerate(paths):
@@ -1042,6 +1059,12 @@ def route(event, prefetch=False, post=False):
         # Read ends. A .doc or .docx continues below, because Read cannot
         # open a Word file.
         if not post and not prefetch and read_runs_on_source(path):
+            return None
+        # A change of the Read before it runs is for the modes that ask
+        # before no Read. See THE PERMISSION RULE in common.py. In the other
+        # modes the Read runs as written, and the Read of a Word file fails
+        # as it does without the plugin.
+        if not post and not prefetch and not may_rewrite(event, "Read"):
             return None
 
         # IMAGES ONLY TO MEASURED MODELS. The two routes below give this

@@ -222,7 +222,7 @@ You can delete these files by hand.
 | `densepack-word-<12 hex>.docx` or `.doc` | DensePack copies a Word file here and packs this copy. It does this when your message or a tool result names the Word file, or when the Word file is in a folder that your message names. The 12 hex characters come from a hash of the path of the Word file. |
 | `densepack-reply-<agent id>.txt` | DensePack writes the subagent report to this file when a pack saves too little and the report stays text. |
 | `densepack-report-swap-<agent id>.json` and `densepack-report-background-<agent id>` | The first file holds the line that replaces the report of a subagent in the Agent result, and the second file marks a background subagent. |
-| `densepack-sourcewhy-<session>` | DensePack writes this file after `source_gate.py` sends the reason for a changed command in this session. Only `/dense-remove` deletes it. |
+| `densepack-sourcewhy-<session>` | DensePack writes this file after `source_gate.py` sends the reason for a changed or blocked command in this session. Only `/dense-remove` deletes it. |
 | `densepack-rangeonce-<session>-<hash>` | DensePack writes this file after `source_gate.py` checks one `sed -n` range of this report or brief text in this session. Later ranges of the same text run as written. Only `/dense-remove` deletes it. |
 
 At session start, `bootstrap.py` deletes the files in this folder that are older than 24 hours and whose names start with these parts.

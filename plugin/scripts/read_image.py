@@ -36,6 +36,12 @@ def image_result(event):
     resp = event.get("tool_response")
     if isinstance(resp, dict) and resp.get("type") == "image":
         return None
+    # A Read that the user or a rule refused gets no image. Claude Code
+    # 2.1.288 fires no PostToolUseFailure for such a Read, and this check
+    # keeps the rule if a later version does.
+    error = str(event.get("error") or "").lower()
+    if "permission" in error or "denied" in error:
+        return None
     import drop_read_gate as gate
     pre = {k: v for k, v in event.items() if k not in ("tool_response", "error")}
     pre["hook_event_name"] = "PreToolUse"

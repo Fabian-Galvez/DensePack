@@ -2934,6 +2934,78 @@ def read_event(raw=None):
     return event
 
 
+# THE PERMISSION RULE. A PreToolUse hook that changes a tool call with
+# updatedInput makes Claude Code check the permission of the NEW call, not of
+# the call that the agent made. Tests on Claude Code 2.1.288 show this.
+#
+#   A Read outside the project, changed to a file inside it, ran in default
+#   mode with no prompt. The same Read unchanged asked first.
+#   A Read of a file that an "ask" rule names, changed to another file, ran
+#   with no prompt in default mode.
+#   A "deny" rule held in each mode. Claude Code checks it before the hook
+#   runs, and the hook never saw the denied Read.
+#   A Read that the user or a rule refuses fires no PostToolUseFailure.
+#
+# A mode that asks before some Reads (default, acceptEdits, plan) or refuses
+# them (dontAsk) gets no changed call from any hook of this plugin. Auto and
+# bypassPermissions ask before no Read, so a change there skips no prompt.
+# Each mode still asks when a rule names the tool, so a hook never changes a
+# call to a tool that an "ask" rule names. A missing or unknown mode counts as
+# a mode that asks.
+REWRITE_MODES = ("auto", "bypassPermissions")
+
+
+def _managed_settings_paths():
+    if sys.platform == "darwin":
+        return [Path("/Library/Application Support/ClaudeCode/managed-settings.json")]
+    if os.name == "nt":
+        return [Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+                / "ClaudeCode" / "managed-settings.json"]
+    return [Path("/etc/claude-code/managed-settings.json")]
+
+
+def ask_rule_names(tool):
+    """True when a settings file holds an "ask" rule for `tool`, such as
+    "Read" or "Read(./notes.txt)". The code does not match the pattern of
+    the rule against a path. Any ask rule for the tool counts. A settings
+    file that exists but does not parse also counts, because its rules are
+    unknown."""
+    files = [Path.home() / ".claude" / "settings.json"]
+    try:
+        root = project_dir()
+        files += [root / ".claude" / "settings.json",
+                  root / ".claude" / "settings.local.json"]
+    except Exception:  # noqa: BLE001
+        return True
+    files += _managed_settings_paths()
+    for path in files:
+        try:
+            if not path.is_file():
+                continue
+            raw = path.read_bytes()
+            data = json.loads(raw.decode("utf-8-sig") or "{}")
+        except (OSError, ValueError):
+            return True
+        if not isinstance(data, dict):
+            return True
+        rules = (data.get("permissions") or {}).get("ask") or []
+        if not isinstance(rules, list):
+            return True
+        for rule in rules:
+            name = str(rule).strip()
+            if name == tool or name.startswith(tool + "("):
+                return True
+    return False
+
+
+def may_rewrite(event, tool=None):
+    """True when a PreToolUse hook may change the call with updatedInput.
+    See THE PERMISSION RULE above."""
+    if str(event.get("permission_mode") or "") not in REWRITE_MODES:
+        return False
+    return not ask_rule_names(tool or str(event.get("tool_name") or ""))
+
+
 def emit(payload):
     """Prints a hook's JSON output with the same encoding rules as the
     input."""
