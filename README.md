@@ -342,10 +342,7 @@ DensePack also writes the text of each Word file beside its images.
 
 ## Thank you
 
-The DensePack plugin renders each character with [FreeType](https://freetype.org) and the [Inter](https://rsms.me/inter/) font family. These two projects gave DensePack a good font from the first day. Thank you both.
-
-Fonts for AI models to read are a later project.
-
+DensePack renders each character with [FreeType](https://freetype.org) and the [Inter](https://rsms.me/inter/) font family. Thank you to the FreeType and Inter projects.
 <br>
 
 ---
