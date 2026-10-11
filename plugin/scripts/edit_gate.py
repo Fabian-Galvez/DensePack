@@ -14,8 +14,12 @@ model sends the Edit again with that text, and the text matches.
 
 What the gate blocks. The gate blocks an Edit whose old_string is not in the
 named file, and an Edit whose old_string is in the file more than once
-without replace_all. Edit rejects the two kinds of call, and the gate
-rejects them one step earlier and shows what the file contains.
+without replace_all. In Claude Code 2.1.280 to 2.1.295, Edit checked the
+old_string before the PreToolUse hooks ran and rejected the two kinds of
+call itself, so this gate never got such a call. In Claude Code 2.1.296 the
+hooks run first, and this gate blocks them with the exact lines. Those
+Edits fail without DensePack too. HOW-IT-WORKS.md "The Edit check" has the
+details.
 
 What the gate allows. The gate allows each Edit that can work. A missing
 file, an unreadable file and an empty old_string all pass, because Edit

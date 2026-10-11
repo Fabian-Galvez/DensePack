@@ -125,7 +125,6 @@ def brief_chars(px=None):
 # models get this one number.
 CODE_PX = int(os.environ.get("DENSEPACK_CODE_PX") or 17)
 
-FONT_SIZE = CODE_PX
 READER_SIZES = {"fable": CODE_PX, "opus": CODE_PX, "sonnet": CODE_PX}
 
 
@@ -768,14 +767,6 @@ def _spawned_model(agent_id, event):
     return lead_model_name(session or None) or None
 
 
-def actor_size(event=None, key=None):
-    """Returns the pixel size of an image for this actor. Returns None when
-    this actor must get plain text. See actor_reader()."""
-    reader = actor_reader(event, key)
-    if not reader:
-        return None
-    return READER_SIZES.get(reader)
-
 
 def reader_gets_images(reader):
     """Returns True when this reader profile gets images.
@@ -874,7 +865,6 @@ def agent_meta_fields(agent_id):
 # the named card with record_card(). A name outside this tuple is unknown,
 # and record_card() writes no row for it.
 CARDS = ("worker", "check", "reader", "runner")
-DEFAULT_CARD = "worker"
 
 # One file per spawning session, one line per Agent call.
 CARD_FILE = "densepack-card-%s.jsonl"
@@ -1118,92 +1108,13 @@ def last_touched_file(agent_id):
     return None, None
 
 
-def has_edited(session_id):
-    """Returns True when a Write or Edit tool call is in this session's own
-    transcript.
 
-    It checks for an edit in the CURRENT session, not in a subagent's. It
-    uses transcript_path and FILE_TOOLS in place of a new per-session state
-    file, because the transcript already contains this fact.
-    """
-    path = transcript_path(session_id)
-    if path is None:
-        return False
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return False
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            row = json.loads(line)
-        except ValueError:
-            continue
-        if row.get("type") != "assistant":
-            continue
-        content = (row.get("message") or {}).get("content") or []
-        if not isinstance(content, list):
-            continue
-        for block in content:
-            if (isinstance(block, dict) and block.get("type") == "tool_use"
-                    and block.get("name") in FILE_TOOLS):
-                return True
-    return False
-
-
-# THE SONNET BURST. A Sonnet turn with a few images gets a reply of a few
-# hundred output tokens. The same turn with many images can get a reply of
-# thousands. Output costs five times the input rate. Past that point the
-# images cost more money than the input they saved.
-#
-# The limit does not depend on patches alone or on count alone. Fewer,
-# larger images give less output than many short ones, and a few very large
-# images give the most. The cap needs the two bounds. The bytes of a turn
-# are the bound that the gate can read before it converts a file.
-#
-# A turn is inside the cap when it contains BURST_CAPS reads or fewer AND
-# their source bytes total BURST_BYTES or fewer. A turn outside the cap gets
-# text for ALL its files. A few images next to many text files is a turn
-# that does the work of the two modes, and the images save nothing there.
-#
-# Opus and Fable have no cap, because a cap on either model discards a real
-# saving.
-BURST_CAPS = {"sonnet": 32}
-# The byte budget for one turn. It allows a turn of thirty-two large source
-# files, about 656,000 bytes, because the hooks of one turn do not all read
-# the whole batch.
+# THE PREFETCH BUDGET. drop_read_gate.prefetch() packs the files of a named
+# folder before the model reads them. It skips folders whose files total more
+# than BURST_BYTES. The pack runs at about 0.15 s per 1,000
+# characters, so 700,000 bytes is about 105 s of packing. The files of a
+# skipped folder still pack at each Read. The value applies to all models.
 BURST_BYTES = 700_000
-
-
-def burst_cap(model):
-    """Returns the largest number of packed images that one turn can give
-    this reader profile. Returns None when the profile has no cap."""
-    return BURST_CAPS.get(str(model or "").strip().lower())
-
-
-def over_cap(paths, cap, budget=BURST_BYTES):
-    """Returns True when this turn's batch is too wide to pack. The batch
-    has more files than the cap or more source bytes than the budget. A
-    file with an unreadable length counts as zero bytes. A name whose file
-    is gone then never caps a turn alone.
-
-    One file read alone is never over the cap, whatever its length. Each turn
-    that burst in the measurements contained several images. The
-    measurements did not include a single large file. A limit with no
-    measurement is a guess."""
-    if len(paths) > cap:
-        return True
-    if len(paths) < 2:
-        return False
-    total = 0
-    for name in paths:
-        try:
-            total += Path(name).stat().st_size
-        except OSError:
-            continue
-    return total > budget
 
 
 def agent_transcript(agent_id):
@@ -1237,7 +1148,7 @@ def turn_reads(event):
     Claude Code writes each content block of an assistant message to the
     transcript as its own line, and all these lines have one message id. A
     PreToolUse hook can then read the batch of its own Read. The gate can
-    count the images of the turn before it packs the first one. Claude Code
+    count the Reads of the turn before it packs the first one. Claude Code
     writes the lines while the reply streams, and the tools start before
     the last line reaches the disk. An early hook counts only the part of
     its batch that is on disk. See the note above. Claude Code appends the
@@ -1246,12 +1157,11 @@ def turn_reads(event):
     blocks with that id.
 
     A subagent's PreToolUse contains the LEAD's transcript_path. The
-    function reads a subagent's own agent-<id>.jsonl in its place. A count
-    of the lead's batch for a subagent's Read can cap a turn with one
-    image.
+    function reads a subagent's own agent-<id>.jsonl in its place, because
+    the lead's transcript contains the Reads of the lead, not of the subagent.
 
-    Returns ([], "") when the transcript is unreadable. No caller then gets
-    a cap.
+    Returns ([], "") when the transcript is unreadable. drop_and_draw() then
+    treats the Read as a short turn.
     """
     if not isinstance(event, dict):
         return [], ""
@@ -1304,13 +1214,36 @@ def turn_reads(event):
     return found, str(ident or "")
 
 
+# The guidance for images goes beside the first image of each session and
+# agent, not in the session start note. Any talk of Reads and images at
+# session start made Sonnet 5.5 plan to Read each file whole: 5 of 14 runs of
+# the architecture-doc bench with the long note, 3 of 8 with the Edit rule
+# alone, and 0 of 8 with "DensePack is on." only (9 October 2026). The agent
+# plans its reading in its first turn, before any image arrives. The note
+# says nothing about Reads either. With "Read the lines with a limit of 20 or
+# fewer. That Read returns them as text", an Opus 5.5 run made 9 small Reads
+# to get text, where the run without DensePack read with a few Bash loops
+# (9 October 2026).
+FIRST_IMAGE_NOTE = (
+    "DensePack sends files and command output as images of the same text. "
+    "Each image has a legend of its marks.")
+
+
+def first_image_note(event):
+    """Return FIRST_IMAGE_NOTE the first time this session and agent gets an
+    image, and "" after that."""
+    event = event or {}
+    key = "first-image-%s-%s" % (event.get("session_id") or "", event.get("agent_id") or "lead")
+    return FIRST_IMAGE_NOTE if claim_once(key) else ""
+
+
 def claim_once(key):
     """Returns True for the first caller that names `key` in this session,
     and False after that.
 
     It uses an exclusive create. The hooks of one batch run at the same
-    time, and only one of them gets True. The caller uses it to write one
-    receipt row for a whole capped turn, not one row for each read in it.
+    time, and only one of them gets True. drop_read_gate._once_note() uses
+    it to send a note to the model once, not once for each Read.
     """
     marker = tmp_dir() / ("densepack-cap-%s" % re.sub(r"[^A-Za-z0-9_-]", "",
                                                       str(key))[:64])
@@ -1319,25 +1252,6 @@ def claim_once(key):
     except OSError:
         return False
     return True
-
-
-def queue_cap_row(event, model, reason, chars):
-    """Queues the receipt row for a turn that the image cap sent as text.
-    The row has the same shape as the row of subagent_stop.py's
-    queue_text_row(): no images, no saving and no cost. pointer.py then
-    prints the reason in the place of an image's price. It does not add the
-    row to the run total or to the receipt debt, which counts packed rows
-    only."""
-    import densepack as dp
-    append_queue({
-        "agent_id": str((event or {}).get("session_id") or ""),
-        "agent_type": "read cap", "font_px": font_size(),
-        "model": model, "spawned_by": str((event or {}).get("session_id") or ""),
-        "mode": "text", "images": [], "dims": [], "pixels": 0,
-        "chars": chars, "text_tokens": round(chars / dp.CHARS_PER_TOKEN),
-        "image_tokens": 0, "patch_tokens": 0, "delivery_tokens": 0,
-        "reason": reason, "would_cost": 0,
-    })
 
 
 def resolved_reader(session=None):
@@ -1369,50 +1283,6 @@ def resolved_reader(session=None):
     return UNKNOWN_READER
 
 
-def user_said(session_id, phrase):
-    """Returns True when the last typed line contains `phrase`.
-
-    All gates without a text field use this escape check. The Read tool has
-    no field for a sentence, unlike Bash's command or Agent's prompt. A
-    phrase that deactivates a gate must then come in the conversation and
-    not in the call. This function walks the session's own transcript from
-    the end. It stops at the first line that is a real typed message and
-    not a tool result. A tool result's content is a list of blocks with no
-    "text" block in it. The search skips it and keeps walking backward. An
-    unreadable transcript is not proof of the phrase. The function then
-    returns False, and the gate stays active.
-    """
-    path = transcript_path(session_id)
-    if path is None:
-        return False
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return False
-    for line in reversed(lines):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            row = json.loads(line)
-        except ValueError:
-            continue
-        if row.get("type") != "user" or row.get("isSidechain"):
-            continue
-        content = (row.get("message") or {}).get("content")
-        if isinstance(content, str):
-            text = content
-        elif isinstance(content, list):
-            text = " ".join(
-                block.get("text", "") for block in content
-                if isinstance(block, dict) and block.get("type") == "text")
-        else:
-            continue
-        if not text:
-            continue
-        return phrase in text.lower()
-    return False
-
 
 def transcript_path(session_id):
     """Returns this session's own transcript file, or None.
@@ -1438,42 +1308,6 @@ def transcript_path(session_id):
         return None
     return None
 
-
-def read_turn_cost(session_id):
-    """Returns the cost of one more turn for this session, in tokens, or
-    None.
-
-    Claude Code sends the whole conversation at the start of each turn. A
-    Read call to open a packed image is one more send of the whole
-    conversation. The last usage record in the transcript contains that
-    number.
-
-    The open of an image is the expensive half of packing. Each Read turn
-    sends the whole conversation again. This number is what the lead pays
-    to open one image.
-    """
-    path = transcript_path(session_id)
-    if path is None:
-        return None
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return None
-    for line in reversed(lines[-400:]):
-        if '"assistant"' not in line:
-            continue
-        try:
-            record = json.loads(line)
-        except ValueError:
-            continue
-        usage = (record.get("message") or {}).get("usage") or {}
-        if not usage:
-            continue
-        size = ((usage.get("cache_read_input_tokens", 0) or 0)
-                + (usage.get("cache_creation_input_tokens", 0) or 0))
-        if size:
-            return size
-    return None
 
 
 def report_pointer(image_count, folder):
@@ -2544,42 +2378,91 @@ def clear_link(path):
 BASH_FIRST_KEY = "CLAUDE_CODE_THRIFTY_SONIC"
 
 
-def bash_first_off(enable=True):
-    """Sets CLAUDE_CODE_THRIFTY_SONIC=0 in the env block of
-    ~/.claude/settings.json, or clears it with enable=False. Returns True
-    when the file changed.
+# On Windows, DensePack runs Claude Code with Bash from Git for Windows. EMBEDDED_SEARCH_TOOLS=1 removes the Grep and
+# Glob tools, whose results always stay text, so the agent searches with grep in Bash, which DensePack packs.
+# CLAUDE_CODE_USE_POWERSHELL_TOOL=0 makes commands run in Git Bash, where long output arrives as all its images in
+# one result. ensure_python.ps1 installs Git for Windows when it is missing. Without Git Bash, these two stay unset,
+# because then Claude Code would have no shell.
+WINDOWS_BASH_KEYS = {"EMBEDDED_SEARCH_TOOLS": "1", "CLAUDE_CODE_USE_POWERSHELL_TOOL": "0"}
 
-    Auto mode and bypassPermissions mode inject a message that tells Claude
-    to read files with cat, head or sed in Bash, and a Bash read stays text.
-    The variable at 0 stops that message. Bash itself stays available. An
-    auto mode session with the variable set has no auto_mode attachment in
-    its transcript. The function keeps a value that is already in the env
-    block. It leaves a file with a BOM alone, because Claude Code then
-    ignores the whole file. It writes nothing when the file does not parse.
-    """
+
+def git_bash_path():
+    """The bash.exe of Git for Windows, or None. Looks where the Git installer puts it, for all users and for one
+    user, and next to a git.exe on PATH."""
+    import shutil
+    places = [os.path.join(os.environ.get(v, ""), "Git", "bin", "bash.exe")
+              for v in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)") if os.environ.get(v)]
+    if os.environ.get("LOCALAPPDATA"):
+        places.append(os.path.join(os.environ["LOCALAPPDATA"], "Programs", "Git", "bin", "bash.exe"))
+    git = shutil.which("git")
+    if git:
+        root = os.path.dirname(os.path.dirname(os.path.realpath(git)))
+        places.append(os.path.join(root, "bin", "bash.exe"))
+    for p in places:
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def windows_bash_keys_missing():
+    """The keys of WINDOWS_BASH_KEYS that this Windows computer with Git Bash still lacks, after bash_first_off()
+    ran. A key counts when settings.json or the environment holds any value for it, so a value that you chose
+    stays without a message. Empty on macOS, Linux and a Windows computer without Git Bash."""
+    if os.name != "nt" or not git_bash_path():
+        return []
+    import json
+    env = {}
+    try:
+        path = Path.home() / ".claude" / "settings.json"
+        raw = path.read_bytes() if path.is_file() else b"{}"
+        data = json.loads(raw.decode("utf-8-sig") or "{}")
+        if isinstance(data, dict) and isinstance(data.get("env", {}), dict):
+            env = data.get("env", {})
+    except (OSError, ValueError):
+        pass
+    return [k for k in WINDOWS_BASH_KEYS if k not in env and k not in os.environ]
+
+
+def bash_first_off(enable=True):
+    """Sets CLAUDE_CODE_THRIFTY_SONIC=0 in the env block of ~/.claude/settings.json. On Windows with Git Bash, it
+    also sets the keys of WINDOWS_BASH_KEYS. With enable=False, it removes each of these keys that still has
+    DensePack's value. Returns the list of keys that it set or removed, empty when the file did not change.
+
+    Auto mode and bypassPermissions mode inject a message that tells Claude to read files with cat, head or sed in
+    Bash, and a Bash read costs a little more than a Read. CLAUDE_CODE_THRIFTY_SONIC=0 stops that message. Bash itself stays available.
+    The function never changes a key that you set to another value. It leaves a file with a BOM alone, because
+    Claude Code then ignores the whole file. It writes nothing when the file does not parse."""
     import json
     path = Path.home() / ".claude" / "settings.json"
     try:
         raw = path.read_bytes() if path.is_file() else b"{}"
         if raw.startswith(b"\xef\xbb\xbf"):
-            return False
+            return []
         data = json.loads(raw.decode("utf-8") or "{}")
     except (OSError, ValueError):
-        return False
+        return []
     if not isinstance(data, dict) or not isinstance(data.get("env", {}), dict):
-        return False
+        return []
     env = data.get("env", {})
-    if enable:
-        if BASH_FIRST_KEY in env:
-            return False
-        env[BASH_FIRST_KEY] = "0"
-    else:
-        if env.get(BASH_FIRST_KEY) != "0":
-            return False
-        del env[BASH_FIRST_KEY]
+    ours = {BASH_FIRST_KEY: "0"}
+    if enable and os.name == "nt" and git_bash_path():
+        ours.update(WINDOWS_BASH_KEYS)
+    if not enable:
+        ours.update(WINDOWS_BASH_KEYS)
+    changed = []
+    for key, value in ours.items():
+        if enable and key not in env:
+            env[key] = value
+            changed.append(key)
+        elif not enable and env.get(key) == value:
+            del env[key]
+            changed.append(key)
+    if not changed:
+        return []
     data["env"] = env
     path.parent.mkdir(parents=True, exist_ok=True)
-    return write_text_atomic(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    write_text_atomic(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    return changed
 
 
 def write_text_atomic(path, text):
@@ -3003,7 +2886,7 @@ def read_event(raw=None):
 #   with no prompt in default mode.
 #   A "deny" rule held in each mode. Claude Code checks it before the hook
 #   runs, and the hook never saw the denied Read.
-#   A Read that the user or a rule refuses fires no PostToolUseFailure.
+#   A Read that you or a rule refuse fires no PostToolUseFailure.
 #
 # A mode that asks before some Reads (default, acceptEdits, plan) or refuses
 # them (dontAsk) gets no changed call from any hook of this plugin. Auto and
@@ -3282,10 +3165,11 @@ def drain_queue():
 # context again at the cache read rate and writes one short call.
 #
 # Claude Code writes the one hour cache at 2x input. A cache read is 0.025x
-# input on Fable 5.1, 0.05x on Opus 5.5 and 0.1x on the other models.
-# Against one write token, a read is then 0.0125 on Fable, 0.025 on Opus
-# and 0.05 on the other models. READ_SHARE holds the Fable and Opus values,
-# and READ_OVER_WRITE holds the value for the other models. An output
+# input on Fable 5.1, 0.05x on Opus 5.5 and Sonnet 5.5, and 0.1x on the
+# other models. Against one write token, a read is then 0.0125 on Fable,
+# 0.025 on Opus and Sonnet, and 0.05 on the other models. READ_SHARE contains
+# the Fable, Opus and Sonnet values, and READ_OVER_WRITE contains the value for
+# the other models. An output
 # token, 5x input, is 2.5 against one write token. The five minute
 # multipliers, 1.25x and 0.08, do not apply.
 #
@@ -3299,13 +3183,17 @@ FABLE_READ_OVER_WRITE = 0.0125
 # write token. The usage in the result record of a claude -p run, times
 # these prices, equals the costUsd of that run exactly.
 OPUS_READ_OVER_WRITE = 0.025
-READ_SHARE = {"fable": FABLE_READ_OVER_WRITE, "opus": OPUS_READ_OVER_WRITE}
+# Sonnet 5.5 bills a cache read at $0.10 and a 1-hour write at $4, the same
+# 0.025 share as Opus 5.5.
+READ_SHARE = {"fable": FABLE_READ_OVER_WRITE, "opus": OPUS_READ_OVER_WRITE,
+              "sonnet": OPUS_READ_OVER_WRITE}
 OUT_OVER_WRITE = 2.5
 READ_CALL_OUTPUT_TOKENS = 150
-TOOL_RESULT_WRAP_TOKENS = 185
 # The first turn prefix of a plain claude -p run. The code uses it when the
-# transcript is unreadable.
-CONTEXT_WHEN_UNKNOWN = 59863
+# transcript is unreadable. On 7 October 2026, a "Reply with OK." request on
+# Claude Code 2.1.293 with no user settings measured 21,684 tokens on Sonnet
+# 5.5. The old value, 59,863, came from an older Claude Code.
+CONTEXT_WHEN_UNKNOWN = 21684
 
 
 def context_tokens(session_id, tail_bytes=400000, path=None):
@@ -3398,8 +3286,8 @@ def read_turn_fee(session_id, actor=None):
 # gives the cache read share of each model.
 RATES = {"fable": (10.0, 50.0), "opus": (4.0, 20.0), "sonnet": (2.0, 10.0), "haiku": (1.0, 5.0)}
 # The cache read as a share of the input price: Fable 5.1 0.025, Opus 5.5
-# 0.05, other models 0.1.
-READ_RATE = {"fable": 0.025, "opus": 0.05}
+# and Sonnet 5.5 0.05, other models 0.1.
+READ_RATE = {"fable": 0.025, "opus": 0.05, "sonnet": 0.05}
 
 
 def read_rate(model):

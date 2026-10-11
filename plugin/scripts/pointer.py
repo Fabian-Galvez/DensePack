@@ -26,8 +26,8 @@ The settings file stores one of four receipt modes:
            response, the same as in default. CONVERSATION TOTALS follows it
            when the totals setting is on. In this mode it also prints while
            the totals setting is at its default, auto, which follows verbose.
-           The two totals rows give the full model name, such as Haiku 4.5,
-           Sonnet 5, Opus 5 or Fable 5. The default mode uses a single letter.
+           In this mode, the Model cell of each totals row names each model
+           in full, such as "2 Sonnet 5.5". The default mode prints "2S".
   light    The compact 4 column table with no totals row, whatever the totals
            setting is. The "Conversation so far" line still prints under it.
   quiet    No table in the response. The hook writes the table to
@@ -268,7 +268,7 @@ WORD_IN_OUTPUT = re.compile(
 # Tools with output that can name a file on disk. Read is not in the list. A
 # Read of a Word file does not reach this hook. A Read of any other file names
 # no new path to scan.
-WORD_SCAN_TOOLS = ("Glob", "Grep", "Bash", "LS")
+WORD_SCAN_TOOLS = ("Glob", "Grep", "Bash", "PowerShell", "LS")
 # The number of characters of one tool result that the scan searches. Shell
 # output can be megabytes long. A useful path is in a file listing, not at the
 # end of a build log.
@@ -538,8 +538,9 @@ def later_images_note(src_name, folder, names, at=1, firsts=None, last=None):
                     n, total, name,
                     ", lines %d to %s" % (firsts[n - 1], ends[n - 1]) if firsts else ""))
     # A review read drop_read_gate.py one image per turn, 8 turns for one
-    # file, where a text Read gives the whole file in one call. The model
-    # still picks the images it needs, and it Reads them in one turn.
+    # file, where a text Read gives the whole file in one call. Whole-file and
+    # range Reads now get all their images in one result (read_image.py).
+    # The other callers of this note still return one image at a time.
     rows.append("Read all the other images that you need in one turn.")
     full = " ".join(rows)
     LAST_NOTE = ("%s|%s" % (folder, "|".join(names)), full)
@@ -1297,7 +1298,7 @@ def group(number):
 
 def model_cell(item):
     """Return the model name, cut to its readable part. The cell shows
-    a full id such as claude-opus-5 as Opus 5. An unknown model gets a dash
+    a full id such as claude-opus-5-5 as Opus 5.5. An unknown model gets a dash
     and not a guess, because a wrong name on a receipt is worse than no
     name."""
     raw = str(item.get("model") or "").strip()
@@ -1329,14 +1330,6 @@ def is_brief(item):
     """
     return item.get("kind") == "brief"
 
-
-def label_with_model(item):
-    """Return one cell with the agent, then the model that wrote the report.
-    No code in the plugin calls this function. The default receipt has four
-    columns, and the model has its own column, Model."""
-    who = label(item)
-    model = model_cell(item)
-    return who if model == "-" else "%s, %s" % (who, model)
 
 
 def label(item):
@@ -1490,8 +1483,8 @@ MODEL_TOTALS_ORDER = (("Fable", "F"), ("Opus", "O"), ("Sonnet", "S"), ("Haiku", 
 
 # The full names that the Model cell of the verbose totals row prints in
 # place of the letters. The order is the same, and all four always print.
-MODEL_FULL_NAMES = {"Haiku": "Haiku 4.5", "Sonnet": "Sonnet 5",
-                    "Opus": "Opus 5", "Fable": "Fable 5"}
+MODEL_FULL_NAMES = {"Haiku": "Haiku 5.5", "Sonnet": "Sonnet 5.5",
+                    "Opus": "Opus 5.5", "Fable": "Fable 5.1"}
 
 
 def _model_family(item):
@@ -1524,7 +1517,7 @@ def format_counts(counts, spelled_out):
     as a line break. Four lines joined by <br> then show as one run of joined
     letters. One line with commas shows correctly in all places.
     spelled_out=False prints the count with the single letter, such as 0F.
-    spelled_out=True prints the full model name, such as 0 Fable 5, for the
+    spelled_out=True prints the full model name, such as 0 Fable 5.1, for the
     verbose table.
     """
     if spelled_out:
@@ -1856,29 +1849,6 @@ def duration_medians():
             for name, _letter in MODEL_LETTERS}
 
 
-def estimate_phrase(family, medians):
-    """Return the words that the row of a running agent shows in place of a
-    real duration. That is a median with its sample size when one exists.
-    Otherwise it is a plain statement that the sample is too small. The code
-    never builds a number from fewer than MIN_MEDIAN_RUNS finished runs. One
-    or two samples do not make a median. A number from them is a guess with
-    a decimal point."""
-    if family is None:
-        return "no estimate, model not measured"
-    median, count = medians.get(family, (None, 0))
-    if median is None or count < MIN_MEDIAN_RUNS:
-        return "no estimate, %d runs measured" % count
-    return "median %.1fm over %d runs" % (median / 60.0, count)
-
-
-def _mmss(seconds):
-    """Return a duration as minutes and seconds, or as seconds alone under a
-    minute."""
-    seconds = float(seconds)
-    if seconds < 60:
-        return "%.1fs" % seconds
-    minutes, rest = divmod(seconds, 60)
-    return "%dm %02ds" % (int(minutes), int(round(rest)))
 
 
 def state_cell(duration, spawned_at=None, now=None, started=True):
@@ -2072,19 +2042,6 @@ def job_role(agent_type):
     return agent_type
 
 
-def job_cell(job, agent_type):
-    """Return a cell with the task and the agent type. No code in the plugin
-    calls this function. The Job column of delegation_table() uses
-    job_role(). For the default agent type, general-purpose, the cell is
-    the task description alone. For any other type, it is the task followed
-    by the type in brackets. A custom agent type is useful to see, and
-    general-purpose on each row of the table adds nothing. The cell never
-    holds the agent id. An internal identifier such as a1b2c3d4e5f6a7b8c
-    carries no meaning, and the job description says what happened."""
-    if agent_type in ("general-purpose", "-"):
-        return job
-    return "%s (%s)" % (job, agent_type)
-
 
 def delegation_table(session):
     """Return the delegation table with the columns Model, Job, Report,
@@ -2211,32 +2168,6 @@ def delegation_table(session):
 # than a guess.
 NO_LOGGED_JOB = "an agent whose task is not in the log"
 
-
-def job_for_marker(session, marker_at, window=MARKER_WINDOW):
-    """Return the task description for the start marker of an agent that
-    did not stop. The code matches the timestamp of the marker against the
-    delegation log, the same way delegation_table pairs a spawn with its
-    marker.
-
-    A stall message or a no-stop-record message then names the task of the
-    agent, not the internal agent id. A string such as a1b2c3d4e5f6a7b8c
-    carries no meaning. When no row in the log is close enough in time,
-    return NO_LOGGED_JOB, never the id."""
-    if marker_at is None:
-        return NO_LOGGED_JOB
-    best, best_gap = None, None
-    for row in delegation_entries():
-        if str(row.get("session") or "") != str(session or ""):
-            continue
-        spawn_time = row.get("time")
-        if spawn_time is None:
-            continue
-        gap = abs(float(spawn_time) - float(marker_at))
-        if best_gap is None or gap < best_gap:
-            best, best_gap = row, gap
-    if best is None or best_gap > window:
-        return NO_LOGGED_JOB
-    return best.get("description") or NO_LOGGED_JOB
 
 
 def totals_table(totals, mode):
@@ -2447,9 +2378,9 @@ def main():
         # edit, and the receipt then prices a line that the lead never got.
         head = report_pointer(report_run["images"], tmp_dir())
     if not packed_reports:
-        head = ("DensePack: %d agent report(s) returned as text (%s). DensePack "
-                "made no image and billed nothing to DensePack."
-                % (len(report_entries),
+        head = ("DensePack: %d agent report%s returned as text (%s). DensePack "
+                "made no image. The saving is zero."
+                % (len(report_entries), "" if len(report_entries) == 1 else "s",
                    "; ".join(sorted({reason_said(i) for i in report_entries}))))
     if not report_entries:
         head = ("DensePack: no agent report arrived in this batch, only "

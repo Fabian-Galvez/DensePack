@@ -30,11 +30,9 @@ agent that reads, drop_and_draw() packs for FALLBACK_READER. A gate that
 cannot name a model still gives the image.
 
 FALLBACK, when the automatic pack fails for a real reason (Pillow is
-missing, the file is gone, or the pack step raised an error). Before a Read
-of a .doc or .docx, the gate rejects the first Read and names the to-pack
-folder to copy the file into by hand. A second, identical Read passes. That
-retry runs only when the pack step failed. After the Read of any other
-file, read_image.py leaves the result as text. A file that packed gives the
+missing, the file is gone, or the pack step raised an error). The Read runs
+as written, and read_image.py leaves the result as text, the same as
+without DensePack. A file that packed gives the
 image on each Read, and an agent changes it with Edit and not with Write.
 
 EXEMPTIONS. Each one is required, or the plugin blocks itself.
@@ -74,18 +72,16 @@ gets. For this reason the gate uses no price floor. It packs the image,
 prices it in real patches, prices the raw Read in text tokens at the
 CHARS_PER_TOKEN divisor of densepack.py, and gives the image only when the
 image costs less. The only size limits before the pack are in
-_drawable_text(), a 1,000 byte minimum and READ_MAX_BYTES. They limit the
-pack time, not the price, and the comparison decides each file between
-them. A file too small for an image loses the comparison.
+_drawable_text(): READ_MIN_BYTES skips an empty file, and READ_MAX_BYTES
+limits the pack time. The comparison decides each file between them. A file
+too small for an image loses the comparison.
 """
 
 import hashlib
 import sys
 
-from common import (BURST_BYTES, actor_key, actor_reader, line_pull,
-                    burst_cap, claim_once, disabled, emit, gets_images,
-                    may_rewrite, no_metacharacters, over_cap, queue_cap_row,
-                    quoted_path, read_event, sibling_image, tmp_dir, turn_reads, vault_dir)
+from common import (actor_key, actor_reader, line_pull, disabled, emit,
+                    gets_images, may_rewrite, no_metacharacters, read_event, sibling_image, tmp_dir, turn_reads, vault_dir)
 
 # The largest file that a Read converts. A single line of 3 MB held the hook
 # for minutes. A bigger file, or one with a null byte, stays text. There is
@@ -101,6 +97,14 @@ from common import (BURST_BYTES, actor_key, actor_reader, line_pull,
 # proportion.
 READ_MAX_BYTES = 1000000
 
+# One floor for all files. The old floor was 1,000 bytes, because a pack of a
+# 483-byte file once took 2.5 s and saved 10 tokens. On 7 October 2026 the
+# Read route packed a 458-byte file in 0.41 s and saved 44 tokens (191 to
+# 147), and a 958-byte file in 0.78 s and saved 187 tokens. The Read route
+# adds no turn and no note for a file of one image, so the price test in
+# route() decides each file, and this floor only skips an empty file.
+READ_MIN_BYTES = 1
+
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".pdf",
                   ".ipynb")
 
@@ -110,33 +114,6 @@ IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".pdf",
 # agent. A Read by a subagent often runs on a model other than the model of
 # the lead agent.
 FALLBACK_READER = "sonnet"
-
-# One marker per session and file. A retry can then still reach the real
-# bytes before an Edit. The code uses it only when drop_and_draw() below
-# cannot make an image.
-MARKER = "densepack-dropread-%s-%s"
-
-MESSAGE = (
-    "DensePack tried to pack this file into an image automatically and could "
-    "not. This file is %s bytes. Do not Read it raw. "
-    "Copy it into .claude/densepack-vault/to-pack/ instead, then "
-    "make any other tool call. The scan packs it fresh from the file's "
-    "current bytes, and the copy and its images move into "
-    ".claude/densepack-vault/to-pack/packed/. Read that image, not this "
-    "file. The drop never "
-    "modifies this path. Edit it as normal once you have the "
-    "information. Use the Read tool on this exact path only when you are "
-    "about to Edit it. Repeat this exact Read, and it passes.\n\n"
-    "File: %s"
-)
-
-
-def marker_path(session_id, file_path):
-    digest = hashlib.sha256(
-        str(file_path).replace("\\", "/").lower().encode("utf-8")
-    ).hexdigest()[:12]
-    return tmp_dir() / (MARKER % (str(session_id)[:8], digest))
-
 
 def is_image(path):
     """True only by the suffix of the file, never by a densepack- name
@@ -458,8 +435,7 @@ def drop_and_draw(path, event, lines=None):
     rows of the legend when the pack lifted a value. Otherwise the note is
     empty. It never holds the path of the sidecar. Returns (None, None, None,
     None) when the pack fails, because the file is gone, Pillow is missing,
-    or the pack step failed. route() then uses the deny message, which names
-    the to-pack folder and lets the agent put the copy there.
+    or the pack step failed. route() then lets the Read run as text.
 
     The code reads the patch cost from the pixels of the packed PNG, through
     densepack.image_cost(), the same formula that subagent_stop.py uses to
@@ -728,8 +704,8 @@ def drop_and_draw(path, event, lines=None):
     except Exception:
         # A page is on disk, but the code cannot read its price. route()
         # cannot compare a pack without a price. This counts as a pack
-        # failure and leads to the same deny message as a missing Pillow or
-        # a missing file.
+        # failure, the same as a missing Pillow or a missing file, and the
+        # Read runs as text.
         discard(drawn)
         return None, None, None, None
 
@@ -768,47 +744,6 @@ def is_scratch_or_temp(path, event=None):
     here = os.path.normcase(os.path.abspath(path))
     base = os.path.normcase(os.path.abspath(scratch))
     return here == base or here.startswith(base.rstrip(os.sep) + os.sep)
-
-
-def capped(event, model, cap):
-    """True when the batch of this turn is too wide for this model to get
-    pictures. The Read then returns text.
-
-    The full batch is not on disk when its first hooks run. Claude Code
-    writes an assistant message one content block to a line as the reply
-    streams, and it starts read-only tools while it still writes. The hooks
-    that fire first read a short batch, and only the later ones read the
-    full batch. A second check after the pack reads the same short batch,
-    because a picture already on disk returns at once. A wait until the file
-    stops growing fails on the gaps that the note in common.py records. For
-    this reason the cap holds each read that starts after its batch is on
-    disk, which is most of a wide batch, and up to `cap` pictures still
-    reach the turn.
-    """
-    if cap is None:
-        return False
-    batch, turn_id = turn_reads(event)
-    if not batch or not over_cap(batch, cap):
-        return False
-    if claim_once("%s-%s" % (event.get("session_id") or "", turn_id)):
-        queue_cap_row(
-            event, model,
-            "%d reads in one turn passed the %s cap of %d files or %s bytes, "
-            "and all of them stayed text"
-            % (len(batch), model, cap, format(BURST_BYTES, ",")),
-            sum(text_bytes(name) for name in batch))
-    return True
-
-
-def text_bytes(path):
-    """The bytes that a raw Read of `path` returns, or 0 when the measure
-    fails. Only the receipt row uses it. A missing file costs the row a
-    number and costs the read nothing."""
-    from pathlib import Path
-    try:
-        return Path(path).stat().st_size
-    except OSError:
-        return 0
 
 
 # ONE PACK PER FILE. prompt_card.py starts a pack of the files of a folder in
@@ -887,7 +822,7 @@ def prefetch(event, paths):
     names them in a Read. prompt_card.py calls this for the files of a folder
     that the message names. Each Read then serves images already on disk and
     does not pack its own file while the model waits. The function skips a
-    file under 1,000 bytes or over READ_MAX_BYTES, and it skips a batch past
+    file under READ_MIN_BYTES or over READ_MAX_BYTES, and it skips a batch past
     BURST_BYTES. route() skips each other file that the Read keeps as
     text."""
     import os
@@ -913,7 +848,7 @@ def prefetch(event, paths):
             size = os.path.getsize(path)
         except OSError:
             continue
-        if 1000 <= size <= READ_MAX_BYTES:
+        if READ_MIN_BYTES <= size <= READ_MAX_BYTES:
             jobs.append((event, str(path), n))
             total += size
     if not jobs or total > BURST_BYTES:
@@ -946,7 +881,7 @@ def read_runs_on_source(path):
 def _drawable_text(path):
     """(size, `drawn_text`, text) for a file whose words a whole-file Read
     packs, or None when the Read keeps it as text. The Read keeps a file as
-    text when it is under 1 KB, over READ_MAX_BYTES, binary, in a script the
+    text when it is empty, over READ_MAX_BYTES, binary, in a script the
     font cannot render, or holds the line marks of the renderer. The size of
     a .doc or .docx comes from the words it holds, which are `drawn_text`.
     route() and draws_on_read() call it, and a Read and a Grep get the same
@@ -972,9 +907,8 @@ def _drawable_text(path):
                       else pointer.doc_text(path)) or None
         if drawn_text:
             size = len(drawn_text.encode("utf-8"))
-    # A file under 1 KB passes as text. The pack of a 483 byte file took
-    # 2.5 s and 469 MB to save 10 tokens.
-    if size < 1000:
+    # An empty file passes as text. See READ_MIN_BYTES.
+    if size < READ_MIN_BYTES:
         return None
     if size > READ_MAX_BYTES:
         return None
@@ -1012,8 +946,7 @@ def draws_on_read(path, event):
     The file is not an image and not a file of the plugin, the model gets
     images, the folder is not a to-pack, vault or scratch folder, and
     _drawable_text() passes. The function skips the pack and its price test,
-    because a check must not pack. It also skips the burst cap, because the
-    cap counts the Reads of this turn, and a Grep is not a Read.
+    because a check must not pack.
     grep_gate.py calls it before it lets a Grep return a whole file as text.
     A .doc or .docx returns False, because a Grep reads its zip bytes, never
     its words, and the Grep does not bypass the image. Never raises."""
@@ -1122,19 +1055,6 @@ def route(event, prefetch=False, post=False):
         # slices. The pull of a few lines passes at the top of route(),
         # through common.line_pull().
 
-        # THE PICTURE CAP. A model whose profile holds a measured cap,
-        # common.BURST_CAPS and common.BURST_BYTES, gets pictures only for a
-        # turn inside that cap and reads a wider turn fully as text. The test
-        # uses the full batch of the assistant message, not this Read alone.
-        # Each hook in the batch then reads the same answer from the same
-        # transcript, and the code needs no counter file. A very wide Sonnet
-        # turn of pictures saves input tokens but costs more in output than
-        # it saves. For this reason only sonnet has a cap.
-        model = actor_reader(event) or FALLBACK_READER
-        cap = burst_cap(model)
-        if capped(event, model, cap):
-            return None
-
         from pathlib import Path
         drawable = _drawable_text(path)
         if drawable is None:
@@ -1213,34 +1133,10 @@ def route(event, prefetch=False, post=False):
                 answer["additionalContext"] = tags
             return {"hookSpecificOutput": answer}
 
-        sid = str(event.get("session_id") or "")
-        if not sid or prefetch:
-            return None
-
-        marker = marker_path(sid, path)
-        if marker.exists():
-            return None
-        # The code writes the marker before it sends the deny. A fault after
-        # this line lets the Read run with the marker already on disk.
-        # The only effect is that this file gets no redirect. The reverse
-        # order can deny the same file forever.
-        # The code moves the marker onto the name, and a false link at the
-        # name gets no write.
-        from common import write_text_atomic
-        if not write_text_atomic(marker, "1"):
-            return None
-
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                # The project names its own files. No character that acts
-                # inside a double-quoted word reaches this message, and a path
-                # with brackets or spaces still names the real file.
-                "permissionDecisionReason": MESSAGE % (
-                    format(size, ","), quoted_path(path)),
-            }
-        }
+        # The pack failed. The Read runs as text, the same as without
+        # DensePack. A deny that asked for a copy into to-pack/ cost the
+        # agent 2 or 3 more calls.
+        return None
     except Exception:  # noqa: BLE001
         return None
 

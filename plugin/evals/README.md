@@ -1,24 +1,22 @@
 # DensePack eval suite
 
-These cases run with Anthropic's `claude plugin eval`. Each case gives Claude Code
-a real task on a frozen copy of the DensePack scripts, 28 files of Python and
-shell, and runs it with DensePack and without it. The report gives the score and
-the price of each run in each arm.
+These are the tasks of the DensePack benches. In each case, Claude Code gets a real
+task on a frozen copy of the DensePack scripts, 28 files of Python and shell.
+`bench/direct_pair.py` runs each task with `claude -p`, once with DensePack and once
+without it, and scores the answer with the regex graders of the case.
 
 | Case | The task |
 | --- | --- |
 | `architecture-doc` | Write ARCHITECTURE.md for 14 hook scripts: the hook event of each, what it does and what it imports |
-| `code-trace` | Trace how a Read becomes the image that the agent gets, through about 20,000 lines of code, and list the other hooks that call the same drawing code, in ANSWER.md |
-| `five-files-read` | Read five scripts whole, 5,586 lines, and write a 5-line summary of them in ANSWER.md |
+| `code-trace` | Trace in ANSWER.md how a Read becomes the image that the agent gets, through about 24,000 lines of code. Then list the other hooks that call the same drawing code, which a change there can break |
+| `five-files-read` | Read five whole scripts of 5,586 lines in all and write a 5-line summary of them in ANSWER.md |
 
-Run the suite from a folder that holds the plugin. The cases use Bash, so they
-need a sandbox: Linux, macOS or WSL2.
+Run one case from the repository folder:
 
 ```
-claude plugin eval ./plugin --tag bench --runs 5 --scaffold --allow-tools Bash Write Edit --model claude-opus-5-5 -j 1
+python bench/direct_pair.py five-files-read --model claude-opus-5-5 --warm --out bench-five-1
 ```
 
-- `--scaffold` runs each case's `setup.sh`, which copies the frozen scripts into the empty workspace.
-- `--allow-tools Bash Write Edit` grants the tools that the tasks need.
-- `-j 1` runs one session at a time. Each DensePack session packs the 28 scripts with several processes, and on a computer with 8 GB for WSL, two such sessions at once made the eval lose runs.
-- The first run asks you to trust the `plugin` folder, because the eval runs the hooks of the plugin and the `setup.sh` of each case on your computer. Claude Code asks this for each folder, so an installed copy of DensePack does not count. In a script or in CI, add `--trust-plugin` to the command to trust the folder.
+- The script copies the frozen scripts into a new folder for each side, so your own files are not touched.
+- The command prints the price, the API requests and the score of each side. The traces stay in the `--out` folder.
+- [Run these benches yourself](../../BENCHMARKS.md#run-these-benches-yourself) contains the other cases and the Windows settings.

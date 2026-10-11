@@ -96,9 +96,6 @@ INK_FLOOR = _S["space.ink_floor"]
 GROUP_PX = _S["font.group_px"]
 PILCROW_INK = _S["mark.pilcrow_ink"]
 COUNT_INK = tuple(_S.get("mark.count_ink") or PILCROW_INK)  # the blank line count
-# The count and the mark of a blank line run, in the order the render step
-# writes them.
-BLANK_FORMAT = _S["mark.blank_format"]
 CURVE_THRESHOLD = _S["curve.threshold"]
 CURVE_RING = _S["curve.ring"]
 CURVE_RING_WEIGHT = _S["curve.ring_weight"]
@@ -394,9 +391,6 @@ def plain_class_map(lines):
 # The marks in the flow.
 NL_MARK = dp.NL_MARK
 BLANK_MARK = _S["mark.blank"]   # the bullet, a run of blank lines
-# The section sign. No page shows it, because the bands and the indent count
-# hold the indent. The name stays for the callers that read it.
-COUNT_MARK = _S["mark.count"]
 # The band as a shape. pad grows or shrinks it past the text, and offset moves
 # it, in pixels. All zero in the shipped renderer.
 BAND_PAD_X = int(_S.get("band.pad_x", 0) or 0)
@@ -461,11 +455,6 @@ UND_MARK = _S["mark.underscore"]  # the double dagger, an underscore run
 # The underscore run mark stays in the reserved set that build_flow rejects in
 # a source. A run of underscores renders as the underscores themselves, in
 # alternating inks. No page shows this mark.
-
-# The runs inside the leading whitespace of one line, in source order.
-# build_flow counts the columns of a tab-indented line with expandtabs(4). The
-# indent count is then the column count.
-_LEAD_RUN = re.compile(r" +|\t+")
 
 # The two inks.
 INDENT_INK = _S["code.ink.indent"]
@@ -2339,27 +2328,6 @@ def backend_span(font, ch, seen):
         _SPAN_CACHE[key] = span
     return span
 
-
-def backend_spills(pairs, face_for):
-    """True when one character of this flow inks a column outside the span
-    that Pillow's layout clears for it.
-
-    The layout keeps Pillow's advances while each backend glyph fits inside
-    the columns that ink_span() measured, because the clearance between
-    neighbors then holds as rendered. When one spills, the page takes its
-    advances and its spans from the backend.
-    """
-    seen_p = {}
-    seen_b = {}
-    for ch, big in {(p[0], p[2]) for p in pairs if not _is_gap(p)}:
-        f = face_for(ch, big)[0]
-        here = ink_span(f, ch, seen_p.setdefault(f.size, {}))
-        there = backend_span(f, ch, seen_b.setdefault(f.size, {}))
-        if there is None:
-            continue
-        if here is None or there[0] < here[0] or there[1] > here[1]:
-            return True
-    return False
 
 
 def paste_ink(im, fill, box, mask):

@@ -21,7 +21,9 @@ Agent tool is a dict with status "completed", the agentId and the report as
 a text block in content. An updatedToolOutput with new text in content
 reaches the lead. An image in content does not reach the lead, in each of
 the four shapes tested. For that reason the lead still opens the image with
-Read.
+Read. On 8 October 2026, a test on Claude Code 2.1.295 confirmed it. An
+image block in content makes the harness drop the whole updatedToolOutput,
+and the lead gets the original report. A text block alone replaces it.
 
 A background agent returns its report later in a message, and its Agent
 result holds no report. Its status is not "completed". The hook changes

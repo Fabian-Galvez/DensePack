@@ -56,7 +56,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
@@ -124,7 +124,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
@@ -143,15 +143,6 @@
           {
             "type": "command",
             "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/read_gate.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/read_gate.py\" ; exit $LASTEXITCODE"
-          }
-        ]
-      },
-      {
-        "matcher": "Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/grep_gate.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/grep_gate.py\" ; exit $LASTEXITCODE"
           }
         ]
       },

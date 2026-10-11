@@ -13,6 +13,6 @@ Then relay the status line in one sentence.
 
 /max-off sends Sonnet text again.
 
-At its next session start, a Sonnet main agent gets the DensePack session start note. Each Sonnet subagent gets the same note when it starts.
+At its next session start, a Sonnet main agent gets the DensePack session start note. Sonnet subagents get the same note when they start.
 
 The setting applies to each session in this project folder. Another project folder keeps its own setting.

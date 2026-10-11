@@ -29,7 +29,7 @@ except ImportError:                       # pragma: no cover
     # in a plain terminal, where no step installs Pillow. The tool prints the
     # install command in place of a traceback.
     sys.exit('DensePack needs Pillow to make an image. Pillow is not installed.\n'
-             'Install it with:  python -m pip install pillow')
+             'Install it with:  python3 -m pip install --user pillow freetype-py numpy')
 
 PATCH = 28         # one visual token is one 28 by 28 patch
 

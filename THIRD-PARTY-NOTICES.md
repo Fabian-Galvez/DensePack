@@ -1,4 +1,4 @@
-<!-- DensePack 1.3.4 -->
+<!-- DensePack 2.0 -->
 # Third-party notices
 
 DensePack uses the MIT license. This file lists the software and the font
@@ -13,6 +13,12 @@ NumPy, BSD 3-Clause, with bundled parts under 0BSD, MIT, Zlib and CC0-1.0. Copyr
 FreeType, FreeType License. Portions of this software are copyright The FreeType Project (www.freetype.org). All rights reserved. freetype-py includes it.
 
 Inter, SIL Open Font License 1.1. Copyright (c) 2016 The Inter Project Authors. `plugin/fonts/Inter-SemiBold.ttf`, with the license in `plugin/fonts/LICENSE-Inter.txt`.
+
+<br>
+
+---
+
+<br>
 
 ## The Pillow permission notice
 

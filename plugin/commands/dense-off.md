@@ -1,5 +1,5 @@
 ---
-description: Stop all DensePack hooks for this session. A new session starts with DensePack on.
+description: Stop all DensePack hooks for this session. New sessions start with DensePack on.
 disable-model-invocation: true
 ---
 
@@ -11,4 +11,4 @@ PowerShell: powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN
 
 Then relay the status line in one sentence.
 
-This command uninstalls nothing and keeps all settings. The hooks of each subagent of this session stop too. /densepack starts DensePack again. It also sets all settings to their defaults.
+This command turns DensePack off for this session and its subagents only. DensePack stays installed, and your settings stay. /densepack turns DensePack on again and sets all settings to their defaults.

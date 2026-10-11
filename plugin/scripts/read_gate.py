@@ -115,7 +115,7 @@ def main():
         # A pointer can be older than the sweep. The tmp copy is then gone,
         # but the copy that keep_copy() put in the vault folder of this
         # conversation is still there. The gate changes the Read to that
-        # copy. A session open past 24 hours can still open each image that
+        # copy. A session open past 7 days can still open each image that
         # it got.
         pending = waiting()
         if asked not in pending:

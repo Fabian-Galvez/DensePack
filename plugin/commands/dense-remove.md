@@ -1,5 +1,5 @@
 ---
-description: Restore the original text of each converted instruction file. Remove CLAUDE_CODE_THRIFTY_SONIC from ~/.claude/settings.json. Delete the DensePack files that /plugin uninstall does not delete. Run it before the uninstall.
+description: Restore the original text of each converted instruction file. Remove the settings that DensePack added to ~/.claude/settings.json: CLAUDE_CODE_THRIFTY_SONIC, and on Windows EMBEDDED_SEARCH_TOOLS and CLAUDE_CODE_USE_POWERSHELL_TOOL. Delete the DensePack files that remain after /plugin uninstall. Run it before the uninstall.
 disable-model-invocation: true
 ---
 

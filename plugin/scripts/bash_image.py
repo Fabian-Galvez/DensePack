@@ -1,4 +1,5 @@
-"""Returns the output of a Bash call as an image, in the same tool result.
+"""Returns the output of a Bash or PowerShell call as an image, in the same
+tool result.
 
 A Read of a file returns an image with no extra turn, because read_image.py
 replaces the Read result with its image after the Read runs. This hook does
@@ -7,14 +8,21 @@ to a file and returned a pointer that the model read in a separate turn.
 That route took 3 to 7 turns and 1.3 to 2.9 times the billed tokens of
 plain text.
 
+POWERSHELL. The hook also runs on PostToolUse of PowerShell. PowerShell
+output takes the same route and gets the same image as Bash output. The
+PowerShell result drops stderr beside an image, so the hook puts that stderr
+in its note. The text copy has the
+name bash-output-<id>.txt for both tools.
+
 PostToolUse on Bash. The command already ran, and its output is in
 tool_response. When the images of that output cost fewer tokens than the
 text, the hook returns updatedToolOutput in the image shape of Bash, with
 stdout as a PNG data URL and isImage true. Claude Code then shows the model
 the image in place of the text, in the same result, and the model uses the
-same number of turns as with text. A Bash result holds one image. Output
-that needs more than one image returns image 1 in the result, and a note
-beside it names the path and the lines of each other image (see
+same number of turns as with text. Bash output that needs more than one
+image returns all its images in the same result, in structuredContent. A
+PowerShell result holds one image, so longer PowerShell output returns image
+1 and a note that names the path and the lines of each other image (see
 pages_output()). A model reads a number such as 745120 from such an image.
 In each other case, the output stays text. A line that holds a git --stat
 bar, a pip list rule, a number of 18 or more digits, a random ID with a
@@ -57,6 +65,12 @@ from common import (actor_key, actor_reader, disabled, emit, ensure_pillow,  # n
 # that check is not exact. For this reason the floor is above the
 # break-even.
 MIN_CHARS = 400
+
+# The tools whose output this hook packs. In Claude Code 2.1.295, the
+# PowerShell tool has the output fields of Bash (stdout, stderr,
+# interrupted, isImage), and its result shows a PNG data URL as an image
+# the same way. A Windows user without Git Bash has only PowerShell.
+SHELL_TOOLS = ("Bash", "PowerShell")
 
 # Output lines that hold one of these go beside the image as exact text. In
 # a test, Opus 5.5 copied real Bash output from its images two times,
@@ -105,7 +119,7 @@ TEXT_ONLY = re.compile(
 # note, and when the exact lines cost more than the image saves, the output
 # stays text. An image with only the numbers of those lines cost more. On a
 # sample where each line is risky, the model read each line from the text
-# copy to type it exactly, at $0.0825 against $0.0669 for the text.
+# copy to type it exactly.
 def risky_rows(text):
     """The 0-based numbers of the lines TEXT_ONLY matches, in order."""
     return sorted({text.count("\n", 0, m.start()) for m in TEXT_ONLY.finditer(text)})
@@ -316,9 +330,10 @@ def draw_small(text, model, title=""):
 
 
 def image_output(event):
-    """Return the PostToolUse output that replaces this Bash output with its
-    image, or None to keep the output as text."""
-    if event.get("tool_name") != "Bash" or disabled(event.get("session_id")):
+    """Return the PostToolUse output that replaces this Bash or PowerShell
+    output with its image, or None to keep the output as text."""
+    tool = event.get("tool_name")
+    if tool not in SHELL_TOOLS or disabled(event.get("session_id")):
         return None
     resp = event.get("tool_response")
     if not isinstance(resp, dict) or resp.get("isImage") or resp.get("interrupted"):
@@ -326,6 +341,9 @@ def image_output(event):
     text = resp.get("stdout")
     if not isinstance(text, str):
         return None
+    # Claude Code maps an image result of Bash with the trimmed stderr as
+    # text beside the image. The PowerShell mapper drops stderr from an image
+    # result. with_stderr() in main() puts that stderr in the note instead.
     # A Windows command ends each line with CRLF. The renderer takes LF only.
     # The Read route gets the same result, because it reads its file with
     # universal newlines. Without this step, write_text() below changes each
@@ -392,10 +410,10 @@ def image_output(event):
         return None
     image = Path(image)
     try:
-        # A Bash result holds one image. Output of more than one page returns
-        # its first page here and names the others in the hook's note.
+        # Output of more than one page: pages_output() returns all pages in
+        # one Bash result, or page 1 and a note for PowerShell.
         if not image.name.endswith("-image-1-of-1-DensePack.png"):
-            return pages_output(resp, text, image, _line, copy_name, exact)
+            return pages_output(resp, text, image, _line, copy_name, exact, tool)
         trim_bottom(image)
         with Image.open(str(image)) as im:
             cost = dp.image_cost(*im.size)
@@ -418,14 +436,16 @@ def image_output(event):
     return tool_output(out, note)
 
 
-def pages_output(resp, text, first, line, copy_name, exact=""):
-    """The PostToolUse output for Bash output of more than one page.
+def pages_output(resp, text, first, line, copy_name, exact="", tool="Bash"):
+    """The PostToolUse output for Bash or PowerShell output of more than one
+    page. `tool` is the tool name that the note gives.
 
-    A Bash result holds one image, and for this reason it holds the first
-    page. The context note of the hook names each other page and the lines
-    it holds, the same as the Read of a long file names its pages, and the
-    model Reads the pages it needs. A long output is the text that costs the
-    most, and this route packs it. `line` is the status line of
+    A Bash result returns every page as an image block in structuredContent,
+    each after a label with its lines, so the model gets the whole output in
+    one result, as with text. A PowerShell result holds one image: it holds
+    the first page, and the note of the hook names each other page and its
+    lines. A long output is the text that costs the most, and this route
+    packs all of it. `line` is the status line of
     pointer.draw_drop_file(). Its Pages row holds the path of each page
     after the first, and its Lines row holds the first source line of each
     page. The pages together must cost fewer tokens than the text, or the
@@ -465,21 +485,65 @@ def pages_output(resp, text, first, line, copy_name, exact=""):
         a = firsts[k] if k < len(firsts) else None
         b = firsts[k + 1] - 1 if k + 1 < len(firsts) else total
         spans.append("lines %d to %d" % (a, b) if a else "")
-    others = " , ".join("image %d of %d%s: %s" % (k + 1, len(pages), " (%s)" % spans[k] if spans[k] else "",
-                                                   pages[k]) for k in range(1, len(pages)))
-    note = ("DensePack packed this Bash output into %d images. This result is image 1 of %d%s. "
-            "Read the others for the rest of the output: %s." % (
-                len(pages), len(pages), " (%s)" % spans[0] if spans[0] else "", others))
     out = dict(resp)
     out["stdout"] = "data:image/png;base64," + data
     out["isImage"] = True
+    if tool == "Bash":
+        # ALL PAGES IN ONE RESULT. The Bash mapper of Claude Code 2.1.296
+        # sends a non-empty structuredContent as the content of the tool
+        # result, in place of stdout. Each page goes in as an image block, so
+        # the model gets the whole output in one result, as with text.
+        blocks = []
+        for k, p in enumerate(pages):
+            blocks.append({"type": "text", "text": "Image %d of %d%s:" % (
+                k + 1, len(pages), " (%s)" % spans[k] if spans[k] else "")})
+            blocks.append({"type": "image", "source": {
+                "type": "base64", "media_type": "image/png",
+                "data": data if k == 0 else base64.b64encode(p.read_bytes()).decode("ascii")}})
+        stderr = resp.get("stderr")
+        if isinstance(stderr, str) and stderr.strip():
+            blocks.append({"type": "text", "text": stderr.strip()})
+        out["structuredContent"] = blocks
+        note = "DensePack packed this Bash output into %d images, all in this result." % len(pages)
+        return tool_output(out, note + ("\n" + extra if extra else ""))
+    # Only the Bash mapper is checked to send structuredContent. For
+    # PowerShell, the note names the other pages, and the model Reads them.
+    others = " , ".join("image %d of %d%s: %s" % (k + 1, len(pages), " (%s)" % spans[k] if spans[k] else "",
+                                                   pages[k]) for k in range(1, len(pages)))
+    note = ("DensePack packed this %s output into %d images. This result is image 1 of %d%s. "
+            "Read the others for the rest of the output: %s." % (
+                tool, len(pages), len(pages), " (%s)" % spans[0] if spans[0] else "", others))
     return tool_output(out, note + ("\n" + extra if extra else ""))
+
+
+def with_stderr(answer, event):
+    """Add the stderr of a PowerShell result to the note beside its image.
+    Claude Code keeps the stderr of a Bash image result as text, and drops
+    the stderr of a PowerShell image result. The model then gets the stderr
+    of the two tools in the same turn."""
+    resp = event.get("tool_response")
+    stderr = resp.get("stderr") if isinstance(resp, dict) else None
+    if not answer or event.get("tool_name") != "PowerShell":
+        return answer
+    if not isinstance(stderr, str) or not stderr.strip():
+        return answer
+    spec = answer["hookSpecificOutput"]
+    note = spec.get("additionalContext", "")
+    spec["additionalContext"] = (note + "\n" if note else "") + "PowerShell stderr:\n" + stderr.strip()
+    return answer
 
 
 def main():
     try:
-        answer = image_output(read_event())
+        event = read_event()
+        answer = with_stderr(image_output(event), event)
         if answer:
+            from common import first_image_note
+            first = first_image_note(event)
+            if first:
+                spec = answer["hookSpecificOutput"]
+                spec["additionalContext"] = "\n".join(
+                    x for x in (first, spec.get("additionalContext")) if x)
             emit(answer)
     except Exception:  # noqa: BLE001
         pass

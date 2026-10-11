@@ -1,4 +1,5 @@
-"""Blocks a Bash read of the text of a packed report and names its image.
+"""Blocks a Bash or PowerShell read of the text of a packed report and names
+its image.
 
 The plugin packs the report of an agent as a small image and gives the model
 a note with the image path. The text stays on disk next to the image. Without
@@ -11,7 +12,9 @@ report text with cat, sed, grep and wc. They put 48,298 characters into the
 prefix of the model, about 20,064 tokens at the measured 2.41 characters per
 token for report prose. Packing those same reports as images saved 20,014
 tokens in that session. The leak canceled the whole saving. The session
-ended 50 tokens worse than a session with no packs.
+ended 50 tokens worse than a session with no packs. That session dates from
+before Bash output was packed. Shell output is now packed too, but its result
+holds one image, while a Read of the image returns all its pages at once.
 
 What the gate blocks. A Bash command that names densepack-report-<id>.txt,
 densepack-src-<id>.txt, densepack-bashsrc-<id>.txt or
@@ -60,6 +63,13 @@ FILENAME = re.compile(r"densepack-[a-z]+-[A-Za-z0-9-]+\.txt")
 READERS = ("cat", "head", "tail", "sed", "grep", "awk", "less", "more",
            "type", "wc", "sort", "uniq", "cut", "nl", "strings", "od",
            "Get-Content", "Select-String")
+
+# The PowerShell tool runs the same gate. PowerShell names are not case
+# sensitive, so the gate matches them in any case. gc is the short name of
+# Get-Content, and sls is the short name of Select-String. cat and type are
+# also short names of Get-Content and are in READERS. Select-String is a
+# search, the same as grep, and grep is in READERS.
+PS_READERS = READERS + ("gc", "sls")
 
 OVERRIDE = "DENSEPACK_SOURCE_OK"
 
@@ -181,6 +191,24 @@ ONE_LINE = r"sed\s+-n\s+['\"]?\d+p"
 RANGE = r"sed\s+-n\s+['\"]?\d+\s*,\s*\d+p"
 BASHSRC = re.compile(r"densepack-bashsrc-[A-Za-z0-9]+\.txt")
 
+# The PowerShell forms of ONE_LINE and RANGE. (Get-Content f)[91] and
+# Get-Content f | Select-Object -Index 91 print one line, the same as
+# sed -n '92p'. (Get-Content f)[9..28], Select-Object -Index 9..28 and
+# Select-Object -Skip 9 -First 20 print a range, the same as
+# sed -n '10,29p'. Select-Object -First 20 alone is head, and
+# Get-Content -TotalCount and -Tail are head and tail. These read the
+# file, the same as head and tail in Bash.
+_PS_SELECT = r"\b(?:Select-Object|select)\s+"
+PS_ONE_LINE = re.compile(
+    r"\)\s*\[\s*-?\d+\s*\]|" + _PS_SELECT + r"-Index\s+\d+(?!\s*(?:,|\.\.|\d))",
+    re.IGNORECASE)
+PS_RANGE = re.compile(
+    r"\)\s*\[\s*-?\d+\s*\.\.\s*-?\d+\s*\]|"
+    + _PS_SELECT + r"-Index\s+\d+\s*\.\.\s*\d+|"
+    + _PS_SELECT + r"-Skip\s+\d+\s+-First\s+\d+|"
+    + _PS_SELECT + r"-First\s+\d+\s+-Skip\s+\d+",
+    re.IGNORECASE)
+
 # One marker per session and sidecar name. When the marker exists, the gate
 # already blocked a range read of that file once in this session, and the
 # next one passes. bootstrap.py prunes it with the other working files.
@@ -192,8 +220,9 @@ def range_marker(session, source_name):
     return tmp_dir() / (RANGE_MARKER % (str(session or "")[:16], digest))
 
 
-def bounded_read(command, session=None):
+def bounded_read(command, session=None, ps=False):
     """Return True when the command asks for named lines and not the file.
+    With ps, the PowerShell forms of one line and a range also count.
 
     One line from any file is always bounded. A range from command output is
     always bounded. A range from a report, src or briefsrc sidecar is not
@@ -203,7 +232,9 @@ def bounded_read(command, session=None):
     """
     if re.search(ONE_LINE, command) is not None:
         return True
-    if re.search(RANGE, command) is None:
+    if ps and PS_ONE_LINE.search(command) is not None:
+        return True
+    if re.search(RANGE, command) is None and not (ps and PS_RANGE.search(command)):
         return False
     if BASHSRC.search(command) is not None:
         return True
@@ -220,25 +251,27 @@ def bounded_read(command, session=None):
     return False
 
 
-def reads_a_file(command, session=None):
+def reads_a_file(command, session=None, ps=False):
     """Return True when the command runs a program that prints the contents
-    of a file.
+    of a file. With ps, the command is a PowerShell command.
 
     The match uses a word boundary. A path with the letters cat, such as a
     folder named catalog, does not count as the cat command. A bounded read
     does not count. It prints the lines that it names and nothing else.
     """
-    if bounded_read(command, session):
+    if bounded_read(command, session, ps):
         return False
-    for name in READERS:
-        if re.search(r"(^|[\s;|&(])%s([\s]|$)" % re.escape(name), command):
+    flags = re.IGNORECASE if ps else 0
+    for name in (PS_READERS if ps else READERS):
+        if re.search(r"(^|[\s;|&(])%s([\s]|$)" % re.escape(name), command, flags):
             return True
     return False
 
 
-def record_bypass(command, session):
+def record_bypass(command, session, ps=False):
     """Write one row in densepack-manifest.jsonl for an override read of
-    packed text. The manifest records each pack and each skipped pack.
+    packed text. The manifest records each pack and each skipped pack. With
+    ps, the command is a PowerShell command.
 
     The override is valid work, and this function does not block or warn.
     The row must still exist. The comment at the top of
@@ -249,7 +282,7 @@ def record_bypass(command, session):
     image exists. That is the text that the override reads at full price.
     """
     try:
-        if not reads_a_file(command, session):
+        if not reads_a_file(command, session, ps):
             return
         total = 0
         names = []
@@ -278,21 +311,24 @@ def record_bypass(command, session):
 
 
 def main():
-    # A fault never blocks the call. This gate runs before each Bash command
-    # in the session. After a fault, the command runs unchanged.
+    # A fault never blocks the call. This gate runs before each Bash and
+    # PowerShell command in the session. After a fault, the command runs
+    # unchanged.
     try:
         event = read_event()
         if disabled(event.get("session_id")):
             return 0
-        if (event.get("tool_name") or "") != "Bash":
+        tool = event.get("tool_name") or ""
+        if tool not in ("Bash", "PowerShell"):
             return 0
+        ps = tool == "PowerShell"
         command = str((event.get("tool_input") or {}).get("command") or "")
         if not command:
             return 0
         if OVERRIDE in command:
-            record_bypass(command, event.get("session_id"))
+            record_bypass(command, event.get("session_id"), ps)
             return 0
-        if not reads_a_file(command, event.get("session_id")):
+        if not reads_a_file(command, event.get("session_id"), ps):
             return 0
         images = images_for(command)
         if not images:
