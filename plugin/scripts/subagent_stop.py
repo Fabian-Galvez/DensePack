@@ -63,7 +63,9 @@ import sys
 import time
 from pathlib import Path
 
-from common import (MARKER, append_lifecycle, append_queue, code_size, disabled,
+from common import (CONTEXT_WHEN_UNKNOWN, OUT_OVER_WRITE, READ_CALL_OUTPUT_TOKENS,
+                    READ_OVER_WRITE,
+                    MARKER, append_lifecycle, append_queue, code_size, disabled,
                     font_size, keep_copy, lead_gets_images, lead_model_name,
                     pending_path, read_turn_fee,
                     report_background_path, report_digest, report_pack_worth,
@@ -234,7 +236,10 @@ def marker_record(started, spawned_by):
 # One Read turn of the model's context, the fee that an image must beat
 # before it saves anything. Below it, the image costs more than the text it
 # replaces.
-READ_TURN_TOKENS = 2000
+# The code computes it with the formula of read_turn_fee() for a session that
+# it cannot read, at READ_OVER_WRITE, the highest cache read share. A fixed number went stale when CONTEXT_WHEN_UNKNOWN changed.
+READ_TURN_TOKENS = int(CONTEXT_WHEN_UNKNOWN * READ_OVER_WRITE
+                       + READ_CALL_OUTPUT_TOKENS * OUT_OVER_WRITE)
 
 
 def report_floor_chars(session_id=None):
@@ -826,8 +831,8 @@ def main():
     append_queue(dict(entry, swap_digest=report_digest(text))
                  if swap_file is not None else entry)
 
-    # Each report image goes on the pending list. One Read call can then get
-    # a whole batch. Each Read is a turn, and one turn reads the whole
+    # Each report image goes on the pending list. The lead can then Read all
+    # the images of a batch in one message, one turn. Each turn reads the whole
     # conversation again. Reports read one Read at a time can cost more than
     # their text saved. The batch makes a small report worth packing at all.
     try:

@@ -1,7 +1,7 @@
-<!-- DensePack 1.3.4 -->
+<!-- DensePack 2.0 -->
 # Right-click tool
 
-The DensePack right-click tool packs a file or selected text into a DensePack image that costs fewer input tokens than the text. Paste the image in place of the text into models that read images well.
+The DensePack right-click tool packs a file or selected text into a DensePack image. For most text, the image costs fewer input tokens than the text itself. Paste the image in place of the text into models that read images well.
 
 <br>
 
@@ -13,9 +13,9 @@ The DensePack right-click tool packs a file or selected text into a DensePack im
 
 | System | Install |
 | --- | --- |
-| Windows | Run `install-densepack.bat`. It installs Python, Pillow, freetype-py, NumPy and AutoHotkey when they are missing. Windows can ask for administrator rights for AutoHotkey.<br><br>The installer adds the shell menu entry, starts the hotkeys and puts a DensePack shortcut in your Windows Startup folder, and the hotkeys then start with Windows. `DensePack.ahk` catches Ctrl+Right-click in each application.<br><br>The installer also adds a reading card hook to `~\.claude\settings.json` that runs before each prompt in each Claude Code project.<br><br>To install without the hook, run `powershell -ExecutionPolicy Bypass -File install-densepack.ps1 -NoCard`. To install without the hotkeys, add `-NoHotkey` to the PowerShell command |
-| Linux | Run `sh install-densepack.sh`. It checks for Python, installs Pillow, freetype-py and NumPy, and writes the file manager menu items and the Open With entry in your home folder. Ubuntu 24.04 and later block pip installs into the system Python, and on those systems the script prints the command to run. `sh uninstall-densepack.sh` removes the tool |
-| macOS | Open `DensePack it.workflow` and accept the install when macOS asks. The Finder right-click menu then shows DensePack it. The workflow runs `~/DensePack/tools/densepack.py`. When the download is in another folder, edit the PACKER line of the workflow. GitHub ZIP files unpack to a folder named DensePack-main, and you must rename that folder to DensePack |
+| Windows | Run `install-densepack.bat`. It installs Python, Pillow, freetype-py, NumPy and AutoHotkey when they are missing. Windows can ask for administrator rights for AutoHotkey.<br><br>The installer adds the shell menu entry and starts the hotkeys. It also puts a DensePack shortcut in your Windows Startup folder to start the hotkeys with Windows. `DensePack.ahk` catches Ctrl+Right-click in each application.<br><br>The installer also adds a reading card hook to `~\.claude\settings.json` that runs before each prompt in each Claude Code project.<br><br>To install without the hook, run `powershell -ExecutionPolicy Bypass -File install-densepack.ps1 -NoCard`. To install without the hotkeys, add `-NoHotkey` to the PowerShell command |
+| Linux | Run `sh install-densepack.sh`. It checks for Python 3.10 or newer and installs Pillow, freetype-py and NumPy when they are missing. It then writes the file manager menu items and the Open With entry in your home folder. Newer Debian and Ubuntu releases block pip installs into the system Python. On those systems, the script prints the commands that work and stops. `sh uninstall-densepack.sh` removes the tool |
+| macOS | Open `DensePack it.workflow` and accept the install when macOS asks. The Finder right-click menu then shows DensePack it. The workflow runs `~/DensePack/tools/densepack.py`. It installs nothing, so it needs Python 3.10 or newer with Pillow, freetype-py and NumPy: run `brew install python`, then `python3 -m pip install --user --break-system-packages pillow freetype-py numpy`. When the download is in another folder, edit the PACKER line of the workflow. GitHub ZIP files unpack to a folder named DensePack-main. Rename that folder to DensePack, because the workflow runs the script from `~/DensePack` |
 
 <br>
 
@@ -45,22 +45,24 @@ The DensePack right-click tool packs a file or selected text into a DensePack im
 
 ## Output folders
 
-On Windows, each hotkey and each menu item saves the text and all images in a new folder named after the first three words of the text.
+On Windows, the hotkeys and menu items save the text and the images of each pack in a new folder. The folder takes its name from the first three words of the text, which helps you find a pack later.
 
 | You used | The new folder is in |
 | --- | --- |
 | `Ctrl + Shift + D` or `Ctrl + Shift + C` | `tools\ctrl-shift-vault` |
 | The `Ctrl + Right-click` menu | `tools\ctrl-right_click-vault` |
 
-Each folder holds `text.txt` with the exact text and one PNG for each image, such as `image-1.png` and `image-2.png`. File Explorer shows the time of each pack.
+Pack folders contain `text.txt` with the exact text and one PNG for each image, such as `image-1.png` and `image-2.png`. File Explorer shows the time of each pack.
 
 `Ctrl + Shift + D` and the menu item **DensePack it** replace the selected text with its image.
 
 - When the text needs more than one image, the tool pastes all images in order.
-- The tool explains this in a window the first time you use one of them. Select "Do not show this message again" to stop that window in later uses.
+- The first time you use one of them, the tool shows a warning window. The warning contains that the tool replaces the selected text, saves the text in the vault folder, and leaves it in the clipboard history. Select "Do not show this message again" to stop that window in later uses.
 - The text also stays in the Windows clipboard history (`Win + V`) when clipboard history is on.
 
-Git ignores the two vault folders, `ctrl-shift-vault` and `ctrl-right_click-vault`, and the tool and the uninstall never delete them. Delete a folder manually when you no longer need it.
+Git ignores the two vault folders, `ctrl-shift-vault` and `ctrl-right_click-vault`. The tool and the uninstall never delete them, so delete a folder manually when you no longer need it.
+
+Removing the plugin folder deletes them when the tool runs from it, so copy out the folders you want to keep first.
 
 <br>
 
@@ -90,9 +92,9 @@ Git ignores the two vault folders, `ctrl-shift-vault` and `ctrl-right_click-vaul
 
 ## The registry change
 
-The installer adds one key, `HKCU\Software\Classes\*\shell\DensePack`, to your own user hive and never to the machine hive. The key adds the right-click entry for each file type.
+The installer adds one key, `HKCU\Software\Classes\*\shell\DensePack`, to your own user hive. When AutoHotkey is missing, its winget install runs for the whole computer and adds AutoHotkey's own entries. The key adds the right-click entry for each file type.
 
-`uninstall-densepack.bat` deletes the key, the Startup shortcut, the hotkeys and the reading card hook in `~/.claude`.
+`uninstall-densepack.bat` deletes the key, the Startup shortcut, the hotkeys and the reading card hook in `~/.claude`. When it finds no Python, it keeps the reading card and prints the entry to delete from `~/.claude/settings.json`.
 
 <br>
 
@@ -102,24 +104,11 @@ The installer adds one key, `HKCU\Software\Classes\*\shell\DensePack`, to your o
 
 ## The image
 
-- Text costs about 1 token for each 2.40 characters, and images cost 1 token for each patch of 28 by 28 pixels.
-- Small dense type puts more characters into each patch.
-- For most text, the image costs fewer tokens than the text.
+For most text, the image costs fewer tokens than the text. The token costs and the meaning of each mark are in [The image](../HOW-IT-WORKS.md#the-image).
 
-After a run from the shell, `densepack.py` prints the text cost and the image cost, and it prints WORSE when the image costs more.
+After a run from the shell, `densepack.py` prints the text cost and the image cost. It prints WORSE when the image costs more. Send the text instead in that case.
 
-This tool and the DensePack plugin use the same renderer, `plugin/scripts/codepack.py`, and make the same image for each model.
+This tool uses the plugin renderer, `plugin/scripts/codepack.py`, so it makes the same image as the plugin for each model.
+The tool loads the renderer from `plugin/scripts/` each time it runs. Changes to the renderer reach the tool with no change to the tool.
 
-| Mark | What it shows |
-| --- | --- |
-| Black characters | Letters |
-| Blue characters | Digits |
-| Red characters | Most other characters |
-| Green numbers in a box | The line number in the source file |
-| Gaps in the green numbers | Blank lines |
-| Red numbers after the green number | The exact indent of the line in spaces |
-| Purple marks at the right edge | The line continues on the next row |
-| The band color | The nesting depth of the line |
-| The key at the top of the first image | The name of each mark |
-
-The image has no line end mark, and the tool writes no legend file. Each menu item and hotkey runs `densepack.py` with no `--size` and makes the same image as the plugin.
+The image has no line end mark. The tool writes no legend file, because the first image has a key for each mark. The menu items and hotkeys all run `densepack.py` with no `--size` and make the same image as the plugin.

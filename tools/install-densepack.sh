@@ -61,7 +61,11 @@ esac
 py=python3
 command -v python3 >/dev/null 2>&1 || py=python
 if ! command -v "$py" >/dev/null 2>&1; then
-  echo "Python is not on your PATH. Install Python 3, then run this again."
+  echo "Python is not on your PATH. Install Python 3.10 or newer, then run this again."
+  exit 1
+fi
+if ! "$py" -c 'import sys; sys.exit(sys.version_info < (3, 10))'; then
+  echo "DensePack needs Python 3.10 or newer. Install it, then run this again."
   exit 1
 fi
 echo "using $("$py" -c 'import sys; sys.stdout.write(sys.executable)')"

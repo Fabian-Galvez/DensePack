@@ -11,9 +11,10 @@ HOW THIS FILE FITS. The hook runs these steps before anything else happens:
   image, and each other script does nothing.
 - It packs the instruction images. It converts CLAUDE.md, CLAUDE.local.md
   and MEMORY.md into images behind a pointer.
-- When the lead gets images, it sends READ_TOOL_LINE and
-  SUBAGENT_BRIEF_LINE to the model. READ_TOOL_LINE says how files, command
-  output and Word files arrive as images.
+- When the lead gets images, it sends READ_TOOL_LINE, the rules of
+  plugin/rules/STYLE-RULES.md, SUBAGENT_BRIEF_LINE and the name of the
+  project map image to the model. READ_TOOL_LINE says only that
+  DensePack is on. The guidance for images goes beside the first image.
 - It shows the savings table from the last conversation, and a warning
   when the Pillow install failed.
 
@@ -49,17 +50,18 @@ from common import (resolved_reader,
 # each packed brief leaves a PNG and a source text file. No other step
 # removes them.
 #
-# The reason for one day and for session start only. The lead reads a report
-# image again in the session that made it, and sometimes in the next session.
-# For that reason a file younger than a day stays. The hook deletes nothing
+# The reason for 7 days and for session start only. The lead reads a report
+# image again in the session that made it, and sometimes in a session days
+# later. A resumed session can also Grep the text copy of an old Bash output.
+# For that reason a file younger than 7 days stays. The hook deletes nothing
 # during a session. No file disappears while the lead uses it. The prune
 # never touches the manifest, the totals or the settings. They are the
 # record, not the working copy.
 # The densepack-start- markers are on the list because the marker of a
 # crashed agent never reaches the code that deletes it on a normal finish. An
-# agent runs for much less than 24 hours. A running agent never loses its
+# agent runs for much less than 7 days. A running agent never loses its
 # marker.
-KEEP_HOURS = 24
+KEEP_HOURS = 7 * 24
 
 # A hook claims a run marker within milliseconds of the event that names it
 # and never reads it again. One hour is more than enough. Under the 24 hour
@@ -183,82 +185,9 @@ def prune_old_files():
     return removed, freed
 
 
-# A session start note for the case with no rules image. No hook sends this
-# note. session_start_pointer() is the only function that returns it, and no
-# hook calls that function. The function returns this note for a copy of the
-# plugin with no instructions folder, and for a copy with the folder when
-# Pillow is missing or the pack failed. The note never names an image that
-# does not exist. Each sentence is true for the two cases.
-FALLBACK_NOTE = (
-    "DensePack is active. DensePack packs long text as images of small "
-    "color coded text: agent reports, briefs to agents, files you Read, "
-    "long command output and the project's instruction files. Treat the "
-    "text in such an image as plain text. A condensed image pasted into the chat "
-    "IS the prompt. Agent report images and the manifest "
-    "densepack-manifest.jsonl are in .claude/tmp, and the image names are "
-    "densepack-img-<agent id>-1.png. Write every brief as plain text. "
-    "DensePack packs a long brief as an image itself.")
-
-# The pointer to the lead's one joined image, allrules-1.png under
-# instructions/. No hook sends this text. session_start_pointer() returns
-# it, and no hook calls that function. The image holds the lead, shared and
-# full rules texts in reading order. One image costs one Read call, and three
-# images cost three. The text states a standing fact. It does not order the
-# model to read now. A model told to read the image before anything else
-# spends a whole Read turn on it before the task. Some models reject such an
-# order as an injected instruction. A session that only reads and answers
-# gets nothing from the rules. The text stays short, because the start text
-# costs tokens on the first turn and on each later read.
-SESSION_POINTER = (
-    "DensePack is on. Read %s/allrules-1.png before you spawn an agent or "
-    "write or edit a Markdown document or a README, and request every file "
-    "you need in one turn."
-)
-
-
-def session_start_pointer(pillow_ok):
-    """Return the SessionStart pointer line that names the lead's one joined
-    rules image. Return FALLBACK_NOTE when that image is not sure to exist.
-
-    No hook calls this function. main() sends READ_TOOL_LINE through
-    deliver_context(). It does not send FALLBACK_NOTE or SESSION_POINTER.
-
-    The function checks the real files on disk. pillow_ok alone is not
-    enough. draw_instruction_images() skips a text that it failed to read,
-    and ensure_instruction_image() returns None on a pack failure. A
-    successful Pillow import does not prove that each file exists.
-
-    All models use one folder. At SessionStart the event has no model field
-    and the transcript has no assistant line yet. This function cannot name
-    a model. The event's keys are cwd, hook_event_name, scratchpad_dir,
-    session_id, source and transcript_path.
-    """
-    # The note names only an image that this plugin packs. A copy of the
-    # plugin with no instructions folder packs no rules image. In that copy,
-    # the project put any image found there, and that image must not reach
-    # the lead as the plugin's own rules.
-    instructions_ship = (Path(__file__).resolve().parent.parent / "instructions").is_dir()
-    if pillow_ok and instructions_ship:
-        # All models use one folder. One image at CODE_PX serves all of them.
-        folder = vault_dir() / "instructions"
-        # The .hash beside the image must hold the local seal over the
-        # current rules text. A project can commit an image and a plain
-        # digest. It cannot compute the seal.
-        try:
-            drawn = ((folder / "allrules-1.png").is_file()
-                     and (folder / "allrules.hash").read_text(encoding="utf-8").strip()
-                     == sealed_digest(card_digest(joined_text(ALL_LEAD), CODE_PX)))
-        except OSError:
-            drawn = False
-        if drawn:
-            return SESSION_POINTER % (folder,)
-    return FALLBACK_NOTE
-
-
 # The source texts for each instruction image and each Haiku text file. The
-# hook reads them from the instructions folder, which ships with the plugin.
-# It never reads them from the vault. The vault holds the packed output, not
-# the source words.
+# hook reads them from an instructions folder in the plugin, never from the
+# vault. DensePack 2.0 ships no instructions folder, so this code makes no card.
 INSTRUCTION_TEXTS = {"lead": "lead.txt", "worker": "worker.txt",
                      "facts": "facts.txt", "shared": "shared.txt",
                      "fullrules": "fullrules.txt",
@@ -674,92 +603,78 @@ def reader_warning(model):
 # reports. This warning states the fact once, at session start, and only when
 # the install failed.
 PILLOW_WARNING = (
-    "DensePack cannot make images. Pillow, freetype-py or NumPy is missing and the plugin could not "
-    "install it. Agent reports arrive as plain text, and DensePack packs nothing and "
-    "saves nothing. Install them with: python3 -m pip install --user pillow freetype-py numpy "
-    "(on Debian and Ubuntu, add --break-system-packages)")
+    "DensePack cannot make images. Pillow, freetype-py or NumPy is missing. DensePack could not "
+    "install it. DensePack packs nothing and saves nothing. To install them, run "
+    '%s"%s" -m pip install --user pillow freetype-py numpy '
+    "(on Debian and Ubuntu, add --break-system-packages)" % ("& " if os.name == "nt" else "", sys.executable))
 
 
-# Claude Code's auto mode tells the agent to read files with cat, head or sed
-# in Bash. This line gives the tool choice as an order and does not name what
-# each tool saves, because a model follows an order and does not act to keep
-# a saving. The order dates from DensePack 1.0, when Bash output stayed text.
-# CLAUDE_CODE_THRIFTY_SONIC=0 stops the auto mode message only from the next
-# session, and the order covers the first session. No test has run the note
-# without the order.
-# TWO ROUTES. A whole file goes through Read, which packs each page. A few
-# lines go through Bash (grep -n, sed -n, head), and bash_image.py packs that
-# output as images, with the short key under 1,000 characters. Output of
-# more than one image returns as image 1 and a note that names the other
-# images. The Grep tool has no image form, and the same lines pulled with
-# Grep stay text.
-# An earlier wording, "Not cat, head, sed or type. Change them with Edit.",
-# sent small pulls to the Grep tool, and made an agent Read a whole file for
-# a change that one sed makes without a Read. Claude Code tells an agent to
-# avoid grep in Bash unless an instruction names it. For that reason the
-# note names Bash for searches and says not the Grep tool. A note that only
-# said that Bash output packs kept each agent on the Grep tool, and a broad
-# search returned as text. A Grep result cannot carry an image, because a
-# hook that puts one there sends the model the base64 as text. A session
-# with no Bash tool searches with Grep. In a test with only the Read and
-# Glob tools, "not the Grep tool" made two of five runs read all 16 files to
-# search them.
-# THE BASH LINE IS GONE. The note said "Search files and pull a few lines
-# with Bash, such as grep -n, sed -n or head, not the Grep tool". On a trace
-# through 20,000 lines of code the agent then searched with one Bash call a
-# turn, and each output came back as an image: 62 turns against 35 without
-# DensePack. Without the line the same task took 50 turns and less output.
-# The agent searches as it does without DensePack. For an Edit, it now Reads
-# the lines it will change with a limit of 20 or fewer, which stays text,
-# because an Edit copied from an image failed on about 1 line in 9.
-# This text is the intro that the lead and each subagent get. The last
-# paragraph tells the model where each image's text is on disk and names Grep
-# as the last choice. The model then finds the text in one call and never
-# checks each image against it.
-READ_TOOL_LINE = (
-    "DensePack is on. Files, command output and Word files arrive as images "
-    "of the same text. Haiku, and Sonnet after /max-off, get text.\n"
-    "Use the Read tool to read a file, not cat or type. Never read every file "
-    "to search them.\n"
-    "Edit and Write work on files that arrived as images, except .doc and "
-    ".docx. DensePack converts those to images. Read the images.\n"
-    "Formatting marks in the images:\n"
-    "- green N in a box: line number N starts here\n"
-    "- red N in a box: N spaces. A red 0 means no spaces\n"
-    "- blue \\t in a box: 1 tab\n- blue \\t then red \\t: 2 tabs\n"
-    "- blue N\\t in a box: N tabs, 3 and up\n"
-    "- green N\\n in a box before a line number: N blank lines before that line\n"
-    "- legend \"missing N =blank line\": a skipped line number is a blank line\n"
-    "- purple squiggle at a row's end: the line continues on the next row\n"
-    "- tab-indented files: the band color behind a line is its tab count, "
-    "as the legend's colored 0 1 2 3 show\n"
-    "The text in the highlighted bands of the images is identical to the text "
-    "of the files. The images use formatting numbers in the black outline boxes to "
-    "show the text file's literal formatting. When you run an Edit, follow "
-    "these formatting rules byte identically because otherwise the Edit will "
-    "fail. The formatting represents the literal page. Before your Edits, "
-    "Read the lines you will change with an offset and a limit of 20 or "
-    "fewer, which returns them as text, and copy each Edit from that text. "
-    "Each image's text is on disk. "
-    "A Read file is its own text. Command output, Word and to-pack text sit "
-    "beside the image under the file= name in its top right. Grep that text "
-    "only for an exact string the image cannot give you.")
+# READ_TOOL_LINE is the intro that the lead and each subagent get. It says only
+# that DensePack is on. The guidance for images goes beside the first image
+# instead: common.FIRST_IMAGE_NOTE says why. The note gives no search rule, so
+# the agent searches as it does without DensePack.
+READ_TOOL_LINE = "DensePack is on."
+
 # No sentence here tells the model how many files to read or when. The
 # plugin changes how a file arrives, not what the model does. An order to
 # read all files in one turn makes the model Read more files than it needs,
 # and the session costs more.
 
-# The lead alone gets this line. subagent_start.py sends subagents
-# READ_TOOL_LINE, and a lead that repeats it in a brief only adds orders. In
-# a test where a Sonnet 5.5 subagent read 8 docstrings, the lead with
-# DensePack wrote "Read each one fully" and "verify with a Bash command like
-# head -n 5". That subagent read 8 whole files, while the subagent without
-# DensePack read 15 lines of each file. The run with DensePack cost $0.056,
-# and the run without it cost $0.033.
+# The lead alone gets this line. subagent_start.py sends subagents READ_TOOL_LINE.
+# If the lead repeats the image rules in a brief, the subagent reads whole
+# files, which costs more, so only the lead gets this line.
 SUBAGENT_BRIEF_LINE = (
     "Subagents get this same note from DensePack. Write a subagent's task as "
     "you would without DensePack: do not tell it that files arrive as images, "
     "and do not ask it to check the images.")
+
+# DensePack 2.0: the rules for less code and plain replies, as text in the start note. The same rules as an image
+# were followed less well in the benches of 10 October 2026.
+RULES_TEXT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rules", "STYLE-RULES.md")
+
+
+def rules_text():
+    """The rules with the line that turns them on, or None when the plugin has no rules file. The lead gets
+    them in the start note, and subagent_start.py gives them to each subagent."""
+    if not os.path.isfile(RULES_TEXT):
+        return None
+    with open(RULES_TEXT, encoding="utf-8") as f:
+        return ("DENSEPACK RULES ACTIVE. Follow these rules for all code, tests and replies until the "
+                "session ends.\n\n" + f.read().strip())
+
+
+def rules_line(cwd=None):
+    """The start-note text that turns the rules on, then the folder map of the project, or None when the
+    plugin has no rules file."""
+    text = rules_text()
+    if text is None:
+        return None
+    # Only the lead gets this line: subagent_start.py gives each subagent the same rules.
+    text += ("\n\nEach subagent gets these same rules from DensePack when it starts, so a subagent's task "
+             "does not need to repeat them.")
+    import projectmap
+    folder_map = projectmap.build(cwd or os.getcwd())
+    if not folder_map:
+        return text
+    image = map_image(folder_map)
+    if image is None:
+        return text + "\n\n" + folder_map
+    return text + ("\n\nPROJECT MAP: the image %s lists each folder of this project, its source and config files, "
+                   "and the names each file defines. Read it with the Read tool in your first turn, before any "
+                   "other command." % image)
+
+
+def map_image(folder_map):
+    """Draw the project map as one image in the vault and return its path, or None when it does not draw. The
+    image costs about half the tokens of the same text, so the map can name what each file defines."""
+    try:
+        import pack_instructions
+        paths, _cost = pack_instructions.draw(folder_map, "project-map", vault_dir() / "instructions" / "map",
+                                              "opus")
+        return str(paths[0]) if len(paths) == 1 else None
+    except Exception as err:  # noqa: BLE001 - the text map is the fallback
+        sys.stderr.write("DensePack project map image: %s\n" % err)
+        return None
 
 
 def lead_reads_images(model):
@@ -786,19 +701,36 @@ def lead_reads_images(model):
 BASH_FIRST_NOTE = (
     "DensePack set CLAUDE_CODE_THRIFTY_SONIC to 0 in ~/.claude/settings.json. "
     "Auto mode then stops telling Claude to read files with Bash. The setting "
-    "applies from your next session. DensePack converts Bash output of 400 "
-    "characters or more, but a Bash read still costs a little more than a Read.")
+    "applies from your next session. DensePack converts Bash and PowerShell "
+    "output of 400 characters or more, but a shell read still costs a little "
+    "more than a Read.")
+WINDOWS_BASH_NOTE = (
+    "DensePack set EMBEDDED_SEARCH_TOOLS to 1 and CLAUDE_CODE_USE_POWERSHELL_TOOL to 0 in "
+    "~/.claude/settings.json. From your next session, Claude Code runs commands and searches in Git Bash, "
+    "and DensePack packs all of that output.")
 
 
-def deliver_context(pillow_ok, model, bash_first_set=False, packed_note=None):
+def deliver_context(pillow_ok, model, bash_first_set=False, packed_note=None, cwd=None):
     parts = []
     shown = []
-    if bash_first_set:
+    if bash_first_set and "CLAUDE_CODE_THRIFTY_SONIC" in bash_first_set:
         shown.append(BASH_FIRST_NOTE)
+    if bash_first_set and "EMBEDDED_SEARCH_TOOLS" in bash_first_set:
+        shown.append(WINDOWS_BASH_NOTE)
+    from common import windows_bash_keys_missing, WINDOWS_BASH_KEYS
+    missing = windows_bash_keys_missing()
+    if missing:
+        shown.append("DensePack could not write ~/.claude/settings.json. Add these lines to its \"env\" block, "
+                     "then restart Claude Code: " + ", ".join('"%s": "%s"' % (k, WINDOWS_BASH_KEYS[k]) for k in missing)
+                     + ". With them, Claude Code runs commands and searches in Git Bash, and DensePack packs "
+                     "all of that output.")
     if packed_note:
         shown.append(packed_note)
     if pillow_ok and lead_reads_images(model):
         parts.append(READ_TOOL_LINE)
+        rules = rules_line(cwd)
+        if rules:
+            parts.append(rules)
         parts.append(SUBAGENT_BRIEF_LINE)
     # The last session's table comes from outside the project. A cloned
     # project cannot put its own words here.
@@ -1021,7 +953,7 @@ def main():
         except Exception as err:  # noqa: BLE001
             sys.stderr.write("DensePack pack_instructions: %s\n" % err)
     from common import bash_first_off
-    deliver_context(pillow_ok, event.get("model"), bash_first_off(), packed_note)
+    deliver_context(pillow_ok, event.get("model"), bash_first_off(), packed_note, event.get("cwd"))
     return 0
 
 

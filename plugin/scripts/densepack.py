@@ -46,13 +46,14 @@ _S = style.load()
 # constants from that rule, not the rule itself. They are the same for all
 # models on the high-resolution tier and do not change with the model.
 # The API accepts 2576 px on the long edge for a single image. A request with
-# more than 20 images gets a stricter limit. The API shrinks any dimension
-# over 2000 px, and the shrink destroys text this small. A busy session can
+# more than 20 images gets a stricter limit. In that request, the API rejects
+# an image with a side over 2000 px. Claude Code shrinks an image over 2000 px.
+# A shrink makes text this small hard to read. A busy session can
 # queue more than 20 packed reports. For this reason, each image is under
 # 2000 px on the two sides. EDGE is lower still, 1568 px or 56 patches of
 # 28 px, from page.edge in style.py.
-EDGE = _S["page.edge"]  # longest side this packer makes. Past 1568 the
-                   # delivery layer can shrink an image without a notice
+EDGE = _S["page.edge"]  # longest side this packer makes. The API shrinks an
+                   # image past 1568 px for models before Claude 4.7
 MAX_TOK = _S["page.max_tok"]   # most patches the API accepts per image
 CAP_W = _S["page.cap_w"]       # largest guaranteed-no-downscale canvas
 CAP_H = _S["page.cap_h"]
@@ -97,6 +98,13 @@ FLOOR_NOTE = ("DensePack got a request for %d px for %s, under the measured "
 # glyph stays in the same place.
 PNG_BYTE_CAP = 250000
 PALETTE_STEPS = (256, 128, 64, 32)
+# A full-color page uses 0.243 to 0.313 bytes per pixel. That range comes
+# from 195 pages of the repo scripts and docs, measured on 4 October 2026.
+# At 0.24 bytes per pixel, a page over 1,041,666 pixels is over the cap in
+# full color. In that test, each page over 1,000,000 pixels was over the cap
+# (128 pages). save_png() writes those pages from the palette at once and
+# skips a full-color save of about 0.4 seconds.
+FULL_COLOR_MAX_PIXELS = int(PNG_BYTE_CAP / 0.24)
 
 
 def clear_link(path):
@@ -131,8 +139,12 @@ def save_png(im, path):
     # not decode.
     part = str(path) + ".part"
     clear_link(part)
-    im.save(part, "PNG", optimize=True)
-    if os.path.getsize(part) > PNG_BYTE_CAP:
+    # A page over FULL_COLOR_MAX_PIXELS is over the cap in full color, and
+    # the code skips that save.
+    large = im.width * im.height > FULL_COLOR_MAX_PIXELS
+    if not large:
+        im.save(part, "PNG", optimize=True)
+    if large or os.path.getsize(part) > PNG_BYTE_CAP:
         source = im.convert("RGB")
         for colours in PALETTE_STEPS:
             source.quantize(colors=colours, method=Image.MEDIANCUT).save(
@@ -178,7 +190,7 @@ LINE_FACTOR = _S["space.line_factor"]
 # their own. The browser app and the clipboard script cannot import Python.
 # They hold the value with a comment that names this constant.
 #
-# Measured against Anthropic's count_tokens endpoint, model claude-opus-5,
+# Measured against Anthropic's count_tokens endpoint, model claude-opus-5-5,
 # over 92 packed source texts. 860,637 characters against 357,951 counted
 # tokens give 2.4043. A second sample, balanced by kind and not by traffic,
 # with 90 texts and 559,234 characters against 232,893 tokens, gives 2.4012.
@@ -189,9 +201,6 @@ LINE_FACTOR = _S["space.line_factor"]
 # reports. Bash output is most of what the plugin packs. By kind, in the
 # traffic weighted sample: bash output 2.37, agent reports 2.60, briefs 2.79.
 CHARS_PER_TOKEN = 2.40
-# The date of the divisor measure, as a value. A page that prints the
-# constant can then print the date without a second copy of it.
-CHARS_PER_TOKEN_MEASURED = "31 August 2026"
 
 # The cost of one image content block on top of its patches. Measured on 28
 # packed PNGs, from 418x412 to 1144x1168, the counted token figure was the
@@ -629,108 +638,6 @@ def _classify(ch, colors=True):
         return PALETTE[alt] if alt else PALETTE["sym"], True
     return (0, 0, 0), False
 
-
-def pages_pdf(paths, out_path):
-    """Bind several packed pages into one PDF, one page per image.
-
-    The delivery rule behind this function. One Read call returns all pages
-    of a file, and no tool result asks the model to Read again for more
-    pages. composite() meets that rule with a stack and returns None when the
-    stack passes CAP_H. Side by side does not work on a long code file
-    either. There two sheets stack to 1176 by 2856 and are 2352 by 1428 side
-    by side, and the two sizes are over the 1568 cap. A Read of a PDF returns
-    each page as its own picture inside the one tool result. The pages then
-    arrive whole, with no second Read and no sheet to shrink.
-
-    The function writes the pages at 72 points per inch, one point per pixel,
-    and a page keeps its exact rendered size. Returns the PDF path, or None
-    when the function cannot bind the pages. The caller keeps the PNG pages,
-    and the patch price still comes from them.
-
-    This file has its own writer. It writes each page through FlateDecode,
-    which is zlib and returns the same bytes it gets. The PdfImagePlugin of
-    Pillow writes an RGB page through DCTDecode, which is JPEG. Measured on a
-    small code page, that path changed 96.00 percent of the pixels with a
-    worst channel error of 176 of 255. A 256 color palette page still changed
-    8.26 percent. This writer changes no pixel.
-    """
-    rasters = []
-    for path in paths:
-        try:
-            im = Image.open(path).convert("RGB")
-        except Exception:  # noqa: BLE001
-            return None
-        rasters.append((im.width, im.height, im.tobytes()))
-    if not rasters:
-        return None
-
-    objs = [b""]  # object numbers start at 1
-
-    def add(body):
-        objs.append(body)
-        return len(objs) - 1
-
-    kids = []
-    pages_id = 1 + 1 + 2 * len(rasters)  # catalog, then two objects a page
-    for w, h, raw in rasters:
-        stream = zlib.compress(raw, 9)
-        img_id = add(
-            b"<< /Type /XObject /Subtype /Image /Width %d /Height %d "
-            b"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode "
-            b"/Length %d >>\nstream\n" % (w, h, len(stream))
-            + stream + b"\nendstream")
-        # One point per pixel. A PDF rasterizer with no other instruction
-        # renders a page at 72 points to the inch, one point to one pixel.
-        # This box then gives the model the pixels of the PNG unchanged. A
-        # smaller box, sized for 100 percent in a viewer, makes such a
-        # rasterizer shrink each glyph first. Scale with the zoom of the
-        # viewer, not with the page box.
-        pw, ph = float(w), float(h)
-        content = b"q %.4f 0 0 %.4f 0 0 cm /Im Do Q" % (pw, ph)
-        cs = zlib.compress(content, 9)
-        con_id = add(b"<< /Filter /FlateDecode /Length %d >>\nstream\n" % len(cs)
-                     + cs + b"\nendstream")
-        kids.append((img_id, con_id, pw, ph))
-
-    page_ids = []
-    for img_id, con_id, w, h in kids:
-        page_ids.append(add(
-            b"<< /Type /Page /Parent %d 0 R /MediaBox [0 0 %.4f %.4f] "
-            b"/Resources << /XObject << /Im %d 0 R >> >> /Contents %d 0 R >>"
-            % (pages_id, w, h, img_id, con_id)))
-    pages_id = add(b"<< /Type /Pages /Count %d /Kids [%s] >>"
-                   % (len(page_ids),
-                      b" ".join(b"%d 0 R" % i for i in page_ids)))
-    # each page names its parent, and the number above must be the real one
-    for i, pid in enumerate(page_ids):
-        objs[pid] = objs[pid].replace(b"/Parent %d 0 R" % (1 + 1 + 2 * len(rasters)),
-                                      b"/Parent %d 0 R" % pages_id)
-    root_id = add(b"<< /Type /Catalog /Pages %d 0 R >>" % pages_id)
-
-    out = bytearray(b"%PDF-1.4\n")
-    offsets = [0]
-    for n in range(1, len(objs)):
-        offsets.append(len(out))
-        out += b"%d 0 obj\n" % n + objs[n] + b"\nendobj\n"
-    start = len(out)
-    out += b"xref\n0 %d\n0000000000 65535 f \n" % len(objs)
-    for n in range(1, len(objs)):
-        out += b"%010d 00000 n \n" % offsets[n]
-    out += (b"trailer\n<< /Size %d /Root %d 0 R >>\nstartxref\n%d\n%%%%EOF\n"
-            % (len(objs), root_id, start))
-
-    part = Path(str(out_path) + ".part")
-    try:
-        clear_link(part)
-        part.write_bytes(bytes(out))
-        os.replace(part, out_path)
-    except Exception:  # noqa: BLE001
-        try:
-            part.unlink(missing_ok=True)
-        except OSError:
-            pass
-        return None
-    return str(out_path)
 
 
 def composite(paths, out_path, size=None):

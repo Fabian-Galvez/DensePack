@@ -158,7 +158,7 @@ def folder_targets(project):
 
 
 def restore_folder(folder):
-    """Restore each packed instruction file of one folder, for /bakoff.
+    """Restore each packed instruction file of one folder, for /bak-off.
     Returns the restored file names."""
     project = str(Path(folder).resolve())
     state = load_state()

@@ -1,5 +1,5 @@
 ---
-description: Restore the original instruction files of a folder that /bakpack packed, and delete their images.
+description: Restore the original instruction files of a folder that /bakpack packed. Delete their images.
 argument-hint: "<folder>"
 disable-model-invocation: true
 ---

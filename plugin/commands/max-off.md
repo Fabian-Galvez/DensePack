@@ -11,8 +11,8 @@ PowerShell: powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN
 
 Then relay the status line in one sentence.
 
-Fable and Opus still get images. A report to a Fable or Opus main agent still becomes an image when the image saves more than it costs. A report to a Sonnet main agent stays text.
+Fable and Opus still get images. Reports to Fable or Opus main agents become images when the images and their Read cost less than the text. Reports to Sonnet main agents stay text.
 
-A Sonnet main agent still gets the session start note, because Claude Code does not name the model at session start. The note says that Sonnet after /max-off gets text. A Sonnet subagent gets no note when DensePack knows its model at the start.
+Sonnet main agents still get the session start note. Claude Code does not name the model at session start, so DensePack cannot leave the note out. The note also covers Sonnet after /max-off, which gets text. Sonnet subagents get no note when DensePack finds their model at the start, because they never get an image.
 
 The setting applies to each session in this project folder. Another project folder keeps its own setting.

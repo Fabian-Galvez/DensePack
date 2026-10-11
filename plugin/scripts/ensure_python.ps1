@@ -135,8 +135,53 @@ function Save-PythonPath($p) {
 # When the save fails, the script continues to the message below. A machine
 # whose only candidate names no exe then gets the reason why its hooks do
 # nothing.
+# DensePack runs Claude Code with Bash. On Windows, Bash comes with Git for Windows.
+# When no Git Bash is found, the script installs Git for Windows for this user
+# with winget, one attempt per machine, like Python below. bootstrap.py then
+# sets the two settings that make Claude Code use Git Bash. The install is for
+# this user only, so it asks for no admin rights. Returns the message to show,
+# or $null when there is nothing to say.
+function Find-GitBash {
+    $places = @()
+    foreach ($v in @($env:ProgramFiles, $env:ProgramW6432, ${env:ProgramFiles(x86)})) {
+        if ($v) { $places += Join-Path $v 'Git\bin\bash.exe' }
+    }
+    if ($env:LOCALAPPDATA) { $places += Join-Path $env:LOCALAPPDATA 'Programs\Git\bin\bash.exe' }
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if ($git) { $places += Join-Path (Split-Path (Split-Path $git.Source)) 'bin\bash.exe' }
+    foreach ($p in $places) { if (Test-Path -LiteralPath $p) { return $p } }
+    return $null
+}
+
+function Install-GitBash {
+    if (Find-GitBash) { return $null }
+    $data = $env:CLAUDE_PLUGIN_DATA
+    if (-not $data) { $data = Join-Path $env:LOCALAPPDATA 'densepack' }
+    $null = New-Item -ItemType Directory -Force -Path $data
+    $tried = Join-Path $data 'git-install-tried'
+    if (Test-Path $tried) { return $null }
+    Set-Content -Path $tried -Value 'tried' -Encoding utf8
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        return ("DensePack runs commands in Bash, which comes with Git for Windows. This computer has " +
+                "neither Git for Windows nor winget. Install Git for Windows from git-scm.com, then " +
+                "restart Claude Code.")
+    }
+    winget install --id Git.Git -e --source winget --scope user `
+        --accept-package-agreements --accept-source-agreements --silent 2>$null | Out-Null
+    if (Find-GitBash) {
+        return ("DensePack installed Git for Windows, which brings Bash. Restart Claude Code. From the " +
+                "next session, commands and searches run in Bash, and DensePack packs their output.")
+    }
+    return ("DensePack tried to install Git for Windows, which brings Bash, and it did not appear. " +
+            "Install Git for Windows from git-scm.com, then restart Claude Code.")
+}
+
 $py = Find-Python
-if ($py -and (Save-PythonPath $py)) { exit 0 }
+if ($py -and (Save-PythonPath $py)) {
+    $gitNote = Install-GitBash
+    if ($gitNote) { Say $gitNote }
+    exit 0
+}
 
 # One attempt per machine. winget takes about a minute. On a machine where it
 # cannot succeed, a repeat at each session start delays each session for no

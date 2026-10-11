@@ -2,8 +2,7 @@
 
 HOW THIS FILE FITS. SessionStart context reaches only the main session, and
 a subagent starts with a new context. Without this hook, a subagent gets
-images with no note that their text is the file's text, or that Grep is the
-last choice. In tests without this hook, Sonnet 5.5 subagents examined the
+images with no note that DensePack is on, and it does not get the rules. In tests without this hook, Sonnet 5.5 subagents examined the
 images with Bash and Grep and made 1 to 3 extra calls in 6 of 8 image runs.
 
 SubagentStart hook. It answers with hookSpecificOutput.additionalContext,
@@ -33,8 +32,32 @@ def intro_for(event):
         reader = None
     if reader is not None and not reader_gets_images(reader):
         return None
-    from bootstrap import READ_TOOL_LINE
-    return READ_TOOL_LINE
+    # None also covers a subagent whose model the code cannot name yet, and
+    # that subagent still gets the note. A Haiku subagent gets text, so the
+    # note would only cost it a few tokens. Its report still reaches an Opus or
+    # Fable lead as images, because subagent_stop.py uses the lead's model.
+    if reader is None and _names_haiku(event):
+        return None
+    from bootstrap import READ_TOOL_LINE, rules_text
+    # DensePack 2.0: the subagent gets the same rules as the lead. The project map stays with the lead, which
+    # read it in its first turn.
+    rules = rules_text()
+    return READ_TOOL_LINE + ("\n\n" + rules if rules else "")
+
+
+def _names_haiku(event):
+    """True when the spawn record or meta.json of this subagent names a Haiku
+    model. A spawn with no model inherits the lead's model."""
+    try:
+        from common import _spawned_model, actor_key, agent_meta_model
+        key = actor_key(event) or ""
+        if not key.startswith("agent-"):
+            return False
+        agent_id = key[len("agent-"):]
+        names = (agent_meta_model(agent_id), _spawned_model(agent_id, event))
+        return any("haiku" in str(name or "").lower() for name in names)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def main():

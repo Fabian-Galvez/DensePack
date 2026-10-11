@@ -67,16 +67,26 @@ open(p, 'w', encoding='utf-8', newline=chr(10)).write(s)
 '@
 
 function Remove-ReadingCard {
-    if (Test-Path $cardTarget) { Remove-Item $cardTarget -Force }
-    # -Remove runs before the script defines Find-Python. This function finds
-    # Python itself.
-    $py = @(Get-Command python -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source } |
-            Where-Object { $_ -notmatch 'WindowsApps' })[0]
-    if ($py -and (Test-Path $claudeSettings)) {
+    # -Remove runs before the script defines Find-Python, so this function finds
+    # Python itself in the same places: python, python3, py and LOCALAPPDATA.
+    $cands = @(Get-Command python, python3, py -All -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
+    $cands += @(Get-ChildItem "$env:LOCALAPPDATA\Programs\Python" -Filter 'python.exe' -Recurse -Depth 1 `
+                    -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+    $py = @($cands | Where-Object { $_ -and $_ -notmatch 'WindowsApps' -and (Test-Path $_) })[0]
+    if (-not (Test-Path $claudeSettings)) {
+        if (Test-Path $cardTarget) { Remove-Item $cardTarget -Force }
+    } elseif ($py) {
         & $py -c $hookEdit $claudeSettings remove
+        # The card file goes only after its entry is gone. If the entry names a
+        # missing file, Python exits with code 2, which blocks each prompt.
+        if ($LASTEXITCODE -ne 0) {
+            "could not edit $claudeSettings. The reading card stays. Close Claude Code and run the uninstall again."
+            return
+        }
+        if (Test-Path $cardTarget) { Remove-Item $cardTarget -Force }
         'removed the reading card hook'
     } else {
-        "no Python found. The installer left the reading card entry in $claudeSettings"
+        "no Python found. The reading card stays. Delete the UserPromptSubmit entry that names densepack_reading_card.py from $claudeSettings, then delete $cardTarget."
     }
 }
 

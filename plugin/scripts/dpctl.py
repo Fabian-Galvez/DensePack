@@ -62,16 +62,13 @@ from common import (disabled,
                     write_settings)
 
 
-def _settings_local():
-    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    return Path(root) / ".claude" / "settings.local.json"
-
 
 def caller_session():
     """Return the session of this dpctl call, or "" when there is none.
 
     Claude Code exports CLAUDE_CODE_SESSION_ID into the environment of each
-    Bash tool call. The slash commands reach dpctl.py through the Bash tool.
+    Bash and PowerShell tool call. The slash commands reach dpctl.py through
+    the Bash tool, or through the PowerShell tool when there is no Bash tool.
     The window that typed /dense-off then names itself. No value goes
     through a hook, and the code guesses nothing.
 
@@ -128,39 +125,39 @@ Only /dense-off stops them all.
 
 | Permanent behavior | What it does |
 | --- | --- |
-| The standing reminder | On a message with a pasted image, DensePack tells the lead how to read a condensed image |
+| The standing reminder | On a message with a pasted image, DensePack adds a card on how to read condensed images |
 | Report packing | DensePack packs the report of each finished subagent into an image when the image costs less than the text |
 | Brief packing | In auto and bypassPermissions mode, DensePack packs each brief over the threshold into an image before the subagent starts. In other modes, the subagent gets the brief as text |
-| One text size | DensePack packs each report and brief at one text size for all models. Each image is between 700 and 952 px wide, at the width that costs the fewest tokens. A longer text makes a taller image or more images. It is not a setting |
-| Reject when worse | DensePack deletes an image that costs more than the text and sends the text |
-| Never to an unmeasured model | Haiku 4.5 gets plain text because Haiku does not read text on images accurately |
+| One text size | DensePack packs each report and brief at one text size for all models. Each image is between 700 and 952 px wide, at the width that costs the fewest tokens. Longer texts make taller images or more images. It is not a setting |
+| Reject when worse | DensePack deletes images that cost more than the text and sends the text |
+| Haiku gets text | Haiku 5.5 got about 95% of the bench checks right from images, far better than Haiku 4.5. Its misses were code facts, so Haiku still gets plain text |
 | Sonnet gets images | Sonnet gets images. Type /max-off to send it plain text |
-| The delivery rule | DensePack sends each subagent the note that tells how files and command output arrive as images |
+| The delivery rule | Subagents that get images also get the session note and the rules. The guidance on images comes with the first image. Haiku subagents get no note |
 | The manifest | Each agent that finishes gets a row, packed or not |
 | The vault | DensePack copies each packed image and its text to .claude/densepack-vault, one folder per conversation. The copies stay when DensePack prunes .claude/tmp. When the vault is over 200 MB, DensePack deletes the oldest folders |
-| The spawn log | Each SPAWNED agent also gets a row before it finishes, with the model that it runs on. The log changes nothing |
-| Instruction files as images | At session start, the folder's CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md, your ~/.claude/CLAUDE.md and the project's MEMORY.md each become a short pointer, the images and <name>.bakpack with the original text. DensePack packs a file only when its images and pointer cost less than its text. A short file stays text. The change applies from the next session, because Claude Code loads these files before DensePack runs. /dense-remove restores the originals |
+| The spawn log | Each agent from the Agent tool also gets a row at its start, with the model that it runs on. The log changes nothing |
+| Instruction files as images | At session start, DensePack converts the instruction files of the folder, your ~/.claude/CLAUDE.md and the project's MEMORY.md. Each file becomes a short pointer to its images, with the original text in <name>.bakpack. DensePack packs a file only when its images and pointer cost less than its text. The change applies from the next session, because Claude Code loads these files before DensePack runs. /dense-remove restores the originals |
 
 | Command | What it sets | Is this the default |
 | --- | --- | --- |
-| /densepack | Packing on and all settings below back to default | It IS the reset |
-| /dense-off | All hooks stop | No |
-| /dense-remove | Restores each converted instruction file to its original text from its .bakpack, removes CLAUDE_CODE_THRIFTY_SONIC and deletes all DensePack files that /plugin uninstall does not delete. Run it before the uninstall | Sets nothing |
-| /bakpack <folder> | Packs the CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of that folder into images behind a pointer. The agent does not read them. Run it from a session in another folder. The first session in that folder reads the images | Sets nothing |
-| /bakoff <folder> | Restores the originals of that folder from their .bakpack copies and deletes their images | Sets nothing |
-| /maxpack | Sonnet gets images too | YES |
+| /densepack | It turns packing on and sets each setting below back to its default | Yes. This command is the reset |
+| /dense-off | It stops all DensePack hooks in this session | No |
+| /dense-remove | Restores each converted instruction file from its .bakpack and removes the settings that DensePack added. It also deletes the DensePack files that /plugin uninstall leaves. Run it before the uninstall | Sets nothing |
+| /bakpack <folder> | Experimental: the benches did not run it, so it has not been thoroughly tested. Packs the CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of that folder into images behind a pointer. Running it costs the agent no Read, because dpctl.py packs the files itself. Run it from a session in another folder. Sessions in that folder then get the images | Sets nothing |
+| /bak-off <folder> | Restores the originals of that folder from their .bakpack copies and deletes their images | Sets nothing |
+| /maxpack | Sonnet gets images | Yes |
 | /max-off | Sonnet gets plain text | No |
-| /helppack | Nothing. Prints this table | Sets nothing |
+| /helppack | It prints this table | Sets nothing |
 
-Every other setting is one /setpack argument, and needs no command of its
+The other settings are /setpack arguments and need no command of their
 own. DensePack saves the last receipt table in
-.claude/tmp/densepack-receipt-last.md. A look at it costs the conversation
+.claude/tmp/densepack-receipt-last.md. Reading that file costs the conversation
 nothing.
 
 The reader setting is the one setting that belongs to a single
 conversation. Run dpctl.py reader inside the conversation that it is for.
 /setpack keep both sets images and reports. dpctl keep images or keep
-reports sets one, and takes a folder after it."""
+reports sets one and takes a folder after it."""
 
 
 def help_text():
@@ -173,7 +170,7 @@ def help_text():
     command file is there."""
     commands = Path(__file__).resolve().parents[1] / "commands"
     text = HELP_TABLE
-    head, marker, tail = text.partition("\nEvery other setting is one /setpack argument")
+    head, marker, tail = text.partition("\nThe other settings are /setpack arguments")
     if marker and not (commands / "setpack.md").is_file():
         text = head.rstrip() + "\n"
     # A behavior row belongs to one script. A copy of the plugin without
@@ -220,12 +217,12 @@ def status_line():
         # session left on disk.
         found = lead_model_name(session)
         how = ("read from the lead model %s" % found if found
-               else "lead model not read yet, using the one size for all models")
+               else "main agent model not read yet, using the one size for all models")
 
     # One image size serves each model, and the status line names no tier.
     tier = ""
     return ("DensePack: packing %s, reader %s (%d px, %s)%s, "
-            "receipts %s, totals %s (%s)%s, keep %s, style card %s, "
+            "receipts %s, totals %s (%s)%s, keep %s, stylecard %s, "
             "Sonnet images %s"
             % (packing, reader, CODE_PX, how, tier,
                current["receipts"], current["totals"],
@@ -281,11 +278,13 @@ def remove_everything():
     for path in (home / ".claude" / "densepack-state", home / ".claude" / "densepack-cards",
                  home / ".claude" / "densepack-tracker.json", home / ".densepack"):
         drop(path)
-    # ensure_python.ps1 writes only python-install-tried in this folder. The
-    # right-click tool keeps its saved packs in the same folder (Windows
-    # names are not case sensitive), so the removal deletes only that file.
+    # ensure_python.ps1 writes only python-install-tried and git-install-tried
+    # in this folder. The right-click tool keeps its saved packs in the same
+    # folder (Windows names are not case sensitive), so the removal deletes
+    # only those two files.
     if os.environ.get("LOCALAPPDATA"):
-        drop(Path(os.environ["LOCALAPPDATA"]) / "densepack" / "python-install-tried")
+        for marker in ("python-install-tried", "git-install-tried"):
+            drop(Path(os.environ["LOCALAPPDATA"]) / "densepack" / marker)
     for path in glob.glob(os.path.join(tempfile.gettempdir(), "densepack-trial-*.pkl")):
         drop(path)
 
@@ -327,8 +326,8 @@ def remove_everything():
         pass
 
     from common import bash_first_off
-    if bash_first_off(enable=False):
-        removed.append("CLAUDE_CODE_THRIFTY_SONIC from ~/.claude/settings.json")
+    for key in bash_first_off(enable=False):
+        removed.append(key + " from ~/.claude/settings.json")
 
     print("DensePack removed %d items:" % len(removed))
     for item in removed:
@@ -358,8 +357,9 @@ def main(argv):
     elif verb == "remove":
         return remove_everything()
 
-    elif verb in ("bakpack", "mdpack"):
-        # mdpack is the name of this command in DensePack 1.3.3 and earlier.
+    elif verb == "bakpack":
+        # /mdpack, the old name of this command, is gone since 2.0. Its old
+        # .densepack.bak backups still restore with /bak-off, through bak_path().
         # The folder arrives as one quoted argument and can hold spaces.
         folder = " ".join(argv[1:]).strip().strip('"').strip("'")
         if not folder:
@@ -369,15 +369,15 @@ def main(argv):
         for name, result in pack_instructions.convert_folder(folder):
             if result != "absent":
                 print("%s: %s" % (name, result))
-        print("A session that starts in that folder loads the pointer and reads the images. "
+        print("Sessions that start in that folder load the pointer and read the images. "
               "The original text stays next to each file as <name>.bakpack. "
-              "/bakoff <folder> restores the originals.")
+              "/bak-off <folder> restores the originals.")
         return 0
 
     elif verb == "bakoff":
         folder = " ".join(argv[1:]).strip().strip('"').strip("'")
         if not folder:
-            print("Name a folder: /bakoff <folder>")
+            print("Name a folder: /bak-off <folder>")
             return 1
         import pack_instructions
         done = pack_instructions.restore_folder(folder)
@@ -413,7 +413,7 @@ def main(argv):
         mode = argv[1] if len(argv) > 1 else ""
         mode = RECEIPTS_ALIASES.get(mode, mode)
         if mode not in SETTINGS_ALLOWED["receipts"]:
-            print("receipts needs one of: default, verbose, light, quiet. "
+            print("receipts takes one of: default, verbose, light, quiet. "
                   "The old words still work, with full as verbose, line as "
                   "default and off as quiet")
             return 1
@@ -423,27 +423,28 @@ def main(argv):
     elif verb == "totals":
         mode = argv[1] if len(argv) > 1 else ""
         if mode not in SETTINGS_ALLOWED["totals"]:
-            print("totals needs one of: on, off, auto")
+            print("totals takes one of: on, off, auto")
             return 1
         write_settings({"totals": mode})
 
     elif verb == "reader":
         mode = argv[1] if len(argv) > 1 else ""
         if mode not in SETTINGS_ALLOWED["reader"]:
-            print("reader needs one of: auto, fable, opus, sonnet")
+            print("reader takes one of: auto, fable, opus, sonnet")
             return 1
         session = caller_session()
         write_settings({"reader": mode})
         if mode == "auto":
-            print("DensePack reads the model of the lead from the first "
-                  "assistant line of the transcript of this session. DensePack "
-                  "packs each image at one size, %d px, for all models. The "
-                  "current reader is %s." % (CODE_PX, resolved_reader(session)))
+            print("DensePack reads the model of the main agent from the newest "
+                  "model line of this session's transcript, so /model changes "
+                  "count. DensePack packs the text of every image at one size, "
+                  "%d px, for all models. The current reader is %s."
+                  % (CODE_PX, resolved_reader(session)))
         else:
-            print("DensePack reader set to %s, %s. DensePack packs each image "
-                  "at one size, %d px, for all models. This changes the "
-                  "name that the plugin reports and no image. Set it to auto "
-                  "again, and the plugin reads the model of the lead."
+            print("DensePack reader set to %s, %s. DensePack packs the text of "
+                  "every image at one size, %d px, for all models. The setting "
+                  "changes only the model name in the report, not the images. "
+                  "With auto, DensePack reads the model of the main agent again."
                   % (mode, READER_NAMES[mode], CODE_PX))
 
     elif verb == "stylecard":
@@ -472,8 +473,9 @@ def main(argv):
                 print("The vault is empty. It fills as agents finish.")
                 return 0
             print("The vault, oldest first. Each packed image and its source "
-                  "text, one folder per conversation. The cap is %d MB. When the vault "
-                  "reaches the cap, DensePack deletes the oldest folder first."
+                  "text, one folder per conversation. The cap is %d MB. When a pack "
+                  "takes the vault over the cap, DensePack deletes the oldest "
+                  "folders first until the vault fits."
                   % (vault_cap_bytes() // 1024 // 1024))
             print("%-40s %10s" % ("conversation", "size"))
             for _t, folder, size in rows:
@@ -484,7 +486,7 @@ def main(argv):
         try:
             megabytes = int(argv[1])
         except ValueError:
-            print("vault needs a number of megabytes, or no argument to list")
+            print("vault takes a number of megabytes. With no argument, it lists the vault.")
             return 1
         write_settings({"vault_mb": megabytes})
         removed = vault_trim()
@@ -506,7 +508,7 @@ def main(argv):
                   "deletes that folder." % (mode, dest))
             return 0
         if mode not in SETTINGS_ALLOWED["keep"]:
-            print("keep needs one of: images, reports, both, off, a folder, "
+            print("keep takes one of: images, reports, both, off, a folder "
                   "or a conversation id from dpctl.py vault")
             return 1
         changes = {"keep": mode}

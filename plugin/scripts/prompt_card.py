@@ -1,8 +1,10 @@
 """Runs before each message you send. It sends the standing reminder, the
 short text that goes before a message.
 
-This file sends only the opening line, which explains a condensed image, on
-a message with a pasted image, in a session with no delegation.
+This file sends the opening line, which explains a condensed image, on a
+message with a pasted image, in a session with no delegation. It also sends a
+note for each Word file that the message names, and it starts a background
+pack of the folders that the message names.
 
 It is a UserPromptSubmit hook. Claude Code runs it, sends the event to its
 stdin, and puts the additionalContext that it returns before your message.
@@ -269,7 +271,7 @@ def skip_note(path, why, gate):
     reasons = {
         "unreadable": "DensePack could not open the file",
         "notext": "DensePack found no text in the file",
-        "small": "its text is under 1,000 bytes",
+        "small": "its text is empty",
         "large": "its text is over %s bytes" % format(gate.READ_MAX_BYTES, ","),
         "worse": "the images cost more tokens than the text",
         "failed": "the pack failed",
@@ -318,9 +320,9 @@ def _word_file_result(path, event, dp, gate, pointer, pack_images,
     if not words:
         return None, "notext"
     size = len(words.encode("utf-8"))
-    # The same floor and ceiling as in drop_read_gate.py. A small file costs
-    # more to pack than it saves, and a large file makes a long wait.
-    if size < 1000:
+    # The same floor and ceiling as in drop_read_gate.py. The price test
+    # decides a small file, and a large file makes a long wait.
+    if size < gate.READ_MIN_BYTES:
         return None, "small"
     if size > gate.READ_MAX_BYTES:
         return None, "large"
@@ -373,17 +375,16 @@ def _word_file_result(path, event, dp, gate, pointer, pack_images,
                      names or [Path(image).name]), None
 
 
-# THE FILE NAMES OF THE FOLDER. For a message about the files in a folder,
-# the agent uses its first turn on a listing, a Glob or an ls, only to get
-# the names. Each turn sends the whole conversation again. A message that
-# names a folder, or says "this folder", gets the file names of that folder
-# here. The first turn of the agent can then Read the files. The hook sends
-# the names alone. Each Read still returns image 1 and its own note, and
-# the agent chooses a later image after it reads image 1.
+# THE FILES OF THE FOLDER. A message that names a folder, or says "this
+# folder", starts a background pack of its files, so the agent's Reads find
+# their images ready. The model gets no list of the names. With a list,
+# Sonnet 5.5 planned to Read all 14 scripts whole in the architecture-doc
+# eval. Without one, it runs ls and wc -l first and reads only the parts it
+# needs, the same as with text.
 THIS_FOLDER = re.compile(r"\b(?:this|the current|the project)\s+(?:folder|directory)\b",
                          re.IGNORECASE)
-# The hook does not list a folder with more files than this. The agent
-# searches such a folder and does not read it whole.
+# The hook does not pack a folder with more files than this in advance.
+# The agent rarely reads so many files, and the pack takes time.
 LIST_MAX_FILES = 200
 
 
@@ -438,9 +439,10 @@ def named_folder(token):
         return None
 
 
-def folder_files(event):
-    """Return the file names of each folder that this message is about, one
-    sentence per folder, or "" when it is about none. Never raises."""
+def predraw_folders(event):
+    """Start packing the files of each folder that this message is about.
+    The model gets no file list, so it explores the folder as it would
+    without DensePack. Never raises."""
     prompt = str(event.get("prompt") or "")
     folders = []
     if THIS_FOLDER.search(prompt):
@@ -452,7 +454,7 @@ def folder_files(event):
             found = named_folder(token)
             if found is not None:
                 folders.append(found)
-    rows, seen = [], set()
+    seen = set()
     for folder in folders:
         try:
             key = str(folder.resolve()).lower()
@@ -469,14 +471,6 @@ def folder_files(event):
         # once, and its Reads find their images ready or wait for the one
         # pack.
         predraw(event, [folder / n for n in names])
-        try:
-            from common import no_metacharacters
-            names = [no_metacharacters(n) for n in names]
-        except Exception:  # noqa: BLE001
-            pass
-        rows.append("The folder %s holds these %d files: %s." % (
-            str(folder), len(names), ", ".join(names)))
-    return "\n".join(rows)
 
 
 def _sentence(path, folder, names):
@@ -507,7 +501,6 @@ def main():
         if disabled(event.get("session_id")):
             return 0
         session = event.get("session_id") or ""
-        warning = None
         # A session that delegated gets no opening line, because the opening
         # line holds the one fact that applies with no agents. The hook
         # sends the card only on a message with a pasted image. That is the
@@ -516,12 +509,9 @@ def main():
         # Opus think before a read-and-answer task. A code page has its own
         # key row, and a packed output has its own pointer.
         pasted = "[Image" in str(event.get("prompt") or "")
-        drawn = "\n\n".join(part for part in (word_pages(event),
-                                                folder_files(event)) if part)
-        if has_delegated(session) or not pasted:
-            text = warning or ""
-        else:
-            text = OPENING + ("\n\n" + warning if warning else "")
+        predraw_folders(event)
+        drawn = word_pages(event)
+        text = "" if has_delegated(session) or not pasted else OPENING
         # A card that matches the last one sent in this session holds no new
         # fact, and the hook emits nothing. This test makes OPENING a once
         # per session send. A Word file packed this turn is a new fact each

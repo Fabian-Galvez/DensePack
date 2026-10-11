@@ -1,5 +1,5 @@
 ---
-description: Print the permanent behaviors, all commands, what each command sets and whether that value is the default.
+description: Print the permanent behaviors and the commands. Show what each command sets and whether that value is the default.
 disable-model-invocation: true
 ---
 

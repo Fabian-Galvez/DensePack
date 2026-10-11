@@ -38,6 +38,9 @@ where the hook does nothing.
   receiver unidentified     NOTHING HAPPENS. An unreadable brief costs the
                             whole task. That loss is far worse than the
                             tokens that the pack saves.
+  receiver gets text        NOTHING HAPPENS. Haiku and models with no reader
+                            profile read text. Sonnet reads text after
+                            /max-off. The rule is in reader_gets_images().
 
   brief under the threshold NOTHING HAPPENS. Under brief_chars() the words
                             cost less than an image.
@@ -123,8 +126,9 @@ TEXT_NOTE = (
 # from cache and bills its own output. A measurement over 11 agents on Opus
 # 5.5 gave a prefix of 29,749 to 30,134 tokens and an output of 16 to 195
 # tokens. Output bills 5 times input on each current model. A cache read
-# bills 0.1 of input on most models (0.05 on Opus 5.5, 0.025 on Fable 5.1).
-# 0.1 is the worst case. The code counts the saving at the cheapest write,
+# bills 0.05 of input on Opus 5.5 and Sonnet 5.5, 0.1 on the other models and
+# 0.025 on Fable 5.1. 0.1 is the worst case. read_call_fee() uses it when the
+# model name gives no version. The code counts the saving at the cheapest write,
 # 1.25 times input, and counts no later read. A brief swaps only when it
 # saves tokens in the worst case.
 READ_CALL_PREFIX = 30000
@@ -173,7 +177,7 @@ def read_call_fee(model_name):
     when the name does not give the model version."""
     name = str(model_name or "").lower()
     share = (0.025 if re.search(r"(fable|mythos)[-_ ]?5[-_.]1", name)
-             else 0.05 if re.search(r"opus[-_ ]?5[-_.]5", name)
+             else 0.05 if re.search(r"(opus|sonnet)[-_ ]?5[-_.]5", name)
              else READ_SHARE_WORST)
     return READ_CALL_PREFIX * share + READ_CALL_OUTPUT * OUTPUT_TO_INPUT
 
