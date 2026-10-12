@@ -6,6 +6,23 @@
 
 <br>
 
+## 2.0.1
+
+| Change | Before | Now |
+| --- | --- | --- |
+| Windows with Python 3.12 | Reads stayed text, with no error. DensePack set `platform._wmi` to None, and on Python 3.12 that made `platform.system()` raise AttributeError, so the freetype import failed. This was in each release since 1.1. | Reads get images. DensePack replaces `platform._wmi_query` with a stub that raises OSError, which skips the slow WMI query on Python 3.12, 3.13 and 3.14. |
+| Claude Code worktrees | Reads in `.claude/worktrees/<name>/` stayed text, because DensePack skipped each path with a `.claude` part. | Reads in worktrees get images. Other `.claude` folders still stay text. |
+| Failed Read packs | The Read stayed text and no error showed. | The Read still stays text, and the error goes to stderr. |
+| Saved Python path on Windows | When 2 sessions started at once, a temp file such as `python-path.1234` could stay in `~/.claude/densepack-state`. | DensePack deletes its temp file when the move fails. |
+
+The first 2 changes fix issue [#1](https://github.com/Fabian-Galvez/DensePack/issues/1).
+
+<br>
+
+---
+
+<br>
+
 ## 2.0
 
 ### Rules and the project map

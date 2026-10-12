@@ -208,7 +208,7 @@ Before it sends an image, DensePack compares the price of the image with the pri
 
 These files and outputs stay text. [What are the limits?](#the-limits) gives each size limit and the reason for it.
 
-- Files in a `.claude` folder and files in the scratchpad folder of Claude Code stay text. DensePack still packs Word files in these locations.
+- Files in a `.claude` folder and files in the scratchpad folder of Claude Code stay text. DensePack still packs Word files in these locations. It also packs files in Claude Code worktrees under `.claude/worktrees/`.
 - Only the stdout of a Bash command packs. The stderr stays text beside the images.
 - The output of interrupted commands stays text.
 - The PowerShell tool drops error text next to an image. DensePack puts that error text in its note beside the image.
@@ -693,13 +693,13 @@ The hooks read the settings files again on each event. Changes apply at the next
 
 To run a verb, open a terminal in the project folder, because each project has its own settings file. Then run the `dpctl.py` of the installed plugin with the verb and its value.
 
-- `2.0.0` in the path is the version of the plugin.
+- `2.0.1` in the path is the version of the plugin.
 - On Windows, run the line in PowerShell and type `python` in place of `python3`.
 
 This line shows a receipt table in the conversation.
 
 ```
-python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/2.0.0/scripts/dpctl.py receipts default
+python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/2.0.1/scripts/dpctl.py receipts default
 ```
 
 On Windows, write `py -3` in place of `python3`.
