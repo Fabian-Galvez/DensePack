@@ -127,7 +127,10 @@ function Save-PythonPath($p) {
                 # not stay.
                 Remove-Item -LiteralPath $shfile -ErrorAction SilentlyContinue
             }
-        } catch { }
+        } catch { } finally {
+            # A failed move, such as 2 sessions at once, leaves no temp file.
+            Remove-Item -LiteralPath "$dir\python-path-win.$PID", "$dir\python-path.$PID" -ErrorAction SilentlyContinue
+        }
     }
     return $true
 }

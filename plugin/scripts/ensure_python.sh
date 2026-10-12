@@ -85,7 +85,8 @@ usable_python() {
         state="$HOME/.claude/densepack-state"
         ( mkdir -p "$state" \
             && printf '%s\n' "$FOUND" > "$state/python-path.$$" \
-            && mv -f "$state/python-path.$$" "$state/python-path" ) 2>/dev/null
+            && mv -f "$state/python-path.$$" "$state/python-path" \
+            || rm -f "$state/python-path.$$" ) 2>/dev/null
     fi
     return 0
 }

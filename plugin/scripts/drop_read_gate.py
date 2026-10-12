@@ -40,8 +40,9 @@ EXEMPTIONS. Each one is required, or the plugin blocks itself.
   never a densepack- name prefix. A name prefix does not show whether a
   file is a picture, because a plugin file can be text too, such as the
   sidecar densepack-bashsrc-*.txt beside each packed image.
-  Any file in a scratch folder. This is a .claude folder, or the scratchpad
-  folder that the hook event names, where working files are. The OS temp root
+  Any file in a scratch folder. This is a .claude folder other than a Claude
+  Code worktree in .claude/worktrees/<name>, or the scratchpad folder that
+  the hook event names, where working files are. The OS temp root
   is not exempt, because a browser unpacks a download there, and all
   working files of the plugin are under .claude.
   The drop and image folders of the vault under densepack-vault/. The scan
@@ -733,10 +734,13 @@ def is_scratch_or_temp(path, event=None):
     hook event names. These hold working files, and the gate skips them.
     DensePack 1.3.3 also skipped each folder with "sandbox" or "scratch" in
     its name, and a project such as from-scratch-app then got no images.
-    The OS temp root is not exempt."""
+    The OS temp root is not exempt. Claude Code puts worktrees, which contain
+    project files, in .claude/worktrees/<name>, and the gate packs them."""
     parts = [p.lower() for p in path.replace("\\", "/").split("/") if p]
     if ".claude" in parts:
-        return True
+        last = len(parts) - 1 - parts[::-1].index(".claude")
+        if parts[last + 1:last + 2] != ["worktrees"]:
+            return True
     scratch = str((event or {}).get("scratchpad_dir") or "")
     if not scratch:
         return False
@@ -1137,7 +1141,9 @@ def route(event, prefetch=False, post=False):
         # DensePack. A deny that asked for a copy into to-pack/ cost the
         # agent 2 or 3 more calls.
         return None
-    except Exception:  # noqa: BLE001
+    except Exception as err:  # noqa: BLE001
+        # The Read stays text, and the error goes to stderr for bug reports.
+        sys.stderr.write("DensePack drop_read_gate.py: %r\n" % err)
         return None
 
 

@@ -110,10 +110,12 @@ if sys.platform == "win32":
     # return no answer to any of them for the length of the hook timeout.
     # Each process waits in platform._wmi_query, the Reads return text, and
     # the service reports "Shutting down" to each other caller on the
-    # machine. With the _wmi module set to None, platform gets the version
-    # from sys.getwindowsversion(), the path it takes on a Python built
-    # without that module, and no hook touches WMI.
-    platform._wmi = None
+    # machine. When _wmi_query raises OSError, platform reads the version
+    # from sys.getwindowsversion(), so no hook queries WMI. Python 3.12
+    # raises AttributeError when _wmi is None, and the freetype import fails.
+    def _no_wmi_query(*keys):
+        raise OSError("not supported")
+    platform._wmi_query = _no_wmi_query
 
 try:
     import freetype
