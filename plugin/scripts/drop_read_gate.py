@@ -82,7 +82,35 @@ import hashlib
 import sys
 
 from common import (actor_key, actor_reader, line_pull, disabled, emit,
-                    gets_images, may_rewrite, no_metacharacters, read_event, sibling_image, tmp_dir, turn_reads, vault_dir)
+                    gets_images, may_rewrite, dense_text, no_metacharacters, read_event, sibling_image, tmp_dir,
+                    turn_reads, vault_dir, why_text)
+
+# With the densetext setting, a file with fewer lines stays text, because Edit
+# needs its exact text, and a short file saves few tokens as an image.
+EDIT_TEXT_LINES = 100
+
+
+def short_file(path):
+    """True when the densetext setting is on, the file is not a Word file, and
+    it has fewer than EDIT_TEXT_LINES lines."""
+    if path.lower().endswith((".doc", ".docx")) or not dense_text():
+        return False
+    try:
+        with open(path, "rb") as f:
+            for n, _ in enumerate(f, 1):
+                if n >= EDIT_TEXT_LINES:
+                    return False
+        return True
+    except OSError:
+        return False
+
+
+def stays_text(reason, path, logged):
+    """Logs why the Read stays text when `logged`, and returns None. Only the
+    calls that pack log, so the PreToolUse pass does not write each line twice."""
+    if logged:
+        why_text("read", reason, path)
+    return None
 
 # The largest file that a Read converts. A single line of 3 MB held the hook
 # for minutes. A bigger file, or one with a null byte, stays text. There is
@@ -960,7 +988,7 @@ def draws_on_read(path, event):
             return False
         if Path(path).suffix.lower() in (".doc", ".docx"):
             return False
-        if not gets_images(event):
+        if not gets_images(event) or short_file(path):
             return False
         if is_drop_folder(path) or is_scratch_or_temp(path, event):
             return False
@@ -1025,8 +1053,11 @@ def route(event, prefetch=False, post=False):
         #
         # This check is about the ACTOR, never the file. Sonnet gets images,
         # and a Haiku lead agent gets text.
+        logged = post or prefetch
         if not gets_images(event):
-            return None
+            return stays_text("this model gets text", path, logged)
+        if short_file(path):
+            return stays_text("under %d lines, densetext is on" % EDIT_TEXT_LINES, path, logged)
 
         # Sealed. A redirect gives the model the image in place of the text.
         # The code replaces only a pair that the local plugin sealed.
@@ -1053,7 +1084,7 @@ def route(event, prefetch=False, post=False):
         if is_drop_folder(path):
             return None
         if is_scratch_or_temp(path, event):
-            return None
+            return stays_text("scratch, temp or .claude folder", path, logged)
         # A Read of more than LINE_PULL_MAX lines is a whole read and is not
         # exempt. Otherwise a model can read a file as text in a few wide
         # slices. The pull of a few lines passes at the top of route(),
@@ -1062,7 +1093,7 @@ def route(event, prefetch=False, post=False):
         from pathlib import Path
         drawable = _drawable_text(path)
         if drawable is None:
-            return None
+            return stays_text("not text that DensePack draws, or over the size limit", path, logged)
         size, drawn_text, text = drawable
 
         # NO PRICE FLOOR HERE. See the module note above the imports. This
@@ -1074,7 +1105,9 @@ def route(event, prefetch=False, post=False):
         # different image that is harder to read. The file then stays text.
         from common import ensure_pillow
         if not ensure_pillow():
-            return None
+            return stays_text("Pillow, freetype or NumPy is missing", path, logged)
+        from common import apply_dense_text
+        apply_dense_text()
         # A Read of some lines gets a picture of those lines alone, or the
         # lines as text when that costs less. See _slice_image().
         if drawn_text is None and (tool_input.get("offset") or tool_input.get("limit")):
@@ -1109,7 +1142,8 @@ def route(event, prefetch=False, post=False):
                 # legend sidecar, not page one only, because they hold the
                 # same words.
                 discard(drawn)
-                return None
+                return stays_text("price: image %d + note %d >= text %d tokens"
+                                  % (patch_tokens, note_tokens, text_tokens), path, logged)
             # A Read that starts past image 1 gets the image that holds its
             # first line. A Read of lines 400 to 460 then does not get lines
             # 1 to 318 again.
@@ -1140,10 +1174,11 @@ def route(event, prefetch=False, post=False):
         # The pack failed. The Read runs as text, the same as without
         # DensePack. A deny that asked for a copy into to-pack/ cost the
         # agent 2 or 3 more calls.
-        return None
+        return stays_text("the pack failed", path, logged)
     except Exception as err:  # noqa: BLE001
-        # The Read stays text, and the error goes to stderr for bug reports.
+        # The Read stays text, and the error goes to stderr and the log for bug reports.
         sys.stderr.write("DensePack drop_read_gate.py: %r\n" % err)
+        why_text("read", "error %r" % err, str((event.get("tool_input") or {}).get("file_path", "")))
         return None
 
 

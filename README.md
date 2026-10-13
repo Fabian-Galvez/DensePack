@@ -118,7 +118,7 @@ DensePack saves by packing what the agent reads and the output of its commands i
 
 On Windows, Bash comes with Git for Windows:
 
-- On the first run, DensePack installs Python and Git for Windows when they are missing. [INSTALL.md](INSTALL.md) has the steps to install them yourself.
+- Install Git for Windows before the plugin, because Claude Code downloads the plugin with Git. On the first run, DensePack installs Python when it is missing. [INSTALL.md](INSTALL.md) has the steps.
 - With Git for Windows, DensePack adds these settings to `~/.claude/settings.json`. They take effect in your next session.
 
 ```json
@@ -146,7 +146,9 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 <br>
 <br>
 
-DensePack packs instruction files, such as `CLAUDE.md`, into images at session start. The originals stay next to their files as `<name>.bakpack`. See [How the conversion works](HOW-IT-WORKS.md#how-the-conversion-works).
+DensePack packs instruction files, such as `CLAUDE.md`, into images only when you run `/bakpack`, not on its own. The originals stay next to their files as `<name>.bakpack`.
+
+Files that an older version converted on its own stay images, and `/bak-off` turns them back into text. See [How the conversion works](HOW-IT-WORKS.md#how-the-conversion-works).
 
 | Command             | What it does                                                                                                                                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -154,10 +156,12 @@ DensePack packs instruction files, such as `CLAUDE.md`, into images at session s
 | `/dense-off`        | Stops all DensePack hooks in this session only. New sessions start with DensePack on                                                                                                                      |
 | `/maxpack`          | Sends images to Sonnet and is the default                                                                                                                                                                 |
 | `/max-off`          | Sends text to Sonnet                                                                                                                                                                                      |
+| `/densetext`         | Keeps more as text: Bash output under 15 lines and 2,000 characters, JSON output and files under 100 lines. Repeated output blocks fold to one copy, and more IDs go beside images as exact text. It sends more text, so it saves less. `/densepack` turns it off |
+| `/densedoctor`     | Checks Python, Pillow, FreeType and NumPy, draws one test image and prints the last lines of `.claude/densepack-vault/why-text.log`, which names why each Read or output stayed text |
 | `/helppack`         | Prints all commands                                                                                                                                                                                       |
 | `/dense-remove`     | Restores each converted instruction file and deletes the DensePack files. Run it before the uninstall. [Remove DensePack](INSTALL.md#remove-densepack) has the details                                    |
-| `/bakpack <folder>` | Experimental: the benches did not run it, so it has not been thoroughly tested. Packs the instruction files of that folder into images and keeps each original as `<name>.bakpack`. Run it from a session in another folder. See [The slash commands](HOW-IT-WORKS.md#the-slash-commands) |
-| `/bak-off <folder>`  | Restores the original files of that folder from their `.bakpack` copies and deletes their images. DensePack stays installed                                                                               |
+| `/bakpack [folder]` | Experimental: the benches did not run it, so it has not been thoroughly tested. With no folder, it packs the instruction files of this project and its memory index `MEMORY.md`. With a folder, it packs the files of that folder, and `/bakpack ~/.claude` packs your personal `CLAUDE.md`. Each original stays as `<name>.bakpack`, and the next session gets the images. See [The slash commands](HOW-IT-WORKS.md#the-slash-commands) |
+| `/bak-off [folder]`  | Restores the original text and deletes the images. With no folder, it restores this project and its memory index. With `~/.claude`, it restores your personal `CLAUDE.md` and every memory index |
 <br>
 
 ---
@@ -168,8 +172,29 @@ DensePack packs instruction files, such as `CLAUDE.md`, into images at session s
 
 The prices in the DensePack benches are for the whole Claude Code session, not only the tokens that a plugin removes.
 
-- [Ponytail 5](https://github.com/DietrichGebert/ponytail/blob/main/benchmarks/results/2026-10-07-agentic.md) makes the agent write less code. On Ponytail's own 39 tasks, with medians of 5 runs, DensePack 2.0 cost 12.4% less than Ponytail 5 and was cheaper on 31. See [Ponytail's agentic benchmark](BENCHMARKS.md#ponytails-benchmark).
-- On the four DensePack benches on Opus 5.5, Ponytail saved 0.6% to 24.9%, and DensePack 2.0 saved 48.2% to 54.2%. Ponytail ran with Grep and Glob, the way its users run it, and DensePack with Bash only. [BENCHMARKS.md](BENCHMARKS.md#opus-55-with-each-setup) has the prices.
+DensePack 2.0.2 ran Ponytail's 39 tasks 10 times in a row on 13 October 2026, and Ponytail's own checks scored all 390 runs. The 10 rounds ran one after another on one Windows laptop, with Opus 5.5 and 6 tasks at a time.
+
+Every run counts, and none was left out or run again. The Ponytail 5 column comes from Ponytail's own results of 7 October 2026.
+
+| On Ponytail's 39 tasks | DensePack 2.0.2 | Ponytail 5 |
+| --- | --- | --- |
+| Sum of the 39 task medians | $4.845 | $5.443 |
+| Saving against Ponytail 5, with medians | 11.0% | |
+| Average price of a session | $0.127 | $0.142 |
+| Saving against Ponytail 5, with averages | 10.9% | |
+| Tasks where DensePack was cheaper | 34 of 39 | |
+| Tasks where DensePack saved less than Ponytail 5 | 5: `conv-service`, `tmpl-fe-colorpicker`, `scope-rename`, `tmpl-be-count`, `tmpl-fe-datepicker` | |
+| Runs that passed Ponytail's hidden tests, on 18 tasks | 180 of 180, 100% | 87 of 90, 96.7% |
+| Runs that passed Ponytail's checks, on all 39 tasks | 390 of 390 | |
+| Lines of code written, sum of the 39 medians | 1,118 | 1,334 |
+
+- [Ponytail 5](https://github.com/DietrichGebert/ponytail/blob/main/benchmarks/results/2026-10-07-agentic.md) makes the agent write less code. On Ponytail's own 39 tasks, with medians of 10 runs, DensePack 2.0.2 cost 11.0% less than Ponytail 5 and was cheaper on 34. All 390 of its runs passed Ponytail's own checks, and none was left out or run again.
+- Ponytail's checks are hidden tests on 18 tasks, and on the other 21 a check that the code was delivered or compiles. On tasks with more reading, DensePack saved more, such as 37.2% against Ponytail 5 on `tmpl-fe-wizard`.
+- DensePack's own 4 benches are much bigger than Ponytail's tasks. They read a copy of DensePack's scripts, 24 Python files with 23,448 lines, about 1 MB. Ponytail's tasks start with an empty folder, a seed of 2 to 50 lines, or a FastAPI and React repo of 10,544 source lines.
+- Without a plugin, Ponytail's tasks cost $0.081 to $0.678 per run on Opus 5.5. DensePack's benches cost $0.740 to $4.737, which is 7 to 9 times as much. So DensePack's smallest bench is bigger than Ponytail's largest task.
+- DensePack only cost more on 5 tasks where Ponytail costs $0.145 or less. It was cheaper on all 10 tasks above that price, and on 24 of the 29 tasks below it.
+- That puts the size where DensePack starts to save at about $0.15 of Opus 5.5 work per session. See [Ponytail's agentic benchmark](BENCHMARKS.md#ponytails-benchmark).
+- On the four DensePack benches on Opus 5.5, Ponytail 5.1.0 saved 0.6% to 24.9%, and DensePack 2.0 saved 48.2% to 54.2%. Ponytail ran with Grep and Glob, the way its users run it, and DensePack with Bash only. [BENCHMARKS.md](BENCHMARKS.md#opus-55-with-each-setup) has the prices.
 - Other tools that turn text into images use smaller letters and misread exact text. Opus 5.5 copied 167 of 168 hex hashes right from DensePack images.
 
 <br>
@@ -183,7 +208,7 @@ The prices in the DensePack benches are for the whole Claude Code session, not o
 <details>
 <summary><strong>Can Claude read text in an image?</strong></summary>
 
-Yes, Fable, Opus and Sonnet read text in images. Opus 5.5 rebuilt a 115-line Markdown file byte for byte from its image in 100 of 100 runs. See [File rebuilds](HOW-IT-WORKS.md#file-rebuilds-25-september-2026).
+Yes, Fable, Opus and Sonnet read text in images.
 
 </details>
 
@@ -211,9 +236,7 @@ Longer sessions that read many files save more, because Claude Code sends each i
 <details>
 <summary><strong>Can Claude misread the image?</strong></summary>
 
-Yes, Opus 5.5 rebuilt a 116-line Python file byte for byte in 73 of 100 runs, and most failed runs only missed spaces or tabs. See [File rebuilds](HOW-IT-WORKS.md#file-rebuilds-25-september-2026).
-
-In a test of Bash output images, Opus 5.5 typed 167 of 168 hex hashes correctly. 
+Yes, some lines, such as random IDs. DensePack sends those lines as exact text beside the image. With DensePack 2.0.2, all 390 runs of Ponytail's 39 tasks passed Ponytail's own checks.
 
 These safeguards limit the risk:
 
@@ -315,7 +338,7 @@ DensePack 2.0 adds rules that make the agent write less, and a map of your proje
 
 - The rules are in [plugin/rules/STYLE-RULES.md](plugin/rules/STYLE-RULES.md). DensePack's session start hook puts them in the agent's start note. They are not a skill, so the agent gets them in every session that gets images.
 - Subagents get the same rules from DensePack's subagent start hook.
-- The start note also names an image of your project map: each folder, its files and the names that each file defines. The agent reads that image in its first turn.
+- The start note also names an image of your project map: each folder, its files and the names that each file defines. The agent reads that image in its first turn. When the map has under 400 characters, the note contains it as text, because the text costs less than the image and its Read.
 - [The session start note](HOW-IT-WORKS.md#the-session-start-note) has the details and the cost, about 2,300 tokens. [BENCHMARKS.md](BENCHMARKS.md#densepack-20-10-october-2026) has the savings.
 
 You can make the rules your own. Ask your agent to change `STYLE-RULES.md` in the DensePack plugin folder, or to delete it. Without that file, DensePack sends no rules and no project map.
@@ -335,7 +358,7 @@ DensePack saves the most in long sessions that read many whole files, such as an
 
 - Reads and Bash commands such as `cat` and `grep` return each page of their output as an image, all in one result.
 - Grep and Glob results stay text. On Windows, the settings in [Install the plugin](#install-the-plugin) make the agent search with Bash instead, as on macOS and Linux. The [savings above](#savings) are from runs with these settings.
-- DensePack converts the `CLAUDE.md` files of a repository at the start of the first session in it. That first session still gets their text. To give the first session the images too, run `/bakpack <path to the repository>` from a session in another folder first.
+- DensePack converts instruction files such as `CLAUDE.md` only when you run `/bakpack`. Run it once in a project, and the next sessions there get the images. To keep any converted file as text again, run `/bak-off`.
 <br>
 
 ---
@@ -352,6 +375,12 @@ Claude Code cannot Read Word files, so DensePack packs `.doc` and `.docx` files 
 <br>
 
 ## Thank you
+
+The output savings and the better replies of DensePack 2.0 are in large part thanks to 3 projects. Its rules use what they found.
+
+- [Ponytail](https://github.com/DietrichGebert/ponytail) showed how rules make the agent write less code, and its benchmark measured DensePack 2.0.
+- The [i-have-adhd](https://github.com/ayghri/i-have-adhd) skill for Claude Code showed how to write short replies that put the answer first.
+- Research on the shape of AI writing named the signs that the rules cut. The main papers are [StoryScope](https://arxiv.org/abs/2604.03136) by Russell, Pham, Iyyer and Wieting, and [SlopShape](https://arxiv.org/abs/2609.15369) by Jochen Madler.
 
 DensePack renders each character with [FreeType](https://freetype.org) and the [Inter](https://rsms.me/inter/) font family. Thank you to the FreeType and Inter projects.
 <br>

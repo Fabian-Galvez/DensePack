@@ -16,7 +16,20 @@ If Claude Code already runs on your computer, type these two commands in Claude 
 /plugin install densepack@densepack-marketplace
 ```
 
-Then type `/exit` and start Claude Code again. 
+Then type `/exit` and start Claude Code again.
+
+On Windows without Git, the first command fails, because Claude Code downloads the plugin with Git. Run these 2 commands in PowerShell instead. The first one installs Git.
+
+```
+winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
+```
+
+Then open a new PowerShell window, so that it finds Git, and install the plugin. This command needs Claude Code 2.1.292 or later.
+
+```
+claude plugin install densepack --marketplace Fabian-Galvez/DensePack
+```
+
 <br>
 <sub>Type `/helppack`. When it prints the table of DensePack commands, the plugin is installed.</sub>
 
@@ -31,7 +44,7 @@ Then type `/exit` and start Claude Code again.
 - Claude Pro, Max, Team, Enterprise or a Console account. The free claude.ai plan does not include Claude Code.
 - Linux and macOS: Python 3.10 or newer.
 - Windows: DensePack installs Python 3.13 when it is missing.
-- Windows: Git for Windows, which brings Bash. DensePack runs Claude Code with Bash, because that is how it saves. It installs Git for Windows when it is missing, and sets the two settings that [Install the plugin](README.md#install-the-plugin) shows.
+- Windows: Git for Windows, which brings Bash. Claude Code downloads the plugin with Git, and DensePack runs Claude Code with Bash because that is how it saves. It sets the two settings that [Install the plugin](README.md#install-the-plugin) shows.
 
 - [Install walkthrough](#install-walkthrough)
 - [Remove DensePack](#remove-densepack)
@@ -47,7 +60,7 @@ Then type `/exit` and start Claude Code again.
 
 <sub><strong>Windows: Git for Windows</strong>
 <br>
-DensePack installs Git for Windows for your user with winget at its first run, when Git is missing. To install it yourself, download Git from https://git-scm.com/downloads/win and install it with the default options.
+Claude Code downloads the plugin with Git, so install Git before the plugin. In PowerShell, run `winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements`, or download Git from https://git-scm.com/downloads/win and install it with the default options.
 
 If your Git Bash setup needs a password when it first opens, such as an SSH key password, enter it before you start Claude Code. Otherwise each Bash command in Claude Code fails.</sub>
 
@@ -100,7 +113,11 @@ mkdir ~/myproject && cd ~/myproject
 
 DensePack needs Python 3.10 or newer. It finds Python only by the names `python3`, `python` and `py`.
 
-<strong>Windows:</strong> When DensePack does not find Python 3.10 or newer, it installs Python 3.13 with winget in `%LOCALAPPDATA%\Programs\Python\Python313`. Type `/exit` and close PowerShell. Open PowerShell again and type these commands.
+<strong>Windows:</strong> When DensePack does not find Python 3.10 or newer, it installs Python 3.13 with winget in `%LOCALAPPDATA%\Programs\Python\Python313`. The install runs in the background, so a slow connection does not cut it off.
+
+The install leaves out Tcl/Tk (`tkinter`) and the Python test suite, which DensePack does not use. To add them later, open Settings, Apps, Python 3.13 and choose Modify.
+
+Wait a few minutes, then type `/exit` and close PowerShell. Open PowerShell again and type these commands.
 
 ```
 cd $HOME\myproject
@@ -180,7 +197,7 @@ Plugins cannot run code during an uninstall. Claude Code deletes only the data f
 - It restores the original text of each converted `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/rules/*.md` and `MEMORY.md` from its `.bakpack`. Text that you added below the pointer stays at the end of the file. Then it deletes the `.bakpack` and the images of that file.
 - It removes `CLAUDE_CODE_THRIFTY_SONIC`, `EMBEDDED_SEARCH_TOOLS` and `CLAUDE_CODE_USE_POWERSHELL_TOOL` from the `env` block of `~/.claude/settings.json` when each still has the value that DensePack wrote.
 - It deletes `~/.claude/densepack-state`, `~/.claude/densepack-cards` and `~/.claude/densepack-tracker.json`.
-- It deletes the Python install markers in `~/.densepack`. In `%LOCALAPPDATA%\densepack`, it deletes only the files `python-install-tried` and `git-install-tried`, because the right-click tool keeps its own files in that folder.
+- It deletes the Python install markers in `~/.densepack`. In `%LOCALAPPDATA%\densepack`, it deletes only the files `python-install-tried`, `python-install-running` and `git-install-tried`, because the right-click tool keeps its own files in that folder.
 - It deletes the `densepack-trial-*.pkl` files in the temp folder.
 - In each project that a transcript in `~/.claude/projects` names, it deletes the `.claude/densepack-vault` folder and the `densepack-*` and `.densepack-*` files in `.claude/tmp`.
 - It deletes the trust entry of the marketplace folder. Claude Code asks for trust again when you reinstall at the same path.

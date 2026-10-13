@@ -656,7 +656,9 @@ def rules_line(cwd=None):
     folder_map = projectmap.build(cwd or os.getcwd())
     if not folder_map:
         return text
-    image = map_image(folder_map)
+    from bash_image import MIN_CHARS
+    # Under the Bash floor, the text costs less than the image and the Read that gets it.
+    image = map_image(folder_map) if len(folder_map) >= MIN_CHARS else None
     if image is None:
         return text + "\n\n" + folder_map
     return text + ("\n\nPROJECT MAP: the image %s lists each folder of this project, its source and config files, "

@@ -12,8 +12,12 @@ event, and a change applies from the next agent.
   python dpctl.py remove                    /dense-remove: restore the converted
                                             instruction files and delete the
                                             DensePack files
-  python dpctl.py bakpack <folder>          /bakpack: pack the instruction files of
+  python dpctl.py bakpack [folder]          /bakpack: pack the instruction files of
                                             that folder
+  python dpctl.py densetext                 /densetext: more output and short
+                                            files stay text
+  python dpctl.py densedoctor               /densedoctor: check the install and
+                                            draw one test image
   python dpctl.py maxpack|maxoff            /maxpack and /max-off: Sonnet gets
                                             images or plain text
   python dpctl.py receipts quiet            the default, no receipt table (the
@@ -136,17 +140,19 @@ Only /dense-off stops them all.
 | The manifest | Each agent that finishes gets a row, packed or not |
 | The vault | DensePack copies each packed image and its text to .claude/densepack-vault, one folder per conversation. The copies stay when DensePack prunes .claude/tmp. When the vault is over 200 MB, DensePack deletes the oldest folders |
 | The spawn log | Each agent from the Agent tool also gets a row at its start, with the model that it runs on. The log changes nothing |
-| Instruction files as images | At session start, DensePack converts the instruction files of the folder, your ~/.claude/CLAUDE.md and the project's MEMORY.md. Each file becomes a short pointer to its images, with the original text in <name>.bakpack. DensePack packs a file only when its images and pointer cost less than its text. The change applies from the next session, because Claude Code loads these files before DensePack runs. /dense-remove restores the originals |
+| Instruction files as images | When you run /bakpack, DensePack converts the instruction files of the folder into short pointers to images, with the original text in <name>.bakpack. It is not automatic. Session start only keeps converted files up to date. /bak-off turns them back into text, also files that DensePack 2.0.1 or older converted on its own |
 
 | Command | What it sets | Is this the default |
 | --- | --- | --- |
 | /densepack | It turns packing on and sets each setting below back to its default | Yes. This command is the reset |
 | /dense-off | It stops all DensePack hooks in this session | No |
 | /dense-remove | Restores each converted instruction file from its .bakpack and removes the settings that DensePack added. It also deletes the DensePack files that /plugin uninstall leaves. Run it before the uninstall | Sets nothing |
-| /bakpack <folder> | Experimental: the benches did not run it, so it has not been thoroughly tested. Packs the CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of that folder into images behind a pointer. Running it costs the agent no Read, because dpctl.py packs the files itself. Run it from a session in another folder. Sessions in that folder then get the images | Sets nothing |
-| /bak-off <folder> | Restores the originals of that folder from their .bakpack copies and deletes their images | Sets nothing |
+| /bakpack [folder] | Experimental: the benches did not run it, so it has not been thoroughly tested. With no folder, it packs the instruction files of this project and its memory index MEMORY.md. With a folder, it packs CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of that folder, and /bakpack ~/.claude packs your personal CLAUDE.md. Running it costs the agent no Read, because dpctl.py packs the files itself. The next session gets the images | Sets nothing |
+| /bak-off [folder] | Restores the original text from the .bakpack copies and deletes the images: with no folder, of this project and its memory index, and with ~/.claude, of your personal CLAUDE.md and every memory index | Sets nothing |
 | /maxpack | Sonnet gets images | Yes |
 | /max-off | Sonnet gets plain text | No |
+| /densetext | Bash output under 15 lines and 2,000 characters, JSON output and files under 100 lines stay text. Repeated blocks of output fold to one copy, and more IDs and hashes go beside the image as exact text. More text costs more tokens, so the savings drop | No |
+| /densedoctor | It checks Python, Pillow, FreeType and NumPy, draws one test image and prints the last lines of .claude/densepack-vault/why-text.log, which names why each Read or output stayed text | Sets nothing |
 | /helppack | It prints this table | Sets nothing |
 
 The other settings are /setpack arguments and need no command of their
@@ -223,16 +229,72 @@ def status_line():
     tier = ""
     return ("DensePack: packing %s, reader %s (%d px, %s)%s, "
             "receipts %s, totals %s (%s)%s, keep %s, stylecard %s, "
-            "Sonnet images %s"
+            "Sonnet images %s, densetext %s"
             % (packing, reader, CODE_PX, how, tier,
                current["receipts"], current["totals"],
                TOTALS_SAID[current["totals"]], quiet, keep,
-               current.get("stylecard", "off"), current.get("maxpack", "on")))
+               current.get("stylecard", "off"), current.get("maxpack", "on"),
+               current.get("densetext", "off")))
 
 
 # The model that each reader profile names. A model id that contains the
 # profile name maps to that profile.
 READER_NAMES = {"fable": "Fable 5.1", "opus": "Opus 5.5", "sonnet": "Sonnet 5.5"}
+
+
+def session_event():
+    """The event that pack_instructions.targets() reads: the transcript of the
+    calling session, which names the memory folder of this project."""
+    sid = caller_session()
+    base = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+    found = sorted(base.glob("projects/*/%s.jsonl" % sid)) if sid else []
+    return {"transcript_path": str(found[0]) if found else None}
+
+
+def doctor():
+    """Checks what DensePack needs, draws one test image and prints the last
+    lines of why-text.log. Prints one line per check. Returns 1 when a check
+    fails, so a broken install shows its cause in one command."""
+    import shutil
+    from common import ensure_pillow, vault_dir
+    failed = []
+
+    def check(good, what):
+        print("%s %s" % ("OK  " if good else "FAIL", what))
+        if not good:
+            failed.append(what)
+
+    check(sys.version_info >= (3, 10), "Python %d.%d at %s" % (sys.version_info[:2] + (sys.executable,)))
+    if os.name == "nt":
+        check(bool(shutil.which("bash")), "Git Bash, which DensePack runs commands in on Windows")
+    check(ensure_pillow(), "Pillow, freetype-py and NumPy load")
+    try:
+        import freetype_glyph  # noqa: F401
+        check(True, "FreeType draws letters")
+    except Exception as err:  # noqa: BLE001
+        check(False, "FreeType draws letters: %r" % err)
+    fonts = Path(__file__).resolve().parents[1] / "fonts" / "Inter-SemiBold.ttf"
+    check(fonts.is_file(), "font file %s" % fonts)
+    image = vault_dir() / "doctor-test-image.png"
+    try:
+        from bash_image import draw_small
+        small = draw_small("DensePack doctor test\n" + "\n".join("line %d: x = %d" % (n, n) for n in range(1, 31)),
+                           "sonnet", "doctor-test.txt")
+        if small is not None:
+            image.parent.mkdir(parents=True, exist_ok=True)
+            image.write_bytes(small[0])
+        check(small is not None, "test image drawn: %s" % image)
+    except Exception as err:  # noqa: BLE001
+        check(False, "test image drawn: %r" % err)
+    print(status_line())
+    log = vault_dir() / "why-text.log"
+    if log.is_file():
+        print("Last lines of %s:" % log)
+        print("\n".join(log.read_text(encoding="utf-8", errors="replace").splitlines()[-10:]))
+    else:
+        print("No %s yet. Nothing stayed text because of an error or a price check." % log)
+    print("DensePack works." if not failed else "Broken: %s" % "; ".join(failed))
+    return 1 if failed else 0
 
 
 def remove_everything():
@@ -278,12 +340,12 @@ def remove_everything():
     for path in (home / ".claude" / "densepack-state", home / ".claude" / "densepack-cards",
                  home / ".claude" / "densepack-tracker.json", home / ".densepack"):
         drop(path)
-    # ensure_python.ps1 writes only python-install-tried and git-install-tried
-    # in this folder. The right-click tool keeps its saved packs in the same
-    # folder (Windows names are not case sensitive), so the removal deletes
-    # only those two files.
+    # ensure_python.ps1 writes only python-install-tried, python-install-running
+    # and git-install-tried in this folder. The right-click tool keeps its saved
+    # packs in the same folder (Windows names are not case sensitive), so the
+    # removal deletes only those three files.
     if os.environ.get("LOCALAPPDATA"):
-        for marker in ("python-install-tried", "git-install-tried"):
+        for marker in ("python-install-tried", "python-install-running", "git-install-tried"):
             drop(Path(os.environ["LOCALAPPDATA"]) / "densepack" / marker)
     for path in glob.glob(os.path.join(tempfile.gettempdir(), "densepack-trial-*.pkl")):
         drop(path)
@@ -361,30 +423,39 @@ def main(argv):
         # /mdpack, the old name of this command, is gone since 2.0. Its old
         # .densepack.bak backups still restore with /bak-off, through bak_path().
         # The folder arrives as one quoted argument and can hold spaces.
-        folder = " ".join(argv[1:]).strip().strip('"').strip("'")
-        if not folder:
-            print("Name a folder: /bakpack <folder>")
-            return 1
+        folder = os.path.expanduser(" ".join(argv[1:]).strip().strip('"').strip("'"))
         import pack_instructions
-        for name, result in pack_instructions.convert_folder(folder):
+        if not folder:
+            # No folder: this project and its memory index, never the user
+            # CLAUDE.md, which applies to every project.
+            results = pack_instructions.convert_all(session_event(), "opus", only_pointers=False,
+                                                    skip=("user-CLAUDE.md",))
+        else:
+            results = pack_instructions.convert_folder(folder)
+        for name, result in results:
             if result != "absent":
                 print("%s: %s" % (name, result))
-        print("Sessions that start in that folder load the pointer and read the images. "
+        print("The next session loads the pointers and reads the images. "
               "The original text stays next to each file as <name>.bakpack. "
-              "/bak-off <folder> restores the originals.")
+              "/bak-off puts the text back.")
         return 0
 
     elif verb == "bakoff":
-        folder = " ".join(argv[1:]).strip().strip('"').strip("'")
-        if not folder:
-            print("Name a folder: /bak-off <folder>")
-            return 1
+        folder = os.path.expanduser(" ".join(argv[1:]).strip().strip('"').strip("'"))
         import pack_instructions
-        done = pack_instructions.restore_folder(folder)
+        from common import project_dir
+        done = pack_instructions.restore_folder(folder or str(project_dir()))
+        transcript = session_event()["transcript_path"]
+        if not folder and transcript:
+            memory = Path(transcript).parent / "memory" / "MEMORY.md"
+            state = pack_instructions.load_state()
+            if pack_instructions.restore(memory, state):
+                done.append(str(memory))
+            pack_instructions.save_state(state)
         for name in done:
             print("restored " + name)
         if not done:
-            print("No packed instruction file in " + folder)
+            print("No packed instruction file in " + (folder or str(project_dir())))
         return 0
 
     elif verb == "on":
@@ -519,10 +590,16 @@ def main(argv):
             changes["keep_folder"] = " ".join(argv[2:])
         write_settings(changes)
 
+    elif verb == "densetext":
+        write_settings({"densetext": "on"})
+
+    elif verb == "densedoctor":
+        return doctor()
+
     else:
         print("unknown verb %r. Verbs: status, on, off, remove, bakpack, bakoff, maxpack, "
-              "maxoff, receipts, totals, keep, reader, stylecard, agents, vault, help"
-              % verb)
+              "maxoff, densetext, densedoctor, receipts, totals, keep, reader, stylecard, "
+              "agents, vault, help" % verb)
         return 1
 
     print(status_line())

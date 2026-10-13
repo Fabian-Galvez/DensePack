@@ -2217,10 +2217,13 @@ SETTINGS_DEFAULTS = {"receipts": "quiet",
                      # stylecard defaults to off. The writing check is opt-in.
                      "reader": "auto", "stylecard": "off",
                      "maxpack": "on",
+                     # densetext defaults to off. It sends more as text and lowers the savings.
+                     "densetext": "off",
                      "vault_mb": VAULT_CAP_MB}
 SETTINGS_ALLOWED = {"reader": ("auto", "fable", "opus", "sonnet"),
                     "stylecard": ("on", "off"),
                     "maxpack": ("on", "off"),
+                    "densetext": ("on", "off"),
                     "receipts": ("default", "verbose", "light", "quiet"),
                     "totals": ("auto", "on", "off"),
                     "keep": ("off", "images", "reports", "both")}
@@ -2317,6 +2320,40 @@ def vault_dir(session_id=None):
     if session_id is None:
         return base
     return base / (str(session_id) if session_id else "no-session-id")
+
+
+WHY_TEXT_MAX = 512 * 1024
+
+
+def why_text(where, reason, path=""):
+    """Appends one line to .claude/densepack-vault/why-text.log: why a Read or a
+    command output stayed text. A broken install then shows its cause instead of
+    failing silently. At WHY_TEXT_MAX bytes the log moves to why-text.old.log.
+    Never raises."""
+    try:
+        import time
+        log = vault_dir() / "why-text.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        if log.is_file() and log.stat().st_size > WHY_TEXT_MAX:
+            os.replace(str(log), str(log.with_name("why-text.old.log")))
+        with open(str(log), "a", encoding="utf-8") as f:
+            f.write("%s %s %s %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), where, reason, path))
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def dense_text():
+    """True when the densetext setting is on: more Bash output and short files
+    stay text, and more IDs go beside the image as exact text."""
+    return settings().get("densetext") == "on"
+
+
+def apply_dense_text():
+    """With the densetext setting, a run of up to 100 characters with no space,
+    such as a long path or a 64-digit hash, stays on one row of the image."""
+    if dense_text():
+        import codepack
+        codepack.UNBROKEN_MAX = 100
 
 
 # The characters that a shell acts on, and the characters that end a line of
