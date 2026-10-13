@@ -43,6 +43,7 @@ cost 70 per cent more. Grep output stays text.
 A fault never blocks the call. After a fault, the output stays as it was.
 """
 import base64
+import json
 import os
 import re
 import shutil
@@ -51,8 +52,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import (actor_key, actor_reader, disabled, emit, ensure_pillow,  # noqa: E402
-                    gets_images, read_event)
+from common import (actor_key, actor_reader, apply_dense_text, disabled, emit, ensure_pillow,  # noqa: E402
+                    gets_images, dense_text, read_event, why_text)
 
 # Below this many characters, the text costs less than the image, and the
 # hook packs nothing. The bill on Opus 5.5, with the one-row key and the
@@ -120,16 +121,29 @@ TEXT_ONLY = re.compile(
 # stays text. An image with only the numbers of those lines cost more. On a
 # sample where each line is risky, the model read each line from the text
 # copy to type it exactly.
-def risky_rows(text):
-    """The 0-based numbers of the lines TEXT_ONLY matches, in order."""
-    return sorted({text.count("\n", 0, m.start()) for m in TEXT_ONLY.finditer(text)})
+# With the densetext setting, these lines also go beside the image as exact text:
+# each ID that mixes digits and both cases, hex hashes of 32 or more digits, and
+# UUIDs. The test above found these typed right, so they are not the default.
+WIDE_IDS = re.compile(
+    r"(?<![0-9A-Za-z])(?=[0-9A-Za-z]*\d)(?=[0-9A-Za-z]*[A-Z])(?=[0-9A-Za-z]*[a-z])"
+    r"(?![A-Za-z]?[a-z]+\d+(?![0-9A-Za-z]))"              # not a word and a number, such as Makefile2
+    r"[0-9A-Za-z]{8,}(?![0-9A-Za-z])"
+    r"|(?<![0-9A-Za-z])[0-9a-fA-F]{32,}(?![0-9A-Za-z])"
+    r"|(?<![0-9A-Za-z])[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}(?![0-9A-Za-z])")
+
+
+def risky_rows(text, wide=False):
+    """The 0-based numbers of the lines TEXT_ONLY matches, in order. With wide,
+    the lines WIDE_IDS matches too."""
+    found = (TEXT_ONLY, WIDE_IDS) if wide else (TEXT_ONLY,)
+    return sorted({text.count("\n", 0, m.start()) for p in found for m in p.finditer(text)})
 
 
 def exact_lines_note(text):
     """Returns the note that gives the exact text of each line TEXT_ONLY
     matches, or "" when no line matches."""
     rows = text.split("\n")
-    hits = risky_rows(text)
+    hits = risky_rows(text, dense_text())
     if not hits:
         return ""
     return ("A model can misread these lines of the image, such as a capital I "
@@ -143,9 +157,47 @@ def pick_note(cost, text, exact):
     the image and the note cost as much as the text, and the output then
     stays text."""
     import densepack as dp
-    if cost + round(len(exact) / dp.CHARS_PER_TOKEN) < round(len(text) / dp.CHARS_PER_TOKEN):
+    note, plain = round(len(exact) / dp.CHARS_PER_TOKEN), round(len(text) / dp.CHARS_PER_TOKEN)
+    if cost + note < plain:
         return exact
+    why_text("bash", "price: image %d + note %d >= text %d tokens" % (cost, note, plain))
     return None
+
+
+# With the densetext setting, a block of up to FOLD_MAX_BLOCK lines that repeats
+# FOLD_MIN_REPEATS or more times in a row folds to one copy and a marker line.
+FOLD_MIN_REPEATS = 3
+FOLD_MAX_BLOCK = 30
+# With the densetext setting, output with fewer lines than SHORT_LINES and fewer
+# characters than SHORT_CHARS stays text.
+SHORT_LINES = 15
+SHORT_CHARS = 2000
+
+
+def fold_repeats(text):
+    """Folds FOLD_MIN_REPEATS or more identical blocks in a row, each of up to
+    FOLD_MAX_BLOCK lines, into one block and a marker line."""
+    lines = text.split("\n")
+    out, i, n = [], 0, len(lines)
+    while i < n:
+        saved, size = 0, 0
+        for k in range(1, min(FOLD_MAX_BLOCK, (n - i) // FOLD_MIN_REPEATS) + 1):
+            block = lines[i:i + k]
+            if lines[i + k] != lines[i] or not any(l.strip() for l in block):
+                continue
+            reps = 1
+            while lines[i + reps * k:i + (reps + 1) * k] == block:
+                reps += 1
+            if reps >= FOLD_MIN_REPEATS and (reps - 1) * k > saved:
+                saved, size = (reps - 1) * k, k
+        if saved:
+            out += lines[i:i + size]
+            out.append("[DensePack: the %d line(s) above repeat %d more times]" % (size, saved // size))
+            i += saved + size
+        else:
+            out.append(lines[i])
+            i += 1
+    return "\n".join(out)
 
 
 def tool_output(out, note=""):
@@ -354,9 +406,25 @@ def image_output(event):
     from drop_read_gate import READ_MAX_BYTES
     if len(text) < MIN_CHARS or len(text) > READ_MAX_BYTES or "\x00" in text:
         return None
+    if dense_text():
+        if text.count("\n") < SHORT_LINES and len(text) < SHORT_CHARS:
+            return None
+        try:
+            json.loads(text)
+            return None
+        except ValueError:
+            pass
+        folded = fold_repeats(text)
+        if folded != text:
+            return folded_output(event, resp, text, folded)
     exact = exact_lines_note(text)
-    if not gets_images(event) or not ensure_pillow():
+    if not gets_images(event):
+        why_text("bash", "this model gets text")
         return None
+    if not ensure_pillow():
+        why_text("bash", "Pillow, freetype or NumPy is missing")
+        return None
+    apply_dense_text()
     import densepack as dp
     import pointer
     from PIL import Image
@@ -371,6 +439,7 @@ def image_output(event):
     if len(text) < SLIM_MAX_CHARS:
         small = draw_small(text, actor_reader(event) or FALLBACK_READER, copy_name)
         if small is None:
+            why_text("bash", "the small pack failed")
             return None
         raw, cost = small
         note = pick_note(cost, text, exact)
@@ -382,7 +451,8 @@ def image_output(event):
                 return None
             write_copy(folder / copy_name, text)
             (folder / (copy_name + "-image-1-of-1-DensePack.png")).write_bytes(raw)
-        except (OSError, UnicodeError):
+        except (OSError, UnicodeError) as err:
+            why_text("bash", "write error %r" % err)
             return None
         out = dict(resp)
         out["stdout"] = "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
@@ -400,13 +470,15 @@ def image_output(event):
             os.environ.update(slim_env(text))
         _line, image = pointer.draw_drop_file(model, str(stage), actor_key(event), stem,
                                               name=copy_name, source="bash")
-    except Exception:  # noqa: BLE001
+    except Exception as err:  # noqa: BLE001
+        why_text("bash", "pack error %r" % err)
         image = None
     finally:
         for name in SLIM_ENV_NAMES:
             os.environ.pop(name, None)
         shutil.rmtree(str(stage_dir), ignore_errors=True)
     if image is None:
+        why_text("bash", "the pack failed")
         return None
     image = Path(image)
     try:
@@ -434,6 +506,29 @@ def image_output(event):
     out["stdout"] = "data:image/png;base64," + data
     out["isImage"] = True
     return tool_output(out, note)
+
+
+def folded_output(event, resp, text, folded):
+    """With the densetext setting: saves the whole output to a file, then
+    returns the folded output, as an image when that costs less, with a note
+    that names the file. Returns None when the file cannot be written."""
+    try:
+        folder = copy_folder()
+        if folder is None:
+            return None
+        full = folder / ("bash-output-%s-full.txt" % str(event.get("tool_use_id") or os.getpid())[-12:])
+        write_copy(full, text)
+    except (OSError, UnicodeError) as err:
+        why_text("bash", "write error %r" % err)
+        return None
+    resp = dict(resp, stdout=folded)
+    note = "DensePack folded repeated lines of this output. The whole output is in %s." % full
+    answer = image_output(dict(event, tool_response=resp))
+    if answer is None:
+        return tool_output(resp, note)
+    spec = answer["hookSpecificOutput"]
+    spec["additionalContext"] = "\n".join(x for x in (spec.get("additionalContext"), note) if x)
+    return answer
 
 
 def pages_output(resp, text, first, line, copy_name, exact="", tool="Bash"):
@@ -545,8 +640,8 @@ def main():
                 spec["additionalContext"] = "\n".join(
                     x for x in (first, spec.get("additionalContext")) if x)
             emit(answer)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as err:  # noqa: BLE001
+        why_text("bash", "error %r" % err)
     return 0
 
 

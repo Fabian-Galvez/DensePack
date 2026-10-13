@@ -119,10 +119,10 @@ The agent uses no extra turn, because these steps run inside the same tool call.
 
 This folder contains the images of the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of the project. The images of your `~/.claude/CLAUDE.md` and of the memory index `MEMORY.md` are in `~/.claude/densepack-state/instruction-images/`. See [HOW-IT-WORKS.md](HOW-IT-WORKS.md#what-densepack-changes) for that conversion.
 
-`/bakpack <folder>` converts the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of another folder.
+`/bakpack` converts the `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` of this project, or of the folder you name. DensePack converts no file on its own.
 
 - It writes their images to `instruction-images/` in the vault of that folder. It also writes a `.gitignore` there, so Git does not commit the images.
-- `/bak-off <folder>` restores these files and deletes their images for one folder. See [Remove DensePack](INSTALL.md#remove-densepack) for what `/dense-remove` does for all folders.
+- `/bak-off [folder]` restores these files and deletes their images for one folder. See [Remove DensePack](INSTALL.md#remove-densepack) for what `/dense-remove` does for all folders.
 
 ### `instructions/map/`
 
@@ -145,6 +145,10 @@ When the conversation folders total more than 200 MB, DensePack deletes files in
 2. When the conversation folders still total more than 200 MB, DensePack deletes the oldest files of the newest folder.
 
 DensePack never deletes the newest conversation folder as a whole, because it contains the conversation in progress. The cleanup also skips `images/`, `to-pack/`, `not-converted/`, `instruction-images/`, `instructions/`, the folders of older versions and folders that you make. Set the `vault_mb` value in `densepack-settings.json` to change the 200 MB limit.
+
+### `why-text.log` and `doctor-test-image.png`
+
+`why-text.log` gets one line for each Read or Bash output that stays text, with the reason, such as an error or the price check. At 512 KB, the log moves to `why-text.old.log`. `/densedoctor` prints its last 10 lines and saves its test image as `doctor-test-image.png`.
 
 ### `.gitignore`
 

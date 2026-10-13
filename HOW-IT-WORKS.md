@@ -25,7 +25,7 @@ DensePack changes some of your files and adds its own folders and packages. The 
 
 | What it changes                                                                                                                                                                                 | What DensePack does                                                                                                                                                                                                                                                                           | Why                                                                                                                                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The instruction files: `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in a project, your `~/.claude/CLAUDE.md` and the auto memory index `MEMORY.md` | At session start, DensePack copies the file to `<name>.bakpack` and packs the text into images. It replaces the file with a short pointer that names each image. It converts a file only when the images and the pointer cost less than the text                                              | Claude Code sends these files as text on each turn                                                                                                                                                                                                                                        |
+| The instruction files: `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in a project, your `~/.claude/CLAUDE.md` and the auto memory index `MEMORY.md` | When you run `/bakpack`, DensePack copies the file to `<name>.bakpack` and packs the text into images. It replaces the file with a short pointer that names each image. It converts a file only when the images and the pointer cost less than the text                                              | Claude Code sends these files as text on each turn                                                                                                                                                                                                                                        |
 | `~/.claude/settings.json`                                                                                                                                                                       | DensePack adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` to the `env` block at each session start when the key is not there. On Windows with Git for Windows, it also adds `"EMBEDDED_SEARCH_TOOLS": "1"` and `"CLAUDE_CODE_USE_POWERSHELL_TOOL": "0"`, so that commands and searches run in Bash. DensePack never changes a key that has another value, so to keep a Claude Code default, set the key to another value, such as `"EMBEDDED_SEARCH_TOOLS": "0"`                                                                                                                                                                                       | In auto and bypassPermissions mode, the Claude Code harness can add an instruction to read files with cat or sed. Claude Code turns it on only for some accounts and models. Bash reads save less than Reads. The setting is not in the Claude Code docs. It applies to all your projects |
 | `.gitignore` files in `.claude/tmp/` and `.claude/densepack-vault/`                                                                                                                             | DensePack writes one line, `*`                                                                                                                                                                                                                                                                | Those folders contain copies of your files and of command output. The `*` line keeps them out of Git                                                                                                                                                                                      |
 | `~/.claude/densepack-state`                                                                                                                                                                     | DensePack creates the folder. It contains the Python path that DensePack found, the seal key `sidecar.key` and the list of converted instruction files. It also contains the images of your `~/.claude/CLAUDE.md` and of each `MEMORY.md`, because those files are outside the project folder | DensePack reads its own notes to find the files that it converted. Cloned repositories can contain a fake copy of those notes. DensePack keeps the real notes in your home folder, where a clone cannot write                                                                             |
@@ -38,14 +38,15 @@ DensePack changes some of your files and adds its own folders and packages. The 
 
 - The instruction files are `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md` and `.claude/rules/*.md` in a project, your `~/.claude/CLAUDE.md` and your auto memory `MEMORY.md`.
 - DensePack converts `AGENTS.md` only when the folder has no `CLAUDE.md`, because Claude Code loads it only then.
-- Claude Code loads these files before DensePack converts them, so the first session in a folder gets their text. The steps below avoid that.
-  1. Run `/bakpack <folder>` from an empty folder next to the folder with the files. The agent does not read their text.
-  2. Start Claude Code in that folder. Claude Code reads the short pointer and the images, not the text.
+- DensePack converts these files only when you run `/bakpack`. It is not automatic, so each user chooses which files become images.
+- `/bakpack` with no folder converts the files of this project and its memory index. `/bakpack <folder>` converts the files of another folder, and `/bakpack ~/.claude` converts your personal `CLAUDE.md`.
+- Claude Code loads these files at session start, so the session that runs `/bakpack` keeps their text. The next session gets the images.
+- `/bak-off` turns converted files back into text. This also works for files that DensePack 2.0.1 or older converted on its own at session start. Those files stay images until you run `/bak-off`.
 - DensePack turns each converted file into three kinds of files, the pointer, the `.bakpack` and the images.
 - The `.bakpack` contains your original text, byte for byte. Claude Code does not load it, because its name does not end in `.md`.
 - DensePack converts a file only when its images and pointer cost less than its text. Short files stay text.
 - Instruction files follow the same size limit as other files. See [What are the limits?](#the-limits).
-- At session start, the pack runs in the background. The session does not wait for it. The next session start shows a note about the files that it converted.
+- At session start, DensePack keeps the converted files up to date in the background. It converts no new file. The session does not wait for it.
 - The images can cost one extra turn at the start of a session. DensePack does not count that turn when it compares the costs. For that reason, short sessions can cost more with a converted file.
 - To change your instructions, edit the `.bakpack`. DensePack converts it again at the next session start.
 - DensePack moves text that you add below the pointer into the `.bakpack` at the next session start. It moves new lines from auto memory the same way.
@@ -146,7 +147,7 @@ Session start runs when a session starts and again after a resume, `/clear` or `
 
 - Its first line is "DensePack is on." Subagents get the same line.
 - It contains the rules for less code and short replies, from `plugin/rules/STYLE-RULES.md`. Subagents get these rules too, and the lead learns this from the note. Haiku subagents, and Sonnet subagents after `/max-off`, get no note and no rules. The lead then leaves the rules out of a task.
-- It names an image of the project map: each folder, its files and the names that each file defines. The lead reads that image in its first turn.
+- It names an image of the project map: each folder, its files and the names that each file defines. The lead reads that image in its first turn. When the map has under 400 characters, the same floor as Bash output, the note contains it as text.
 
 The guidance for images goes beside the first image of each session and each agent, about 25 tokens one time:
 
@@ -348,7 +349,8 @@ When a part goes to the model a second time, Anthropic bills it as new again.
 | Sonnet, all files                                       | Yes. Type `/max-off` to send Sonnet text                                                                                                                                                                                                                                                                                                      |
 | Chinese, Japanese and Korean text                       | No. The Inter font has no glyphs for these characters                                                                                                                                                                                                                                                                                         |
 
-<sub>Byte identical rebuilds are not normal tasks. In this bench, a model rebuilds a file from a DensePack image. The score is how exact the copy is. The files were one Python, one Markdown, one HTML and one GDScript file. The runs of Opus 5.5 and Sonnet 5.5 used medium effort. All four files had 100 runs, with 10 more rebuilds of the Python file. [BENCHMARKS.md](#file-rebuilds-25-september-2026) has the 100 runs of each file.</sub>
+<sub>Byte-identical rebuilds test how exact a copy from an image can be. They are not normal tasks. See [Byte-identical rebuilds](#byte-identical-rebuilds).</sub>
+
 
 <br>
 
@@ -565,81 +567,22 @@ These hooks run on **your computer**, not on the computers of Anthropic.
 
 <br>
 
-## Accuracy
+## Byte-identical rebuilds
 
-Sonnet 5.5 answered 15 of 15 questions from images with the high effort setting of Claude Code. It answered 15 of 15 with the medium effort setting. Opus 5.5 had the same result.
+The rebuilds were one-shot accuracy tests that ran in September with scripts outside the repo. DensePack has changed since, and these tests have not run again.
 
-### Haiku 5.5 with images, 7 October 2026
+They show that a model can rebuild a code file byte for byte from its image. Opus 5.5 read each file as an image and wrote it again, 100 times for each file.
 
-Haiku 5.5 ran the three benches once, with a test copy of DensePack that sent Haiku images. The score is the share of the checks of each bench that the answer passed.
-
-| Bench | Checks passed, Haiku 5.5 | Checks passed, Sonnet 5.5 |
+| File | Lines | Byte-identical rebuilds |
 | --- | --- | --- |
-| Five files read whole | 100% | 100% |
-| Architecture doc | 89% | 100% |
-| Code trace | 96% | 100% |
+| Markdown prose | 115 | 100 of 100 |
+| Python script | 116 | 73 of 100 |
+| HTML email template | 25 | 63 of 100 |
+| GDScript game code | 222 | 65 of 100 |
 
-- Haiku 5.5 passed about 95% of the checks. Haiku 4.5 scored 1 of 10 on a packed report. The misses were code facts that the answer needs, such as which script imports which, so DensePack still sends Haiku text.
-- Haiku 5.5 ran each bench once, so the scores give the size of the gap and are not a mean of many runs.
+In the other runs, most differences were a count of spaces or tabs. No run changed a word in the Markdown, Python or HTML file.
 
-### Python rebuild, 28 September 2026
-
-The model reads the Python script of the [byte identical rebuild](#file-rebuilds-25-september-2026) as an image and writes the file again from the image. Sonnet 5.5 and Opus 5.5 each ran 10 times with the medium effort setting of Claude Code.
-
-| Result | Sonnet 5.5 | Opus 5.5 |
-| --- | --- | --- |
-| Byte identical | 1 of 10 | 5 of 10 |
-| No wrong words and the same Python program | 8 of 10 | 10 of 10 |
-| Character match | 98.8% to 100% | 98.5% to 100% |
-
-- The `difflib` module of Python measures the character match, which is the similarity of the new file to the source file.
-- Some runs have each word right but are not byte identical. Their only differences are line breaks that moved inside the docstring at the top of the file.
-- In one Sonnet 5.5 run, the model changed the words of one `print` line. In another run, it put the end of a comment on a new line without its `#`. That line is a syntax error.
-- In one more Sonnet 5.5 run with the high effort setting, the only error is a line that ends 2 words early. The character match is 99.96%.
-
-For work that copies whole files exactly, type /max-off to send Sonnet text.
-
-### File rebuilds, 25 September 2026
-
-The model reads one file as an image and writes the file again from that image. Runs pass when the new file is byte for byte identical to the source file. Opus 5.5 with the medium effort setting ran 100 times on each file.
-
-| File | Lines | Indent | Text tokens | Image tokens | Saving | Byte identical rebuilds | Price of each run |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Markdown prose | 115 | spaces | 1,855 | 886 | 52% | 100 of 100 | $0.1551 to $0.1991 |
-| Python script | 116 | spaces | 1,859 | 834 | 55% | 73 of 100 | $0.1608 to $0.2599 |
-| HTML email template | 25 | spaces | 2,360 | 1,150 | 51% | 63 of 100 | $0.1911 to $0.2483, and $0.0697 to $0.0859 for the 10 runs that the safety classifier stopped |
-| GDScript game code | 222 | tabs | 2,790 | 1,430 | 49% | 65 of 100 | $0.2339 to $0.3420 |
-
-The failed runs had these errors.
-
-- In the Python script, all 27 failed runs have a wrong count of spaces. In 19 of them, the model writes 12 spaces on a line that has 14.
-- In the HTML email template, 27 failed runs have a wrong count of spaces. In 10 more runs, a safety classifier stopped the model before it wrote the file.
-- In the GDScript game code, 18 failed runs have only a wrong count of tabs or spaces. 17 other failed runs change the text.
-  - The model adds a lone "#" line after line 3 in 8 runs.
-  - The model adds a period on line 42 in 10 runs.
-  - 2 runs have the two changes.
-  - The 17th run changes only line 46.
-
-No run changed a word in the Markdown, Python or HTML file.
-
-The image uses marks for line numbers, spaces, tabs and blank lines. [The image](#the-image) explains each mark.
-
-### Subagent copy, 28 September 2026
-
-The Opus 5.5 main agent (the lead) started one Sonnet 5.5 subagent. The subagent read 8 whole Python files and copied the first line of each docstring.
-
-| Result | 10 runs with DensePack | 10 runs without DensePack |
-| --- | --- | --- |
-| Lines copied exactly | 78 of 80 | 80 of 80 |
-| Price of the Sonnet 5.5 part of each run | $0.050 to $0.055 | $0.198 to $0.201 |
-
-In the two misses, the subagent typed "stalled agent" in place of "stalled subagent", although the word "subagent" is clear in the image.
-
-<br>
-
----
-
-<br>
+In 10 more rebuilds of the Python file, the new file ran the same program. This held in 8 of 10 Sonnet 5.5 runs and 10 of 10 Opus 5.5 runs.
 
 <br>
 
@@ -657,13 +600,15 @@ The plugin has eight commands. They are Markdown files in `plugin/commands/`, th
 | `/dense-off`        | All hooks stop                                                                                                  | It applies to this conversation only                                                     |
 | `/maxpack`          | Sonnet gets images. This is the default                                                                         | It applies to all conversations in this project                                          |
 | `/max-off`          | Sonnet gets plain text. Fable and Opus still get images                                                         | It applies to all conversations in this project                                          |
+| `/densetext`         | More stays text: Bash output under 15 lines and 2,000 characters, JSON output and Reads of files under 100 lines. Repeated blocks of up to 30 lines that repeat 3 or more times fold to one copy, and the whole output goes to `bash-output-<id>-full.txt`. IDs that mix digits and both cases, hex hashes of 32 or more digits and UUIDs go beside the image as exact text. Runs of up to 100 characters with no space stay on one row. It is off by default, because it sends more text and saves less. `/densepack` turns it off | It applies to all conversations in this project |
+| `/densedoctor`     | It sets nothing. It checks Python, Git Bash on Windows, Pillow, FreeType, NumPy and the font, draws one test image and prints the last 10 lines of `why-text.log` | It changes nothing |
 | `/helppack`         | It sets nothing. It prints all commands and the behaviors that only `/dense-off` stops                          | It changes nothing                                                                       |
-| `/bakpack <folder>` | Experimental: the benches did not run it, so it has not been thoroughly tested. It sets nothing. It converts the instruction files of that folder | It applies to that folder                                                                |
-| `/bak-off <folder>`  | It sets nothing. It restores the original instruction files of that folder                                      | It applies to that folder                                                                |
+| `/bakpack [folder]` | Experimental: the benches did not run it, so it has not been thoroughly tested. It sets nothing. With no folder, it converts the instruction files of this project and its memory index. With a folder, it converts the files of that folder, and `~/.claude` converts your personal `CLAUDE.md` | It applies to that folder |
+| `/bak-off [folder]` | It sets nothing. It restores the original text and deletes the images. With no folder, it restores this project and its memory index. With `~/.claude`, it restores your personal `CLAUDE.md` and every memory index | It applies to that folder |
 | `/dense-remove`     | It sets nothing. It undoes the changes of DensePack. [Remove DensePack](INSTALL.md#remove-densepack) lists them | It applies to your computer                                                              |
 
 - `/helppack` prints two fixed tables and no current values. The first table names the behaviors that only `/dense-off` stops. The second table names each command, what it sets and whether that is the default.
-- `/bakpack` takes a folder path and converts the instruction files in that folder, without the agent reading them.
+- `/bakpack` converts the instruction files of this project, or of the folder you name, without the agent reading them.
 - `/densepack`, `/dense-off`, `/maxpack` and `/max-off` end with a status line of the current settings. It shows packing, the reader, receipts, totals, keep, the style card and images for Sonnet.
 - `/densepack` also sets the keep folder and the vault cap to their defaults.
 
@@ -691,15 +636,21 @@ The hooks read the settings files again on each event. Changes apply at the next
 
 `maxpack` is also a setting, with the default `on`. `/maxpack` and `/max-off` change it.
 
+`densetext` is a setting with the default `off`. `/densetext` turns it on, and `/densepack` turns it off with the other settings.
+
+DensePack logs why a Read or a Bash output stayed text, such as an error, a missing library, the price check or a skipped folder. Each reason is one line in `.claude/densepack-vault/why-text.log` in the project.
+
+At 512 KB, the log moves to `why-text.old.log`. Output under 400 characters stays text by design and gets no line. `/densedoctor` prints the last 10 lines.
+
 To run a verb, open a terminal in the project folder, because each project has its own settings file. Then run the `dpctl.py` of the installed plugin with the verb and its value.
 
-- `2.0.1` in the path is the version of the plugin.
+- `2.0.2` in the path is the version of the plugin.
 - On Windows, run the line in PowerShell and type `python` in place of `python3`.
 
 This line shows a receipt table in the conversation.
 
 ```
-python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/2.0.1/scripts/dpctl.py receipts default
+python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/2.0.2/scripts/dpctl.py receipts default
 ```
 
 On Windows, write `py -3` in place of `python3`.
@@ -744,9 +695,10 @@ Claude Code runs a hook at a named event. `plugin/hooks/hooks.json` names the ev
 
 | Event              | Tool             | Script                                  | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------ | ---------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SessionStart       | None             | `ensure_python.sh`, `ensure_python.ps1` | It finds a Python 3.10 or newer and saves its path in `~/.claude/densepack-state`. On Windows with no Python, it installs Python 3.13 with winget, one time. On Windows with no Git Bash, it also installs Git for Windows with winget, one time for each computer. On Linux and macOS, it installs nothing and shows the install command on screen                                                                                                                                                                                                                                                                                 |
-| SessionStart       | None             | `bootstrap.py`                          | It deletes working files older than 7 days and installs Pillow, freetype-py and NumPy when they are missing. It converts the instruction files in the background and sets CLAUDE_CODE_THRIFTY_SONIC in `~/.claude/settings.json` at each session start when the key is missing. On Windows with Git for Windows, it also sets EMBEDDED_SEARCH_TOOLS and CLAUDE_CODE_USE_POWERSHELL_TOOL. It sends the session start note, with a rule to write subagent tasks the same way as without DensePack. It sends a warning in place of the note when Pillow, freetype-py or NumPy is missing. It shows the totals of the last conversation on screen when receipts are not quiet |
+| SessionStart       | None             | `ensure_python.sh`, `ensure_python.ps1` | It finds a Python 3.10 or newer and saves its path in `~/.claude/densepack-state`. On Windows with no Python, it installs Python 3.13 with winget in a background process, so the 10-minute hook limit cannot cut a slow install. It leaves out Tcl/Tk and the test suite, which DensePack does not use. It marks the install as tried only when the install ends. On Windows with no Git Bash, it also installs Git for Windows with winget, one time for each computer. On Linux and macOS, it installs nothing and shows the install command on screen                                                                                                                                                                                                                                                                                 |
+| SessionStart       | None             | `bootstrap.py`                          | It deletes working files older than 7 days and installs Pillow, freetype-py and NumPy when they are missing. It updates the files that `/bakpack` converted, in the background, and sets CLAUDE_CODE_THRIFTY_SONIC in `~/.claude/settings.json` at each session start when the key is missing. On Windows with Git for Windows, it also sets EMBEDDED_SEARCH_TOOLS and CLAUDE_CODE_USE_POWERSHELL_TOOL. It sends the session start note, with a rule to write subagent tasks the same way as without DensePack. It sends a warning in place of the note when Pillow, freetype-py or NumPy is missing. It shows the totals of the last conversation on screen when receipts are not quiet |
 | UserPromptSubmit   | None             | `prompt_card.py`                        | It sends the legend card one time in each session, with the first message that contains a pasted image. Pasted images, such as those from the right-click tool, have no key row for their colors and marks. Sessions that started a subagent get no card. It packs a Word file that your prompt names. It packs the files of a folder that your prompt names in the background                                                                                                                                               |
+| UserPromptSubmit | None | `style_reminder.py` | It adds one line of about 15 tokens to each message you send. The line points Claude back to the rules of the session start note. Claude stops following rules that sit far back in a long session. It adds no API request |
 | PreToolUse         | Read             | `drop_read_gate.py`                     | It lets a Read run on the real file. Its Word file route never runs, because Claude Code rejects Word file Reads before this hook                                                                                                                                                                                                                                                                                                                                                                                            |
 | PreToolUse         | Read             | `read_gate.py`                          | It marks a packed report image delivered when the agent reads it. When the image is gone from `.claude/tmp`, it opens the copy in the vault, only in auto and bypassPermissions mode. See [Permission modes](#permission-modes)                                                                                                                                                                                                                                                                                              |
 | PreToolUse         | Edit             | `edit_gate.py`                          | It blocks an Edit whose old text is not in the file, or is in it more than once without replace_all. Its message contains the exact lines of the file. See [The Edit check](#the-edit-check)                                                                                                                                                                                                                                                                                                                                                                   |
@@ -760,6 +712,7 @@ Claude Code runs a hook at a named event. `plugin/hooks/hooks.json` names the ev
 | PostToolUse        | Bash, PowerShell | `bash_image.py`                         | It puts Bash or PowerShell output in the result as images. Longer Bash output returns all its images in one result. Longer PowerShell output returns image 1 and a note that names the others. It sends the lines that a model can misread as exact text                                                                                                                                                                                                                                                                     |
 | PostToolUse        | Agent, Task      | `report_swap.py`                        | It replaces the report text in the Agent result with one line that names the packed report                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | PostToolUse        | All tools        | `pointer.py`                            | It gives the lead a line that names each packed report image and writes the receipt table to `.claude/tmp/densepack-receipt-last.md`. It packs up to 6 Word files whose full paths the last Glob, Grep, LS, Bash or PowerShell result printed. It also packs the files in `to-pack/`                                                                                                                                                                                                                                                     |
+| PostToolBatch | All tools | `style_reminder.py` | It adds the same line once before each model call that follows tool calls. It adds no API request |
 | SessionEnd         | None             | `session_end.py`                        | It writes the totals of the reports and briefs that the conversation packed. With receipts quiet, the default, it writes the totals table to `.claude/tmp/densepack-receipt-last.md`. Otherwise the next session start shows the table on screen. Session start, not this hook, deletes old working files                                                                                                                                                                                                                    |
 
 Two rules apply to all of them.

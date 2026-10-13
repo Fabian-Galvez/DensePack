@@ -93,6 +93,17 @@
         ]
       }
     ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/style_reminder.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/style_reminder.py\" ; exit $LASTEXITCODE",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
@@ -100,6 +111,15 @@
             "type": "command",
             "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/prompt_card.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/prompt_card.py\" ; exit $LASTEXITCODE",
             "timeout": 1800
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "exec sh \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.sh\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/style_reminder.py\" ; powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/run_hook.ps1\" \"${CLAUDE_PLUGIN_ROOT}/scripts/run_once.py\" \"${CLAUDE_PLUGIN_ROOT}/scripts/style_reminder.py\" ; exit $LASTEXITCODE",
+            "timeout": 30
           }
         ]
       }

@@ -333,14 +333,18 @@ def restore(path, state):
     return True
 
 
-def convert_one(path, label, what, folder, reader, state):
-    """Make the pointer, .bak and images of one file. Returns the log text."""
+def convert_one(path, label, what, folder, reader, state, only_pointers=False):
+    """Make the pointer, .bak and images of one file. Returns the log text.
+    With only_pointers, a file that is not a pointer yet stays as it is, because
+    the user chooses each conversion with /bakpack."""
     from common import write_text_atomic
     if not path.is_file():
         return "absent"
     bak = bak_path(path)
     current = read(path)
     is_pointer, added = split_pointer(current)
+    if not is_pointer and only_pointers:
+        return "kept as text, /bakpack converts it"
     if is_pointer:
         if not bak.is_file():
             # The original is gone. Keep what you added and drop the pointer.
@@ -474,12 +478,17 @@ def take_background_note():
     return note or None
 
 
-def convert_all(event, reader):
+def convert_all(event, reader, only_pointers=True, skip=()):
+    """Session start keeps the pointers that /bakpack made up to date and
+    converts no new file. /bakpack with no folder passes only_pointers=False
+    and skips the user-CLAUDE.md label, because that file applies to every project."""
     state = load_state()
     log = []
     for path, label, what, folder in targets(event):
+        if label in skip:
+            continue
         try:
-            log.append((str(path), convert_one(path, label, what, folder, reader, state)))
+            log.append((str(path), convert_one(path, label, what, folder, reader, state, only_pointers)))
         except Exception as exc:  # noqa: BLE001
             log.append((str(path), "failed: %s" % exc))
     save_state(state)

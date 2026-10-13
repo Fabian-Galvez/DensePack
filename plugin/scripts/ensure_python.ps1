@@ -193,41 +193,44 @@ $data = $env:CLAUDE_PLUGIN_DATA
 if (-not $data) { $data = Join-Path $env:LOCALAPPDATA 'densepack' }
 $null = New-Item -ItemType Directory -Force -Path $data
 $tried = Join-Path $data 'python-install-tried'
+$running = Join-Path $data 'python-install-running'
 if (Test-Path $tried) {
     Say ("DensePack found no Python 3.10 or newer. None of its hooks run, and reports " +
-         "arrive as plain text. It already tried to install Python once on " +
-         "this computer. Install Python 3.10 or newer, then restart Claude Code.")
+        "arrive as plain text. It already tried to install Python once on " +
+        "this computer. Install Python 3.10 or newer, then restart Claude Code.")
     exit 0
 }
-Set-Content -Path $tried -Value 'tried' -Encoding utf8
+# The install runs in its own process, because on a slow connection it can take
+# longer than the 10 minutes that Claude Code gives a hook. The tried marker is
+# written when the install ends. A running marker older than 60 minutes comes
+# from an install that did not end, such as one cut by a shutdown, and the next
+# session tries again.
+if ((Test-Path $running) -and (Get-Item $running).LastWriteTime -gt (Get-Date).AddMinutes(-60)) {
+    Say ("DensePack is still installing Python 3.13 in the background. Restart " +
+        "Claude Code when the install is done. Until then, reports arrive as plain text.")
+    exit 0
+}
 
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Set-Content -Path $tried -Value 'tried' -Encoding utf8
     Say ("DensePack needs Python 3.10 or newer, and this computer has none. " +
-         "None of its hooks run, and reports arrive as plain text. winget is " +
-         "not installed either. Install Python from python.org, then restart " +
-         "Claude Code.")
+        "None of its hooks run, and reports arrive as plain text. winget is " +
+        "not installed either. Install Python from python.org, then restart " +
+        "Claude Code.")
     exit 0
 }
 
-winget install --id Python.Python.3.13 -e --source winget --scope user `
-    --accept-package-agreements --accept-source-agreements 2>$null | Out-Null
-
-$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
-            [Environment]::GetEnvironmentVariable('Path', 'User')
-
-$py = Find-Python
-if ($py) {
-    # The function returns true or false. Without $null =, that value prints
-    # before the JSON, and Claude Code cannot parse the message.
-    $null = Save-PythonPath $py
-    # The other hooks of this session already started without an interpreter.
-    # They cannot run again now. The next session uses the new Python.
-    Say ("DensePack installed Python 3.13, which its hooks need. Restart " +
-         "Claude Code, and packing starts. DensePack packed nothing in this " +
-         "session.")
-} else {
-    Say ("DensePack tried to install Python 3.13, and it did not appear. " +
-         "None of its hooks run, and reports arrive as plain text. Install " +
-         "Python 3.10 or newer, then restart Claude Code.")
-}
+Set-Content -Path $running -Value 'running' -Encoding utf8
+$t = $tried -replace "'", "''"
+$r = $running -replace "'", "''"
+# Tcl/Tk and the test suite are most of the files, and DensePack uses neither.
+# In Windows Sandbox, the Tcl/Tk step alone took over 10 minutes.
+$job = "winget install --id Python.Python.3.13 -e --source winget --scope user --custom 'Include_tcltk=0 Include_test=0' " +
+    "--accept-package-agreements --accept-source-agreements *> `$null; " +
+    "Set-Content -LiteralPath '$t' -Value ('winget exit ' + `$LASTEXITCODE) -Encoding utf8; " +
+    "Remove-Item -LiteralPath '$r' -ErrorAction SilentlyContinue"
+Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $job)
+Say ("DensePack is installing Python 3.13 in the background, because its hooks " +
+    "need Python 3.10 or newer. On a slow connection this takes several minutes. " +
+    "Restart Claude Code when the install is done. Until then, reports arrive as plain text.")
 exit 0

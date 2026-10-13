@@ -6,6 +6,28 @@
 
 <br>
 
+## 2.0.2
+
+| Change | Before | Now |
+| --- | --- | --- |
+| Rules in long sessions | Claude followed the rules of the session start note less as the session grew, because they sit far back. | One line of about 15 tokens before each model call points Claude back to those rules. It adds no API request. |
+| Writing rules | Replies often used "Label: text" lines, lists for most answers and a closing note. | Under the new rules, replies give the answer first and then stop. They use a colon only before a list, and lists only for steps or 3 to 5 items. The rule to fix a sentence by rewriting it has no step to read the paragraph again. With that step, Opus 5.5 used a median of 1,239 thinking tokens on Ponytail's `open-mandelbrot` task, against 269 with the rules before it. |
+| Instruction files | At each session start, DensePack converted `CLAUDE.md`, `AGENTS.md`, `.claude/rules/*.md`, your personal `~/.claude/CLAUDE.md` and the memory index into images on its own. | DensePack converts these files only when you run `/bakpack`. `/bakpack` with no folder converts this project and its memory index, and `/bakpack ~/.claude` converts your personal `CLAUDE.md`. Files that an older version converted stay images, and `/bak-off` turns them back into text. |
+| Why output stayed text | Reads and Bash outputs that stayed text because of an error or a missing library showed no reason. 2.0.1 sent Read errors to stderr only. | DensePack writes the reason to `.claude/densepack-vault/why-text.log` in the project. The log names the cause at the first Read, such as the Python 3.12 error of issue [#1](https://github.com/Fabian-Galvez/DensePack/issues/1). |
+| `/densedoctor` | Checking an install took several manual steps. | `/densedoctor` checks Python, Git Bash on Windows, Pillow, FreeType, NumPy and the font, draws one test image and prints the last lines of the log. |
+| `/densetext` | Bash output from 400 characters, JSON output and short files became images. | `/densetext` keeps more as text, folds repeated output, and puts more IDs beside images as exact text. It is off by default, because it saves less, and `/densepack` turns it off. These ideas come from issue [#2](https://github.com/Fabian-Galvez/DensePack/issues/2). |
+| Python install on Windows | The winget install ran inside the session start hook. On a slow connection, the 10-minute hook limit could cut it, and DensePack never tried again. | The install runs in a background process, and DensePack marks it as tried only when it ends. It leaves out Tcl/Tk and the Python test suite, which DensePack does not use. In Windows Sandbox, the Tcl/Tk step alone took over 10 minutes. |
+| Tests | None | `tests/test_densepack.py` checks it and the parts of `/densetext`. Run it with `python -m unittest discover tests`. |
+| Small project maps | The start note named an image of the project map, so the agent spent a Read on it, also for a map of 1 line. | When the map has under 400 characters, the same floor as Bash output, the start note contains it as text. On Ponytail's `scope-rename` task, the map has 226 characters. |
+| Ponytail's benchmark | The table had 5 runs of each task with DensePack 2.0, with a 12.4% saving against Ponytail 5. | DensePack 2.0.2 ran all 39 tasks 10 times in a row on 13 October, and all 390 runs count. All 390 passed Ponytail's own checks, and DensePack cost 11.0% less than Ponytail 5. [BENCHMARKS.md](BENCHMARKS.md#ponytails-benchmark) has the price and check result of each run. |
+| Install on Windows without Git | On Windows PCs without Git, installing the plugin failed with "Command 'git' not found", because Claude Code needs Git to download plugins. | INSTALL.md has 2 PowerShell commands for Windows without Git. The first installs Git with winget, and the second installs the plugin. |
+
+<br>
+
+---
+
+<br>
+
 ## 2.0.1
 
 | Change | Before | Now |
