@@ -54,7 +54,7 @@ DensePack 2.0 also cuts what the agent writes.
 - The start note now contains the rules in [plugin/rules/STYLE-RULES.md](plugin/rules/STYLE-RULES.md): the smallest complete code change, few turns, and short, plain replies. Subagents get the same rules.
 - The rules keep private data private. No change may show private data to more people than before, such as one user's email address to other users.
 - The start note also names an image of the project map: each folder, its files and the names that each file defines. The agent reads that image in its first turn.
-- The start note is about 2,300 tokens, up from 72. [BENCHMARKS.md](BENCHMARKS.md#densepack-20-10-october-2026) has the savings.
+- The start note is about 2,300 tokens, up from 72. [BENCHMARKS.md](BENCHMARKS.md#densepack-202-13-october-2026) has the savings.
 
 ### If you used /mdpack
 

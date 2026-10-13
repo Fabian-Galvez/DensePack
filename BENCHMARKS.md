@@ -8,19 +8,44 @@ In each A/B bench, the same task runs twice on the same model, once with DensePa
 
 <br>
 
-## DensePack 2.0, 10 October 2026
+## DensePack 2.0.2, 13 October 2026
 
-DensePack 2.0 has a start note of rules for less code and short replies. The note also names an image that maps the project's folders, files and the names in each file.
+DensePack 2.0.2 has a start note of rules for less code and short replies. The note also names an image that maps the project's folders, files and the names in each file.
 
 The savings below are against the price of the same task without either plugin, or against Ponytail 5 in the Ponytail table. When a saving is negative, the run cost more.
 
 ### DensePack's benches
 
-DensePack 2.0 ran each bench 5 times on each setup on 10 and 11 October. The runs used Claude Code 2.1.296 on Windows, `claude -p`, Bash and no Grep or Glob.
+DensePack 2.0.2 ran each bench 5 times in a row on both Opus 5.5 setups on 13 October 2026. The Sonnet 5.5 table is from DensePack 2.0 on 10 and 11 October. The runs used Claude Code 2.1.296 on Windows, `claude -p`, Bash and no Grep or Glob.
 
 The first table of each setup contains the averages from the README. The runs table below it contains the price and the score of each run.
 
 ### Opus 5.5
+
+| Bench | Without DensePack | DensePack 2.0.2 |
+| --- | --- | --- |
+| Five files read | $0.984 | $0.509, 48.3% |
+| Architecture doc | $0.740 | $0.349, 52.8% |
+| Read-in-full architecture | $1.810 | $0.866, 52.1% |
+| Code trace | $4.737 | $2.359, 50.2% |
+
+The price of each run:
+
+| Run | Five files read | Architecture doc | Read-in-full architecture | Code trace |
+| --- | --- | --- | --- | --- |
+| 1 | $0.512, 7/7 | $0.331, 18/18 | $0.883, 18/18 | $2.016, 26/26 |
+| 2 | $0.510, 7/7 | $0.342, 18/18 | $0.873, 18/18 | $2.390, 26/26 |
+| 3 | $0.505, 7/7 | $0.412, 18/18 | $0.854, 18/18 | $2.865, 26/26 |
+| 4 | $0.512, 7/7 | $0.323, 18/18 | $0.868, 18/18 | $2.511, 26/26 |
+| 5 | $0.505, 7/7 | $0.338, 18/18 | $0.853, 18/18 | $2.013, 26/26 |
+
+- All 20 runs count. No run was left out or run again.
+- Architecture doc saves the most, because the agent writes a long document there, and the rules make it shorter.
+- In five files read, the agent reads 5 named files and writes a 5-line summary, so the rules have little to cut.
+- Code trace is mostly reading, with 31 to 48 Reads in each run.
+
+<details>
+<summary>DensePack 2.0 on 10 and 11 October 2026</summary>
 
 | Bench | Without DensePack | DensePack 2.0 |
 | --- | --- | --- |
@@ -43,9 +68,34 @@ The price of each run:
 - In five files read, the agent reads 5 named files and writes a 5-line summary, so the rules have little to cut.
 - Code trace is mostly reading, with 29 to 47 Reads in each run.
 
+</details>
+
 ### Opus 5.5 main agent with a Sonnet 5.5 subagent
 
-The Opus main agent gives the reading to one Sonnet 5.5 subagent, and DensePack 2.0 gives the rules to the subagent too. The savings are against Opus 5.5 without DensePack.
+The Opus main agent gives the reading to one Sonnet 5.5 subagent, and DensePack 2.0.2 gives the rules to the subagent too. The savings are against Opus 5.5 without DensePack.
+
+| Bench | Without DensePack | DensePack 2.0.2 with a Sonnet subagent |
+| --- | --- | --- |
+| Five files read | $0.984 | $0.283, 71.2% |
+| Architecture doc | $0.740 | $0.415, 43.9% |
+| Read-in-full architecture | $1.810 | $0.556, 69.3% |
+| Code trace | $4.737 | $1.477, 68.8% |
+
+The price of each run:
+
+| Run | Five files read | Architecture doc | Read-in-full architecture | Code trace |
+| --- | --- | --- | --- | --- |
+| 1 | $0.286, 7/7 | $0.578, 18/18 | $0.536, 18/18 | $1.447, 26/26 |
+| 2 | $0.293, 7/7 | $0.358, 18/18 | $0.514, 18/18 | $1.309, 26/26 |
+| 3 | $0.268, 7/7 | $0.347, 18/18 | $0.532, 18/18 | $1.602, 26/26 |
+| 4 | $0.284, 7/7 | $0.445, 18/18 | $0.586, 18/18 | $1.455, 26/26 |
+| 5 | $0.286, 7/7 | $0.345, 18/18 | $0.612, 18/18 | $1.572, 26/26 |
+
+- All 20 runs count. No run was left out or run again.
+- With no DensePack, the Opus main agent with a Sonnet subagent cost $0.892 on the architecture doc. Against that price, DensePack 2.0.2 saved 53.5% on average. That price leaves out an estimate of the cost of the eval's Bash sandbox.
+
+<details>
+<summary>DensePack 2.0 on 10 and 11 October 2026</summary>
 
 | Bench | Without DensePack | DensePack 2.0 with a Sonnet subagent |
 | --- | --- | --- |
@@ -66,6 +116,8 @@ The price of each run:
 
 - In the architecture doc, the subagent searched the scripts with Bash and read only the parts it needed, with 5 to 11 images.
 - With no DensePack, the Opus main agent with a Sonnet subagent cost $0.892 on the architecture doc. Against that price, DensePack 2.0 saved 57.7% to 66.1%, 62.7% on average. That price leaves out an estimate of the cost of the eval's Bash sandbox.
+
+</details>
 
 ### Sonnet 5.5
 
@@ -102,35 +154,41 @@ These notes apply to all runs above.
 
 ### Opus 5.5 with each setup
 
-![The price of one Opus 5.5 session without DensePack, with Ponytail, with DensePack 2.0, and with DensePack 2.0 and a Sonnet subagent](images/savings-benchmarks.svg)
+![The price of one Opus 5.5 session without DensePack, with Ponytail, with DensePack 2.0.2, and with DensePack 2.0.2 and a Sonnet subagent](images/savings-benchmarks.svg)
 
 The savings are against the price without DensePack. The DensePack and Ponytail prices are averages of 5 runs, and Ponytail 5.1.0 ran with Grep and Glob. In the last column, the Opus lead gives the reading to one Sonnet 5.5 subagent.
 
-| Bench | Without DensePack | Ponytail 5.1.0 | DensePack 2.0 | DensePack 2.0 with a Sonnet subagent |
+| Bench | Without DensePack | Ponytail 5.1.0 | DensePack 2.0.2 | DensePack 2.0.2 with a Sonnet subagent |
 | --- | --- | --- | --- | --- |
-| Five files read | $0.984 | $0.978, 0.6% | $0.499, 49.3% | $0.287, 70.8% |
-| Architecture doc | $0.740 | $0.556, 24.9% | $0.339, 54.2% | $0.333, 55.0% |
-| Read-in-full architecture | $1.810 | $1.577, 12.8% | $0.874, 51.7% | $0.543, 70.0% |
-| Code trace | $4.737 | $4.263, 10.0% | $2.455, 48.2% | $1.645, 65.3% |
+| Five files read | $0.984 | $0.978, 0.6% | $0.509, 48.3% | $0.283, 71.2% |
+| Architecture doc | $0.740 | $0.556, 24.9% | $0.349, 52.8% | $0.415, 43.9% |
+| Read-in-full architecture | $1.810 | $1.577, 12.8% | $0.866, 52.1% | $0.556, 69.3% |
+| Code trace | $4.737 | $4.263, 10.0% | $2.359, 50.2% | $1.477, 68.8% |
 
 - Ponytail adds a start note of about 2,000 tokens: its rules and a list of the function names in the folder. It costs about $0.02 per run, and $0.03 on code trace.
-- DensePack 2.0 adds a start note of about 2,300 tokens with its rules. The note names a project map image, 466 tokens for these 24 scripts, which the agent reads in its first turn.
+- DensePack adds a start note of about 2,300 tokens with its rules. The note names a project map image, 466 tokens for these 24 scripts, which the agent reads in its first turn.
 - The prices of both tools already contain the cost of this extra text.
 
 ### Opus 5.5 with DensePack costs about as much as Sonnet 5.5
 
-Without DensePack, Sonnet 5.5 costs about half as much as Opus 5.5 in these benches. With DensePack 2.0, Opus 5.5 costs about the same as Sonnet 5.5 without it, so you get Opus for about the price of Sonnet.
+Without DensePack, Sonnet 5.5 costs about half as much as Opus 5.5 in these benches. With DensePack 2.0.2, Opus 5.5 costs about the same as Sonnet 5.5 without it, so you get Opus for about the price of Sonnet.
 
 The savings are against Opus 5.5 without DensePack.
 
-| Bench | Opus 5.5 without DensePack | Opus 5.5 with DensePack 2.0 | Sonnet 5.5 without DensePack |
+| Bench | Opus 5.5 without DensePack | Opus 5.5 with DensePack 2.0.2 | Sonnet 5.5 without DensePack |
 | --- | --- | --- | --- |
-| Five files read | $0.984 | $0.499, 49.3% | $0.498, 49.4% |
-| Architecture doc | $0.740 | $0.339, 54.2% | $0.322, 56.5% |
-| Read-in-full architecture | $1.810 | $0.874, 51.7% | $0.826, 54.4% |
-| Code trace | $4.737 | $2.455, 48.2% | $2.706, 42.9% |
+| Five files read | $0.984 | $0.509, 48.3% | $0.498, 49.4% |
+| Architecture doc | $0.740 | $0.349, 52.8% | $0.322, 56.5% |
+| Read-in-full architecture | $1.810 | $0.866, 52.1% | $0.826, 54.4% |
+| Code trace | $4.737 | $2.359, 50.2% | $2.706, 42.9% |
 
 ### Ponytail's benchmark
+
+![DensePack 2.0.2 against Ponytail 5 on Ponytail's own benchmark: $0.127 against $0.142 per session, every round cheaper, and all hidden-test checks passed](images/ponytail-benchmark-summary.png)
+
+![The price and check result of each DensePack 2.0.2 run on Ponytail's 39 tasks, runs 1 to 5](images/ponytail-benchmark-runs-1-to-5.png)
+
+![The price and check result of each DensePack 2.0.2 run on Ponytail's 39 tasks, runs 6 to 10](images/ponytail-benchmark-runs-6-to-10.png)
 
 - [Ponytail's agentic benchmark](https://github.com/DietrichGebert/ponytail/blob/main/benchmarks/results/2026-10-07-agentic.md) has 39 tasks. They are 18 small tasks with a hidden check, 12 features in a FastAPI and React repo, 6 small apps and 3 learning examples.
 - DensePack 2.0.2 ran all 39 tasks 10 times on 13 October 2026, with Opus 5.5 and Claude Code 2.1.296 on Windows. The 10 rounds ran one after another, 6 tasks at a time, from 01:10 to 01:59.
