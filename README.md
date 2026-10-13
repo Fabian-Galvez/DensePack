@@ -1,12 +1,12 @@
-<!-- DensePack 2.0 -->
+<!-- DensePack 2.0.2 -->
 <p align="left">
   <img src="images/densepack-readme-banner.svg" alt="DensePack" />
 </p>
 
 <p align="center">
-DensePack packs text into images that Claude reads accurately. The images use 49% to 55% fewer input tokens than the text.<br>
+<strong>DensePack cuts the price of whole Claude Code sessions by 48.3% to 52.8% with Opus 5.5, and 43.9% to 71.2% with a Sonnet subagent.</strong><br>
 <br>
-<strong>DensePack 2.0.2 saves 48.3% to 52.8% on entire Claude Code sessions with Opus 5.5. With an Opus 5.5 main agent and a Sonnet 5.5 subagent, it saves 43.9% to 71.2%.</strong><br>
+DensePack packs text into images that the agent reads accurately, including Bash output and .doc and .docx files. It saved on every benchmark session that cost more than $0.14 without it.<br>
 </p>
 
 <p align="center">
@@ -21,7 +21,6 @@ DensePack packs text into images that Claude reads accurately. The images use 49
 
 - [Savings](#savings)
 - [Install the plugin](#install-the-plugin)
-- [Other plugins](#other-plugins)
 - [Questions](#questions)
 - [Three parts](#three-parts)
 - [Save the most](#save-the-most)
@@ -43,7 +42,7 @@ DensePack packs text into images that Claude reads accurately. The images use 49
 
 On Opus 5.5, each saving is against the price without DensePack. In the last column, the Opus lead gives the reading to one Sonnet 5.5 subagent. The DensePack prices are averages of 5 runs.
 
-| Bench                     | Without DensePack | Ponytail 5.1.0 | DensePack 2.0.2 | DensePack 2.0.2 with a Sonnet subagent |
+| Bench                     | Without DensePack | Ponytail 5     | DensePack 2.0.2 | DensePack 2.0.2 with a Sonnet subagent |
 | ------------------------- | ----------------- | -------------- | ------------- | ------------------------------------ |
 | Five files read           | $0.984            | $0.978, 0.6%   | $0.509, 48.3% | $0.283, 71.2%                        |
 | Architecture doc          | $0.740            | $0.556, 24.9%  | $0.349, 52.8% | $0.415, 43.9%                        |
@@ -79,22 +78,41 @@ The Opus main agent gives the reading to one Sonnet 5.5 subagent. The savings ar
 | Read-in-full architecture | $1.81             | $0.56         | 69.3%  | 2.2%                  | 0.6%                     |
 | Code trace                | $4.74             | $1.48         | 68.8%  | 5.9%                  | 1.5%                     |
 
-### Sonnet 5.5
-
-| Bench                     | Without DensePack | DensePack 2.0 | Saving | Pro 5-hour limit used | Max 5x 5-hour limit used |
-| ------------------------- | ----------------- | ------------- | ------ | --------------------- | ------------------------ |
-| Five files read           | $0.50             | $0.26         | 48.6%  | 1.0%                  | 0.3%                     |
-| Architecture doc          | $0.32             | $0.21         | 35.3%  | 0.8%                  | 0.2%                     |
-| Read-in-full architecture | $0.83             | $0.50         | 39.2%  | 2.0%                  | 0.5%                     |
-| Code trace                | $2.71             | $2.37         | 12.4%  | 9.5%                  | 2.4%                     |
-
 The last two columns show how much of the 5-hour limit one session with DensePack used. On 10 October 2026, $0.25 of API price used about 1% of the 5-hour limit on Pro, and $1 used about 1% on Max 5x.
 
 DensePack adds a start note of about 2,300 tokens with its rules, about $0.018 at the start of an Opus 5.5 session. The prices above already include it. [The session start note](HOW-IT-WORKS.md#the-session-start-note) has the cost on each model.
 
-The agent searched and ran commands in Bash. The DensePack prices are averages of 5 runs, and [BENCHMARKS.md](BENCHMARKS.md#densepack-202-13-october-2026) has each run. You can run the same benches on your own computer with the scripts in `bench/`, as [Run these benches yourself](BENCHMARKS.md#run-these-benches-yourself) shows.
+The agent searched and ran commands in Bash. [BENCHMARKS.md](BENCHMARKS.md#densepack-202-13-october-2026) has each run. You can run the same benches on your own computer with the scripts in `bench/`, as [Run these benches yourself](BENCHMARKS.md#run-these-benches-yourself) shows.
 
 Longer sessions save more, because Claude Code sends the whole conversation again with each request. Images cost about half the tokens of their text in each of those requests.
+
+### Ponytail's tasks
+
+![DensePack 2.0.2 against Ponytail 5 on Ponytail's own benchmark: $0.127 against $0.142 per session, every round cheaper, and all hidden-test checks passed](images/ponytail-benchmark-summary.png)
+
+DensePack 2.0.2 ran Ponytail's 39 tasks 10 times in a row on 13 October 2026, and Ponytail's own checks scored all 390 runs. The rounds ran on one Windows laptop, with Opus 5.5 and 6 tasks at a time.
+
+Every run counts, and none was left out or run again. The Ponytail 5 column comes from Ponytail's own results of 7 October 2026.
+
+| On Ponytail's 39 tasks | DensePack 2.0.2 | Ponytail 5 |
+| --- | --- | --- |
+| Sum of the 39 task medians | $4.845 | $5.443 |
+| Saving against Ponytail 5, with medians | 11.0% | |
+| Average price of a session | $0.127 | $0.142 |
+| Saving against Ponytail 5, with averages | 10.9% | |
+| Tasks where DensePack was cheaper | 34 of 39 | |
+| Runs that passed Ponytail's hidden tests, on 18 tasks | 180 of 180, 100% | 87 of 90, 96.7% |
+| Runs that passed Ponytail's checks, on all 39 tasks | 390 of 390 | |
+| Lines of code written, sum of the 39 medians | 1,118 | 1,334 |
+
+- [Ponytail 5](https://github.com/DietrichGebert/ponytail/blob/main/benchmarks/results/2026-10-07-agentic.md) makes the agent write less code. On Ponytail's own 39 tasks, with medians of 10 runs, DensePack 2.0.2 cost 11.0% less than Ponytail 5 and was cheaper on 34. All 390 of its runs passed Ponytail's own checks, and none was left out or run again.
+- Ponytail's checks are hidden tests on 18 tasks, and on the other 21 a check that the code was delivered or compiles. On tasks with more reading, DensePack saved more, such as 37.2% against Ponytail 5 on `tmpl-fe-wizard`.
+- DensePack's own 4 benches are much bigger than Ponytail's tasks. They read a copy of DensePack's scripts, 24 Python files with 23,448 lines, about 1 MB. Ponytail's tasks start with an empty folder, a seed of 2 to 50 lines, or a FastAPI and React repo of 10,544 source lines.
+- Without a plugin, Ponytail's tasks cost $0.081 to $0.678 per run on Opus 5.5. DensePack's benches cost $0.740 to $4.737, which is 7 to 9 times as much. So DensePack's smallest bench is bigger than Ponytail's largest task.
+- DensePack only cost more on 5 tasks where Ponytail costs $0.145 or less. It was cheaper on all 10 tasks above that price, and on 24 of the 29 tasks below it.
+- That puts the size where DensePack starts to save at about $0.15 of Opus 5.5 work per session. See [Ponytail's agentic benchmark](BENCHMARKS.md#ponytails-benchmark).
+- On the 4 DensePack benches on Opus 5.5, Ponytail 5.1.0 saved 0.6% to 24.9%, and DensePack 2.0.2 saved 48.3% to 52.8%. Ponytail ran with Grep and Glob, the way its users run it, and DensePack with Bash only. [BENCHMARKS.md](BENCHMARKS.md#opus-55-with-each-setup) has the prices.
+- Opus 5.5 copied 167 of 168 hex hashes right from DensePack images. DensePack's safeguards cover the last one.
 
 <br>
 
@@ -162,43 +180,6 @@ Files that an older version converted on its own stay images, and `/bak-off` tur
 | `/dense-remove`     | Restores each converted instruction file and deletes the DensePack files. Run it before the uninstall. [Remove DensePack](INSTALL.md#remove-densepack) has the details                                    |
 | `/bakpack [folder]` | Experimental: the benches did not run it, so it has not been thoroughly tested. With no folder, it packs the instruction files of this project and its memory index `MEMORY.md`. With a folder, it packs the files of that folder, and `/bakpack ~/.claude` packs your personal `CLAUDE.md`. Each original stays as `<name>.bakpack`, and the next session gets the images. See [The slash commands](HOW-IT-WORKS.md#the-slash-commands) |
 | `/bak-off [folder]`  | Restores the original text and deletes the images. With no folder, it restores this project and its memory index. With `~/.claude`, it restores your personal `CLAUDE.md` and every memory index |
-<br>
-
----
-
-<br>
-
-## Other plugins
-
-The prices in the DensePack benches cover the whole Claude Code session, with its input and output tokens.
-
-![DensePack 2.0.2 against Ponytail 5 on Ponytail's own benchmark: $0.127 against $0.142 per session, every round cheaper, and all hidden-test checks passed](images/ponytail-benchmark-summary.png)
-
-DensePack 2.0.2 ran Ponytail's 39 tasks 10 times in a row on 13 October 2026, and Ponytail's own checks scored all 390 runs. The 10 rounds ran one after another on one Windows laptop, with Opus 5.5 and 6 tasks at a time.
-
-Every run counts, and none was left out or run again. The Ponytail 5 column comes from Ponytail's own results of 7 October 2026.
-
-| On Ponytail's 39 tasks | DensePack 2.0.2 | Ponytail 5 |
-| --- | --- | --- |
-| Sum of the 39 task medians | $4.845 | $5.443 |
-| Saving against Ponytail 5, with medians | 11.0% | |
-| Average price of a session | $0.127 | $0.142 |
-| Saving against Ponytail 5, with averages | 10.9% | |
-| Tasks where DensePack was cheaper | 34 of 39 | |
-| Tasks where DensePack saved less than Ponytail 5 | 5: `conv-service`, `tmpl-fe-colorpicker`, `scope-rename`, `tmpl-be-count`, `tmpl-fe-datepicker` | |
-| Runs that passed Ponytail's hidden tests, on 18 tasks | 180 of 180, 100% | 87 of 90, 96.7% |
-| Runs that passed Ponytail's checks, on all 39 tasks | 390 of 390 | |
-| Lines of code written, sum of the 39 medians | 1,118 | 1,334 |
-
-- [Ponytail 5](https://github.com/DietrichGebert/ponytail/blob/main/benchmarks/results/2026-10-07-agentic.md) makes the agent write less code. On Ponytail's own 39 tasks, with medians of 10 runs, DensePack 2.0.2 cost 11.0% less than Ponytail 5 and was cheaper on 34. All 390 of its runs passed Ponytail's own checks, and none was left out or run again.
-- Ponytail's checks are hidden tests on 18 tasks, and on the other 21 a check that the code was delivered or compiles. On tasks with more reading, DensePack saved more, such as 37.2% against Ponytail 5 on `tmpl-fe-wizard`.
-- DensePack's own 4 benches are much bigger than Ponytail's tasks. They read a copy of DensePack's scripts, 24 Python files with 23,448 lines, about 1 MB. Ponytail's tasks start with an empty folder, a seed of 2 to 50 lines, or a FastAPI and React repo of 10,544 source lines.
-- Without a plugin, Ponytail's tasks cost $0.081 to $0.678 per run on Opus 5.5. DensePack's benches cost $0.740 to $4.737, which is 7 to 9 times as much. So DensePack's smallest bench is bigger than Ponytail's largest task.
-- DensePack only cost more on 5 tasks where Ponytail costs $0.145 or less. It was cheaper on all 10 tasks above that price, and on 24 of the 29 tasks below it.
-- That puts the size where DensePack starts to save at about $0.15 of Opus 5.5 work per session. See [Ponytail's agentic benchmark](BENCHMARKS.md#ponytails-benchmark).
-- On the four DensePack benches on Opus 5.5, Ponytail 5.1.0 saved 0.6% to 24.9%, and DensePack 2.0.2 saved 48.3% to 52.8%. Ponytail ran with Grep and Glob, the way its users run it, and DensePack with Bash only. [BENCHMARKS.md](BENCHMARKS.md#opus-55-with-each-setup) has the prices.
-- Other tools that turn text into images use smaller letters and misread exact text. Opus 5.5 copied 167 of 168 hex hashes right from DensePack images.
-
 <br>
 
 ---
@@ -334,7 +315,7 @@ Yes, the bench scripts are in `bench/`, and the tasks are in `plugin/evals/`. [R
 
 [tools/Tool-README.md](tools/Tool-README.md) lists what the right-click tool changes on your computer and how to remove it. It also contains the steps to install the tool without the hotkeys.
 
-### Rules and the project map, DensePack 2.0
+### Rules and the project map
 
 DensePack 2.0 adds rules that make the agent write less, and a map of your project that makes it read less.
 
