@@ -374,7 +374,7 @@ _RENDERER_SIG = None
 # image cache key. Setting one never packs the instruction images again.
 NOT_PIXEL_SETTINGS = {"DENSEPACK_STYLE", "DENSEPACK_CODE_PX", "DENSEPACK_HELPER_MEMORY_MB",
                       "DENSEPACK_SERIAL_DRAW", "DENSEPACK_DASHBOARD_NETWORK", "DENSEPACK_ARENA",
-                      "DENSEPACK_ARENA_ROOT", "DENSEPACK_CONTEXT_TOKENS"}
+                      "DENSEPACK_ARENA_ROOT", "DENSEPACK_CONTEXT_TOKENS", "DENSEPACK_PONYPACK"}
 
 
 def renderer_signature():
@@ -639,8 +639,13 @@ def rules_text():
     if not os.path.isfile(RULES_TEXT):
         return None
     with open(RULES_TEXT, encoding="utf-8") as f:
-        return ("DENSEPACK RULES ACTIVE. Follow these rules for all code, tests and replies until the "
-                "session ends.\n\n" + f.read().strip())
+        rules = f.read().strip()
+    if os.environ.get("DENSEPACK_PONYPACK") == "1":
+        # Ponytail's own rules cover code size and tests, so only DensePack's reading and writing rules stay
+        head, _, rest = rules.partition("## Write the smallest complete change")
+        rules = head + rest[rest.find("## Work in few turns"):]
+    return ("DENSEPACK RULES ACTIVE. Follow these rules for all code, tests and replies until the "
+            "session ends.\n\n" + rules)
 
 
 def rules_line(cwd=None):

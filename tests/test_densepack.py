@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugin" / "scripts"))
 
 import bash_image  # noqa: E402
+import bootstrap  # noqa: E402
 import drop_read_gate  # noqa: E402
 
 
@@ -44,6 +45,18 @@ class DenseTextSetting(unittest.TestCase):
             self.assertTrue(drop_read_gate.short_file(f.name))
         finally:
             os.unlink(f.name)
+
+
+class PonypackSetting(unittest.TestCase):
+    def test_ponypack_drops_only_the_code_rules(self):
+        os.environ["DENSEPACK_PONYPACK"] = "1"
+        try:
+            text = bootstrap.rules_text()
+        finally:
+            del os.environ["DENSEPACK_PONYPACK"]
+        self.assertNotIn("## Write the smallest complete change", text)
+        self.assertIn("## Work in few turns", text)
+        self.assertIn("## Write the smallest complete change", bootstrap.rules_text())
 
 
 if __name__ == "__main__":
