@@ -13,10 +13,8 @@ DensePack packs text into images that the agent reads accurately, including Bash
 <sub>The DensePack plugin and the right-click tool render their images with FreeType and run on Windows, Linux and macOS. The tests ran on Windows and Linux.</sub>
 </p>
 
-<p align="center">
-<a href="https://fabian-galvez.github.io/DensePack/images/densepack-launch.mp4"><img src="images/densepack-launch.jpg" alt="DensePack launch video, 90 seconds" width="720"></a><br>
-<sub><a href="https://fabian-galvez.github.io/DensePack/images/densepack-launch.mp4">Watch the 90-second video</a></sub>
-</p>
+https://github.com/user-attachments/assets/ab2836aa-540c-433c-974b-16b0071874de
+
 
 ---
 
