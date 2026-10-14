@@ -13,6 +13,11 @@ DensePack packs text into images that the agent reads accurately, including Bash
 <sub>The DensePack plugin and the right-click tool render their images with FreeType and run on Windows, Linux and macOS. The tests ran on Windows and Linux.</sub>
 </p>
 
+<p align="center">
+<a href="https://fabian-galvez.github.io/DensePack/images/densepack-launch.mp4"><img src="images/densepack-launch.jpg" alt="DensePack launch video, 90 seconds" width="720"></a><br>
+<sub><a href="https://fabian-galvez.github.io/DensePack/images/densepack-launch.mp4">Watch the 90-second video</a></sub>
+</p>
+
 ---
 
 <details>
@@ -366,6 +371,8 @@ The output savings and the better replies of DensePack 2.0 are in large part tha
 - Research on the shape of AI writing named the signs that the rules cut. The main papers are [StoryScope](https://arxiv.org/abs/2604.03136) by Russell, Pham, Iyyer and Wieting, and [SlopShape](https://arxiv.org/abs/2609.15369) by Jochen Madler.
 
 DensePack renders each character with [FreeType](https://freetype.org) and the [Inter](https://rsms.me/inter/) font family. Thank you to the FreeType and Inter projects.
+
+Thank you to [brag](https://github.com/latent-spaces/brag), the Claude Code plugin that helped make the launch video.
 <br>
 
 ---
