@@ -13,9 +13,6 @@ DensePack packs text into images that the agent reads accurately, including Bash
 <sub>The DensePack plugin and the right-click tool render their images with FreeType and run on Windows, Linux and macOS. The tests ran on Windows and Linux.</sub>
 </p>
 
-https://github.com/user-attachments/assets/ab2836aa-540c-433c-974b-16b0071874de
-
-
 ---
 
 <details>
@@ -41,16 +38,16 @@ https://github.com/user-attachments/assets/ab2836aa-540c-433c-974b-16b0071874de
 
 ## Savings
 
-![The price of one Opus 5.5 session without DensePack, with Ponytail, with DensePack 2.0.2, and with DensePack 2.0.2 and a Sonnet subagent](images/savings-benchmarks.svg)
+![The price of one Opus 5.5 session without DensePack, with DensePack 2.0.2, and with DensePack 2.0.2 and a Sonnet subagent](images/savings-benchmarks.svg)
 
 On Opus 5.5, each saving is against the price without DensePack. In the last column, the Opus lead gives the reading to one Sonnet 5.5 subagent. The DensePack prices are averages of 5 runs.
 
-| Bench                     | Without DensePack | Ponytail 5     | DensePack 2.0.2 | DensePack 2.0.2 with a Sonnet subagent |
-| ------------------------- | ----------------- | -------------- | ------------- | ------------------------------------ |
-| Five files read           | $0.984            | $0.978, 0.6%   | $0.509, 48.3% | $0.283, 71.2%                        |
-| Architecture doc          | $0.740            | $0.556, 24.9%  | $0.349, 52.8% | $0.415, 43.9%                        |
-| Read-in-full architecture | $1.810            | $1.577, 12.8%  | $0.866, 52.1% | $0.556, 69.3%                        |
-| Code trace                | $4.737            | $4.263, 10.0%  | $2.359, 50.2% | $1.477, 68.8%                        |
+| Bench                     | Without DensePack | DensePack 2.0.2 | DensePack 2.0.2 with a Sonnet subagent |
+| ------------------------- | ----------------- | ------------- | ------------------------------------ |
+| Five files read           | $0.984            | $0.509, 48.3% | $0.283, 71.2%                        |
+| Architecture doc          | $0.740            | $0.349, 52.8% | $0.415, 43.9%                        |
+| Read-in-full architecture | $1.810            | $0.866, 52.1% | $0.556, 69.3%                        |
+| Code trace                | $4.737            | $2.359, 50.2% | $1.477, 68.8%                        |
 
 All prices are for the whole Claude Code session at Anthropic's API prices.
 
@@ -88,34 +85,6 @@ DensePack adds a start note of about 2,300 tokens with its rules, about $0.018 a
 The agent searched and ran commands in Bash. [BENCHMARKS.md](BENCHMARKS.md#densepack-202-13-october-2026) has each run. You can run the same benches on your own computer with the scripts in `bench/`, as [Run these benches yourself](BENCHMARKS.md#run-these-benches-yourself) shows.
 
 Longer sessions save more, because Claude Code sends the whole conversation again with each request. Images cost about half the tokens of their text in each of those requests.
-
-### Ponytail's tasks
-
-![DensePack 2.0.2 against Ponytail 5 on Ponytail's own benchmark: $0.127 against $0.142 per session, every round cheaper, and all hidden-test checks passed](images/ponytail-benchmark-summary.png)
-
-DensePack 2.0.2 ran Ponytail's 39 tasks 10 times in a row on 13 October 2026, and Ponytail's own checks scored all 390 runs. The rounds ran on one Windows laptop, with Opus 5.5 and 6 tasks at a time.
-
-Every run counts, and none was left out or run again. The Ponytail 5 column comes from Ponytail's own results of 7 October 2026.
-
-| On Ponytail's 39 tasks | DensePack 2.0.2 | Ponytail 5 |
-| --- | --- | --- |
-| Sum of the 39 task medians | $4.845 | $5.443 |
-| Saving against Ponytail 5, with medians | 11.0% | |
-| Average price of a session | $0.127 | $0.142 |
-| Saving against Ponytail 5, with averages | 10.9% | |
-| Tasks where DensePack was cheaper | 34 of 39 | |
-| Runs that passed Ponytail's hidden tests, on 18 tasks | 180 of 180, 100% | 87 of 90, 96.7% |
-| Runs that passed Ponytail's checks, on all 39 tasks | 390 of 390 | |
-| Lines of code written, sum of the 39 medians | 1,118 | 1,334 |
-
-- [Ponytail 5](https://github.com/DietrichGebert/ponytail/blob/main/benchmarks/results/2026-10-07-agentic.md) makes the agent write less code. On Ponytail's own 39 tasks, with medians of 10 runs, DensePack 2.0.2 cost 11.0% less than Ponytail 5 and was cheaper on 34. All 390 of its runs passed Ponytail's own checks, and none was left out or run again.
-- Ponytail's checks are hidden tests on 18 tasks, and on the other 21 a check that the code was delivered or compiles. On tasks with more reading, DensePack saved more, such as 37.2% against Ponytail 5 on `tmpl-fe-wizard`.
-- DensePack's own 4 benches are much bigger than Ponytail's tasks. They read a copy of DensePack's scripts, 24 Python files with 23,448 lines, about 1 MB. Ponytail's tasks start with an empty folder, a seed of 2 to 50 lines, or a FastAPI and React repo of 10,544 source lines.
-- Without a plugin, Ponytail's tasks cost $0.081 to $0.678 per run on Opus 5.5. DensePack's benches cost $0.740 to $4.737, which is 7 to 9 times as much. So DensePack's smallest bench is bigger than Ponytail's largest task.
-- DensePack only cost more on 5 tasks where Ponytail costs $0.145 or less. It was cheaper on all 10 tasks above that price, and on 24 of the 29 tasks below it.
-- That puts the size where DensePack starts to save at about $0.15 of Opus 5.5 work per session. See [Ponytail's agentic benchmark](BENCHMARKS.md#ponytails-benchmark).
-- On the 4 DensePack benches on Opus 5.5, Ponytail 5.1.0 saved 0.6% to 24.9%, and DensePack 2.0.2 saved 48.3% to 52.8%. Ponytail ran with Grep and Glob, the way its users run it, and DensePack with Bash only. [BENCHMARKS.md](BENCHMARKS.md#opus-55-with-each-setup) has the prices.
-- Opus 5.5 copied 167 of 168 hex hashes right from DensePack images. DensePack's safeguards cover the last one.
 
 <br>
 
@@ -222,7 +191,7 @@ Longer sessions that read many files save more, because Claude Code sends each i
 <details>
 <summary><strong>Can Claude misread the image?</strong></summary>
 
-Yes, some lines, such as random IDs. DensePack sends those lines as exact text beside the image. With DensePack 2.0.2, all 390 runs of Ponytail's 39 tasks passed Ponytail's own checks.
+Yes, some lines, such as random IDs. DensePack sends those lines as exact text beside the image. With DensePack 2.0.2, all 390 runs of Ponytail's 39 tasks passed Ponytail's own checks. Opus 5.5 copied 167 of 168 hex hashes right from DensePack images. DensePack's safeguards cover the last one.
 
 These safeguards limit the risk:
 
@@ -370,7 +339,6 @@ The output savings and the better replies of DensePack 2.0 are in large part tha
 
 DensePack renders each character with [FreeType](https://freetype.org) and the [Inter](https://rsms.me/inter/) font family. Thank you to the FreeType and Inter projects.
 
-Thank you to [brag](https://github.com/latent-spaces/brag), the Claude Code plugin that helped make the launch video.
 <br>
 
 ---
