@@ -1,7 +1,7 @@
 """Writes images/savings-benchmarks.svg and prints the savings of BENCHMARKS.md.
 
-For each bench, the chart compares the Opus 5.5 price without DensePack, with Ponytail 5.1.0, with DensePack 2.0.2, and
-with DensePack 2.0.2 and a Sonnet 5.5 subagent. It also prints these prices as a Markdown table.
+For each bench, the chart compares the Opus 5.5 price without DensePack, with DensePack 2.0.2, and with
+DensePack 2.0.2 and a Sonnet 5.5 subagent. It also prints these prices as a Markdown table.
 Run it from the repository folder: python -I bench/savings_chart.py"""
 import html
 import re
@@ -56,7 +56,7 @@ RUNS = {
 # The runs without DensePack ran with claude plugin eval, which turns on Claude Code's Bash sandbox. The sandbox adds its
 # instructions to the start of each request: about 3,750 tokens on Claude Code 2.1.293 and 2.1.296, and about 3,000 on
 # 2.1.284 to 2.1.289. Their first requests have 16,209 and 15,364 tokens, against 12,457 for the same tools with claude -p.
-# The runs with DensePack and with Ponytail ran with claude -p and no sandbox, the same as a normal Claude Code session.
+# The runs with DensePack ran with claude -p and no sandbox, the same as a normal Claude Code session.
 # The prices below take the sandbox tokens off each eval run: one 1-hour cache write, then one cache read per later request.
 SANDBOX = {  # sandbox tokens of each run without DensePack, in the order of RUNS
     "Five files read": {"Opus 5.5": [3000] * 5 + [3750] * 5, "Sonnet 5.5": [3000] * 10 + [3750] * 6},
@@ -79,13 +79,9 @@ RUNS = {b: {m: ([p - sandbox_cost(b, m, t) for p, t in zip(off, SANDBOX[b][m])],
 for _b, _per in EVAL_RUNS.items():
     for _m, (_off, _on) in _per.items():
         assert len(_off) == len(SANDBOX[_b][_m]), (_b, _m)
-# The chart shows Opus 5.5 on each bench: the average price without DensePack, Ponytail 5.1.0, DensePack 2.0.2, and
-# DensePack 2.0.2 with an Opus lead that gives the reading to one Sonnet 5.5 subagent. Each list holds the price of each run.
+# The chart shows Opus 5.5 on each bench: the average price without DensePack, DensePack 2.0.2, and DensePack
+# 2.0.2 with an Opus lead that gives the reading to one Sonnet 5.5 subagent. Each list holds the price of each run.
 OPUS = "Opus 5.5"
-PONYTAIL = {"Five files read": [0.974702, 0.982883, 0.9860006, 0.973228, 0.9731778],
-            "Architecture doc": [0.5598904, 0.49464, 0.480471, 0.479327, 0.7636842],
-            "Read-in-full architecture": [1.5223788, 1.572377, 1.5587548, 1.680015, 1.5534774],
-            "Code trace": [4.044022, 4.208957, 4.2307352, 4.3806602, 4.449936]}
 DP2 = {"Five files read": [0.511703, 0.5096296, 0.5049544, 0.511618, 0.5054512],
        "Architecture doc": [0.3314944, 0.3418024, 0.411823, 0.3227828, 0.337632],
        "Read-in-full architecture": [0.8828876, 0.8728484, 0.8541342, 0.8681568, 0.8527344],
@@ -94,10 +90,9 @@ SUBAGENT = {"Five files read": [0.2859725, 0.2928646, 0.2682214, 0.2838948, 0.28
             "Read-in-full architecture": [0.5360264, 0.5141509, 0.5318894, 0.5861994, 0.6116137],
             "Code trace": [1.4469261, 1.3086413, 1.6023099, 1.4546511, 1.5720561],
             "Architecture doc": [0.5780668, 0.3581746, 0.3469788, 0.4451298, 0.3447937]}
-SERIES = [("Baseline", "#a8a69e"), ("Ponytail 5", "#2f8f6b"), ("DensePack 2.0.2", "#eb6834"),
-          ("DensePack 2.0.2", "#f5a623")]
+SERIES = [("Baseline", "#a8a69e"), ("DensePack 2.0.2", "#eb6834"), ("DensePack 2.0.2", "#f5a623")]
 # The models of each series, the second line of its legend entry. #f5a623 is DensePack's orange from its icon.
-MODELS = ["Opus 5.5", "Opus 5.5", "Opus 5.5", "Opus 5.5 main + Sonnet 5.5 Subagent"]
+MODELS = ["Opus 5.5", "Opus 5.5", "Opus 5.5 main + Sonnet 5.5 Subagent"]
 # The percentage inside a bar is white, or dark on a light bar.
 INSIDE_INK = {"#f5a623": "#0b0b0b"}
 FONT = 'font-family="system-ui, -apple-system, &quot;Segoe UI&quot;, Arial, sans-serif" font-weight="600"'
@@ -105,7 +100,7 @@ HEAVY = 'font-family="&quot;Arial Black&quot;, &quot;Segoe UI Black&quot;, &quot
 X0, UNIT = 40, 9.4           # bars start at x 40, and a 100% saving is 940 px
 MAX_5X, PRO = 1.0, 0.25      # API price that used 1% of the 5-hour limit, measured on 10 October 2026
 BAR, GAP, TITLE, BENCH_GAP = 28, 6, 34, 20
-LEGEND = [(150, 1), (370, 2), (590, 3)]  # x of each legend square, and its entry in SERIES
+LEGEND = [(260, 1), (480, 2)]  # x of each legend square, and its entry in SERIES
 TOP = 142
 
 
@@ -149,12 +144,12 @@ def average(runs):
 
 
 def prices(bench):
-    return [average(RUNS[bench][OPUS][0]), average(PONYTAIL[bench]), average(DP2[bench]), average(SUBAGENT[bench])]
+    return [average(RUNS[bench][OPUS][0]), average(DP2[bench]), average(SUBAGENT[bench])]
 
 
 def table():
-    print("| Bench | Without DensePack | Ponytail 5.1.0 | DensePack 2.0.2 | DensePack 2.0.2 with a Sonnet subagent |")
-    print("| --- | --- | --- | --- | --- |")
+    print("| Bench | Without DensePack | DensePack 2.0.2 | DensePack 2.0.2 with a Sonnet subagent |")
+    print("| --- | --- | --- | --- |")
     for bench in RUNS:
         p = prices(bench)
         cells = ["$%.3f" % p[0]] + ["$%.3f, %.1f%%" % (v, 100 * (1 - v / p[0])) for v in p[1:]]
@@ -201,7 +196,7 @@ def main():
     for k in range(0, 101, 25):
         grid.append('<text x="%.0f" y="%d" font-size="13" text-anchor="middle" %s fill="#6b6a64">%d%%</text>' % (
             X0 + k * UNIT, y, FONT, k))
-    notes = ["Each bar is the saving against the baseline, one Opus 5.5 run without DensePack or Ponytail, for the whole session.",
+    notes = ["Each bar is the saving against the baseline, one Opus 5.5 run without DensePack, for the whole session.",
              "The 5-hour bar is the share of the 5-hour limit that one baseline run used on Max 5x and on Pro.",
              "With Opus 5.5 main + Sonnet 5.5 Subagent, the Opus agent gives the reading to one Sonnet 5.5 subagent."]
     legend = ['<text x="537" y="%d" font-size="15" text-anchor="middle" %s fill="#52514e">%s</text>' % (y + 28 + 22 * i, FONT, n)
@@ -219,7 +214,7 @@ def main():
     svg = ['<svg viewBox="-1 0 1074 %d" width="1074" height="%d" xmlns="http://www.w3.org/2000/svg" role="img" '
            'aria-labelledby="t d">' % (height, height),
            '<title id="t">Total conversation savings</title><desc id="d">The saving of one Claude Code session on Opus 5.5 '
-           'against the price without DensePack, with Ponytail 5, with DensePack 2.0.2, and with DensePack 2.0.2 on an '
+           'against the price without DensePack, with DensePack 2.0.2, and with DensePack 2.0.2 on an '
            'Opus 5.5 main agent and a Sonnet 5.5 subagent. %s</desc>' % " ".join(desc),
            '<style>%s</style>' % css,
            '<rect x="-1" y="0" width="1074" height="%d" fill="#fcfcfb"/>' % height,
