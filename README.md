@@ -6,7 +6,7 @@
 <p align="center">
 <strong>DensePack cuts the price of whole Claude Code sessions by 48.3% to 52.8% with Opus 5.5, and 43.9% to 71.2% with a Sonnet subagent.</strong><br>
 <br>
-DensePack packs text into images that the agent reads accurately, including Bash output and .doc and .docx files. It saved on every benchmark session that cost more than $0.14 without it.<br>
+DensePack packs text into images that the agent reads accurately, including Bash output and .doc and .docx files. All 20 of its runs on the 4 Opus benches cost less than the average session without it.<br>
 </p>
 
 <p align="center">
@@ -191,7 +191,7 @@ Longer sessions that read many files save more, because Claude Code sends each i
 <details>
 <summary><strong>Can Claude misread the image?</strong></summary>
 
-Yes, some lines, such as random IDs. DensePack sends those lines as exact text beside the image. With DensePack 2.0.2, all 390 runs of Ponytail's 39 tasks passed Ponytail's own checks. Opus 5.5 copied 167 of 168 hex hashes right from DensePack images. DensePack's safeguards cover the last one.
+Yes, some lines, such as random IDs. DensePack sends those lines as exact text beside the image. With DensePack 2.0.2, all 390 runs of Ponytail's 39 tasks passed Ponytail's own checks, as the [13 October results](https://github.com/Fabian-Galvez/DensePack/blob/f2529e5/BENCHMARKS.md#ponytails-benchmark) show. Opus 5.5 copied 167 of 168 hex hashes right from DensePack images. DensePack's safeguards cover the last one.
 
 These safeguards limit the risk:
 
