@@ -1,4 +1,5 @@
 """Checks for fixes that must not come back. Run: python -m unittest discover tests"""
+import io
 import os
 import shutil
 import sys
@@ -10,12 +11,14 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugin" / "scripts"))
 
 import bash_image  # noqa: E402
+import brief_pack  # noqa: E402
 import codepack  # noqa: E402
 import common  # noqa: E402
 import drop_read_gate  # noqa: E402
 import edit_gate  # noqa: E402
 import grep_gate  # noqa: E402
 import source_gate  # noqa: E402
+import subagent_stop  # noqa: E402
 
 
 class WorktreeReads(unittest.TestCase):
@@ -138,6 +141,72 @@ class LookAlikeGrep(unittest.TestCase):
     def test_latin_text_saves_nothing(self):
         common.note_look_alikes("Becker EP-0042 OK\n")
         self.assertIsNone(self.search())
+
+
+class ExactTextForLookAlikes(unittest.TestCase):
+    # Cyrillic "Ваш номер ЕР-0042 оплачен" holds В, а, Е, Р, о, р, с, which
+    # look like Latin B, a, E, P, o, p, c in an image.
+    CYRILLIC = ("\u0412\u0430\u0448 \u043d\u043e\u043c\u0435\u0440 \u0415\u0420-0042 "
+                "\u043e\u043f\u043b\u0430\u0447\u0435\u043d\n") * 120
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.root, ".claude", "tmp"))
+        self.env = mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": self.root})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        shutil.rmtree(self.root)
+
+    def log(self):
+        path = Path(self.root, ".claude", "densepack-vault", "why-text.log")
+        return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+    def test_bash_output_with_cyrillic_stays_text(self):
+        event = {"tool_name": "Bash", "session_id": "s", "tool_response": {"stdout": self.CYRILLIC}}
+        self.assertIsNone(bash_image.image_output(event))
+        self.assertIn("bash holds Cyrillic letters", self.log())
+
+    # The Read check runs after the font check, which needs Pillow.
+    @unittest.skipUnless(common.ensure_pillow(), "Pillow, freetype or NumPy is missing")
+    def test_read_of_cyrillic_file_stays_text(self):
+        path = os.path.join(self.root, "notes.md")
+        Path(path).write_text(self.CYRILLIC, encoding="utf-8")
+        event = {"tool_name": "Read", "session_id": "s", "tool_input": {"file_path": path}}
+        with mock.patch.object(drop_read_gate, "gets_images", lambda event: True):
+            self.assertIsNone(drop_read_gate.route(event, post=True))
+            self.assertFalse(drop_read_gate.draws_on_read(path, event))
+        self.assertIn("read holds Cyrillic letters", self.log())
+
+    def test_brief_and_report_with_cyrillic_stay_text(self):
+        brief = {"tool_name": "Agent", "session_id": "s", "tool_input": {"prompt": self.CYRILLIC}}
+        with mock.patch.object(brief_pack, "read_event", lambda: brief), \
+                mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            brief_pack.main()
+        self.assertEqual(out.getvalue(), "")
+        report = {"session_id": "s", "agent_id": "a1", "last_assistant_message": self.CYRILLIC}
+        with mock.patch.object(subagent_stop, "read_event", lambda: report):
+            self.assertEqual(subagent_stop.main(), 0)
+        self.assertFalse(common.report_swap_path("a1").exists())
+        self.assertIn("brief holds Cyrillic letters", self.log())
+        self.assertIn("report holds Cyrillic letters", self.log())
+
+    def test_each_look_alike_kind(self):
+        reason = common.exact_text_reason
+        self.assertIn("Greek", reason("\u039a\u03b1\u03bb\u03b7\u03bc\u03ad\u03c1\u03b1"))
+        self.assertIn("spaces", reason("total\u00a0100"))
+        self.assertIn("dash", reason("total \u2212100"))
+        self.assertIsNone(reason("2010\u20132020 \u2014 en and em dashes stay images"))
+        self.assertIsNone(reason("plain ASCII output, as before - 0123 IlO0\n" * 40))
+
+    def test_setting_off_gives_images_again(self):
+        common.write_settings({"exacttext": "off"})
+        self.assertIsNone(common.exact_text_reason(self.CYRILLIC))
+
+    def test_strict_keeps_en_and_em_dashes_as_text(self):
+        common.write_settings({"exacttext": "strict"})
+        self.assertIn("en and em", common.exact_text_reason("unit 12345\u2013A"))
 
 
 if __name__ == "__main__":
