@@ -11,6 +11,7 @@ DensePack writes files in these places.
 | Your system temp folder                                                                                        | It contains a copy of each file while DensePack packs it. The packs also write their job files here.                                |
 | The `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/rules/*.md` and `MEMORY.md` files that DensePack converts | DensePack replaces the file with a pointer to the images and keeps the original text beside it in `<name>.bakpack`.                 |
 | `~/.claude/settings.json`                                                                                      | DensePack sets `CLAUDE_CODE_THRIFTY_SONIC` to `0` in this file. On Windows with Git for Windows, it also sets `EMBEDDED_SEARCH_TOOLS` to `1` and `CLAUDE_CODE_USE_POWERSHELL_TOOL` to `0`. |
+| `~/.claude/densepack-text-files.txt`                                                                           | You write this file. Reads of files that match one of its patterns, one per line such as `*.kt`, stay text in every project |
 
 DensePack saves all of these files on your computer and sends none of them to a service.
 
@@ -232,6 +233,8 @@ You can delete these files by hand.
 | `densepack-rangeonce-<session>-<hash>`                                                                       | DensePack writes this file after `source_gate.py` checks one `sed -n` range of this report or brief text in this session. Later ranges of the same text run as written. Only `/dense-remove` deletes it.                                                                                                                                                                                                                                                                                                                                                             |
 
 At session start, `bootstrap.py` deletes the files with these names once they are older than 7 days.
+
+`look-alikes.json` and `look-alikes-denied.json` in the same folder stay until you delete them. The first holds up to 500 words with Cyrillic or Greek letters that look like Latin ones, so `grep_gate.py` can put both spellings into a search. The second holds up to 50 searches that `grep_gate.py` denied once in a mode that asks.
 
 - The image, source, report, code and legend files start with `densepack-img-`, `densepack-src-`, `densepack-report-`, `densepack-code-` and `densepack-legend-`.
 - The brief files start with `densepack-brief-`, `densepack-briefsrc-` and `densepack-briefcode-`.

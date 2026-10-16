@@ -53,7 +53,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import (actor_key, actor_reader, apply_dense_text, disabled, emit, ensure_pillow,  # noqa: E402
-                    gets_images, dense_text, read_event, why_text)
+                    gets_images, dense_text, note_look_alikes, read_event, why_text)
 
 # Below this many characters, the text costs less than the image, and the
 # hook packs nothing. The bill on Opus 5.5, with the one-row key and the
@@ -406,6 +406,7 @@ def image_output(event):
     from drop_read_gate import READ_MAX_BYTES
     if len(text) < MIN_CHARS or len(text) > READ_MAX_BYTES or "\x00" in text:
         return None
+    note_look_alikes(text)
     if dense_text():
         if text.count("\n") < SHORT_LINES and len(text) < SHORT_CHARS:
             return None

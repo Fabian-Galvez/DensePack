@@ -8,6 +8,9 @@ context to a request that Claude Code already sends.
 
 No line when DensePack is off or the rules file is gone, because then the start
 note has no rules to point at.
+
+After a batch with an Edit that Claude Code rejected, the context also holds
+the exact lines that edit_gate.py gives, see failed_edit_reasons() there.
 """
 
 import json
@@ -29,9 +32,14 @@ def main():
     name = event.get("hook_event_name")
     if name not in ("PostToolBatch", "UserPromptSubmit"):
         return 0
-    if disabled(event.get("session_id")) or not os.path.isfile(RULES_FILE):
+    if disabled(event.get("session_id")):
         return 0
-    emit({"hookSpecificOutput": {"hookEventName": name, "additionalContext": LINE}})
+    parts = [LINE] if os.path.isfile(RULES_FILE) else []
+    if name == "PostToolBatch" and any(c.get("tool_name") == "Edit" for c in event.get("tool_calls") or []):
+        from edit_gate import failed_edit_reasons
+        parts += failed_edit_reasons(event)
+    if parts:
+        emit({"hookSpecificOutput": {"hookEventName": name, "additionalContext": "\n\n".join(parts)}})
     return 0
 
 

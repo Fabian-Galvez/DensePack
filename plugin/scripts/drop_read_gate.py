@@ -82,7 +82,7 @@ import hashlib
 import sys
 
 from common import (actor_key, actor_reader, line_pull, disabled, emit,
-                    gets_images, may_rewrite, dense_text, no_metacharacters, read_event, sibling_image, tmp_dir,
+                    gets_images, keeps_text, may_rewrite, dense_text, no_metacharacters, note_look_alikes, read_event, sibling_image, tmp_dir,
                     turn_reads, vault_dir, why_text)
 
 # With the densetext setting, a file with fewer lines stays text, because Edit
@@ -919,6 +919,9 @@ def _drawable_text(path):
     route() and draws_on_read() call it, and a Read and a Grep get the same
     answer."""
     from pathlib import Path
+    # The user's list of files that stay text, see common.keeps_text().
+    if keeps_text(path):
+        return None
     try:
         size = Path(path).stat().st_size
     except OSError:
@@ -1095,6 +1098,7 @@ def route(event, prefetch=False, post=False):
         if drawable is None:
             return stays_text("not text that DensePack draws, or over the size limit", path, logged)
         size, drawn_text, text = drawable
+        note_look_alikes(text)
 
         # NO PRICE FLOOR HERE. See the module note above the imports. This
         # route pays no delivery fee, and no fixed character count marks

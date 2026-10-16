@@ -167,7 +167,7 @@
         ]
       },
       {
-        "matcher": "Glob",
+        "matcher": "Glob|Grep",
         "hooks": [
           {
             "type": "command",

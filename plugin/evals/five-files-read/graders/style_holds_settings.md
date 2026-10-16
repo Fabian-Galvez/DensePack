@@ -1,6 +1,6 @@
 ---
 type: regex
 target: { source: file, path: ANSWER.md }
-pattern: 'style\.py[^\n]*(?:setting|default|value|tunable)'
+pattern: 'style\.py[^\n]*(?:setting|default|value|tunable|override)'
 flags: i
 ---
