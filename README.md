@@ -1,10 +1,10 @@
-<!-- DensePack 2.0.2 -->
+<!-- DensePack 2.0.3 -->
 <p align="left">
   <img src="images/densepack-readme-banner.svg" alt="DensePack" />
 </p>
 
 <p align="center">
-<strong>DensePack cuts the price of whole Claude Code sessions by 48.3% to 52.8% with Opus 5.5, and 43.9% to 71.2% with a Sonnet subagent.</strong><br>
+<strong>DensePack cuts the price of whole Claude Code sessions by 45.0% to 52.8% with Opus 5.5, and 58.9% to 70.8% with a Sonnet subagent.</strong><br>
 <br>
 DensePack packs text into images that the agent reads accurately, including Bash output and .doc and .docx files. All 20 of its runs on the 4 Opus benches cost less than the average session without it.<br>
 </p>
@@ -38,16 +38,16 @@ DensePack packs text into images that the agent reads accurately, including Bash
 
 ## Savings
 
-![The price of one Opus 5.5 session without DensePack, with DensePack 2.0.2, and with DensePack 2.0.2 and a Sonnet subagent](images/savings-benchmarks.svg)
+![The price of one Opus 5.5 session without DensePack, with DensePack 2.0.3, and with DensePack 2.0.3 and a Sonnet subagent](images/savings-benchmarks.svg)
 
-On Opus 5.5, each saving is against the price without DensePack. In the last column, the Opus lead gives the reading to one Sonnet 5.5 subagent. The DensePack prices are averages of 5 runs.
+On Opus 5.5, each saving is against the price without DensePack. In the last column, the Opus lead gives the reading to one Sonnet 5.5 subagent. The DensePack prices are averages of 5 runs, and of 10 runs for the architecture doc and code trace with a subagent.
 
-| Bench                     | Without DensePack | DensePack 2.0.2 | DensePack 2.0.2 with a Sonnet subagent |
+| Bench                     | Without DensePack | DensePack 2.0.3 | DensePack 2.0.3 with a Sonnet subagent |
 | ------------------------- | ----------------- | ------------- | ------------------------------------ |
-| Five files read           | $0.984            | $0.509, 48.3% | $0.283, 71.2%                        |
-| Architecture doc          | $0.740            | $0.349, 52.8% | $0.415, 43.9%                        |
-| Read-in-full architecture | $1.810            | $0.866, 52.1% | $0.556, 69.3%                        |
-| Code trace                | $4.737            | $2.359, 50.2% | $1.477, 68.8%                        |
+| Five files read           | $0.984            | $0.512, 47.9% | $0.287, 70.8%                        |
+| Architecture doc          | $0.740            | $0.349, 52.8% | $0.304, 58.9%                        |
+| Read-in-full architecture | $1.810            | $0.865, 52.2% | $0.532, 70.6%                        |
+| Code trace                | $4.737            | $2.605, 45.0% | $1.510, 68.1%                        |
 
 All prices are for the whole Claude Code session at Anthropic's API prices.
 
@@ -60,29 +60,29 @@ All prices are for the whole Claude Code session at Anthropic's API prices.
 
 ### Opus 5.5
 
-| Bench                     | Without DensePack | DensePack 2.0.2 | Saving | Pro 5-hour limit used | Max 5x 5-hour limit used |
+| Bench                     | Without DensePack | DensePack 2.0.3 | Saving | Pro 5-hour limit used | Max 5x 5-hour limit used |
 | ------------------------- | ----------------- | ------------- | ------ | --------------------- | ------------------------ |
-| Five files read           | $0.98             | $0.51         | 48.3%  | 2.0%                  | 0.5%                     |
+| Five files read           | $0.98             | $0.51         | 47.9%  | 2.0%                  | 0.5%                     |
 | Architecture doc          | $0.74             | $0.35         | 52.8%  | 1.4%                  | 0.3%                     |
-| Read-in-full architecture | $1.81             | $0.87         | 52.1%  | 3.5%                  | 0.9%                     |
-| Code trace                | $4.74             | $2.36         | 50.2%  | 9.4%                  | 2.4%                     |
+| Read-in-full architecture | $1.81             | $0.87         | 52.2%  | 3.5%                  | 0.9%                     |
+| Code trace                | $4.74             | $2.60         | 45.0%  | 10.4%                  | 2.6%                     |
 
 ### Opus 5.5 main agent with a Sonnet 5.5 subagent
 
 The Opus main agent gives the reading to one Sonnet 5.5 subagent. The savings are against Opus 5.5 without DensePack.
 
-| Bench                     | Without DensePack | DensePack 2.0.2 | Saving | Pro 5-hour limit used | Max 5x 5-hour limit used |
+| Bench                     | Without DensePack | DensePack 2.0.3 | Saving | Pro 5-hour limit used | Max 5x 5-hour limit used |
 | ------------------------- | ----------------- | ------------- | ------ | --------------------- | ------------------------ |
-| Five files read           | $0.98             | $0.28         | 71.2%  | 1.1%                  | 0.3%                     |
-| Architecture doc          | $0.74             | $0.41         | 43.9%  | 1.7%                  | 0.4%                     |
-| Read-in-full architecture | $1.81             | $0.56         | 69.3%  | 2.2%                  | 0.6%                     |
-| Code trace                | $4.74             | $1.48         | 68.8%  | 5.9%                  | 1.5%                     |
+| Five files read           | $0.98             | $0.29         | 70.8%  | 1.1%                  | 0.3%                     |
+| Architecture doc          | $0.74             | $0.30         | 58.9%  | 1.2%                  | 0.3%                     |
+| Read-in-full architecture | $1.81             | $0.53         | 70.5%  | 2.1%                  | 0.6%                     |
+| Code trace                | $4.74             | $1.51         | 68.1%  | 6.0%                  | 1.5%                     |
 
 The last two columns show how much of the 5-hour limit one session with DensePack used. On 10 October 2026, $0.25 of API price used about 1% of the 5-hour limit on Pro, and $1 used about 1% on Max 5x.
 
 DensePack adds a start note of about 2,300 tokens with its rules, about $0.018 at the start of an Opus 5.5 session. The prices above already include it. [The session start note](HOW-IT-WORKS.md#the-session-start-note) has the cost on each model.
 
-The agent searched and ran commands in Bash. [BENCHMARKS.md](BENCHMARKS.md#densepack-202-13-october-2026) has each run. You can run the same benches on your own computer with the scripts in `bench/`, as [Run these benches yourself](BENCHMARKS.md#run-these-benches-yourself) shows.
+The agent searched and ran commands in Bash. [BENCHMARKS.md](BENCHMARKS.md#densepack-203-15-october-2026) has each run. You can run the same benches on your own computer with the scripts in `bench/`, as [Run these benches yourself](BENCHMARKS.md#run-these-benches-yourself) shows.
 
 Longer sessions save more, because Claude Code sends the whole conversation again with each request. Images cost about half the tokens of their text in each of those requests.
 
@@ -182,7 +182,7 @@ Images cost 1 token for each square of 28 by 28 pixels, no matter how much text 
 <details>
 <summary><strong>How much do I save?</strong></summary>
 
-On the benches in [Savings](#savings), DensePack 2.0.2 saved 48.3% to 52.8% of the whole session with Opus 5.5. With an Opus 5.5 main agent and a Sonnet 5.5 subagent, it saved 43.9% to 71.2%.
+On the benches in [Savings](#savings), DensePack 2.0.3 saved 45.0% to 52.8% of the whole session with Opus 5.5. With an Opus 5.5 main agent and a Sonnet 5.5 subagent, it saved 58.9% to 70.8%.
 
 Longer sessions that read many files save more, because Claude Code sends each image again with each later request.
 
@@ -294,7 +294,7 @@ DensePack 2.0 adds rules that make the agent write less, and a map of your proje
 - The rules are in [plugin/rules/STYLE-RULES.md](plugin/rules/STYLE-RULES.md). DensePack's session start hook puts them in the agent's start note. They are not a skill, so the agent gets them in every session that gets images.
 - Subagents get the same rules from DensePack's subagent start hook.
 - The start note also names an image of your project map: each folder, its files and the names that each file defines. The agent reads that image in its first turn. When the map has under 400 characters, the note contains it as text, because the text costs less than the image and its Read.
-- [The session start note](HOW-IT-WORKS.md#the-session-start-note) has the details and the cost, about 2,300 tokens. [BENCHMARKS.md](BENCHMARKS.md#densepack-202-13-october-2026) has the savings.
+- [The session start note](HOW-IT-WORKS.md#the-session-start-note) has the details and the cost, about 2,300 tokens. [BENCHMARKS.md](BENCHMARKS.md#densepack-203-15-october-2026) has the savings.
 
 You can make the rules your own. Ask your agent to change `STYLE-RULES.md` in the DensePack plugin folder, or to delete it. Without that file, DensePack sends no rules and no project map.
 

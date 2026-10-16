@@ -97,6 +97,13 @@ WHY = (
 MESSAGE = ACTION + WHY
 
 
+# Claude Code 2.1.300 has no Grep tool, so agents search with these in Bash.
+# grep_gate.py puts the real spelling of look-alike letters into the command.
+SEARCH_TOOLS = re.compile(r"\b[ef]?grep\b|\brg\b|\bfindstr\b|Select-String", re.I)
+# These flags read a pattern as plain text, so the [EЕ] brackets would not match.
+FIXED_STRINGS = re.compile(r"\s-[A-Za-z]*F|--fixed-strings|\bfgrep\b|-SimpleMatch|\bfindstr\b[^|]*\s/[LlCc][:\s]")
+
+
 def why_already_sent(session):
     """Return True when the gate already sent WHY in this session.
 
@@ -325,6 +332,12 @@ def main():
         command = str((event.get("tool_input") or {}).get("command") or "")
         if not command:
             return 0
+        if SEARCH_TOOLS.search(command) and not FIXED_STRINGS.search(command):
+            from grep_gate import look_alike_search
+            out = look_alike_search(event, event.get("tool_input"), "command")
+            if out:
+                emit(out)
+                return 0
         if OVERRIDE in command:
             record_bypass(command, event.get("session_id"), ps)
             return 0

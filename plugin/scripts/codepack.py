@@ -1196,7 +1196,7 @@ def _first_line_number(pairs, chunk):
 
 
 def _set_key_stats(text, pairs, pages, pitch=0.0):
-    """Row two of the key names the lines on the first page and their
+    """The last row of the key names the lines on the first page and their
     characters. The model then checks its copy against the two."""
     global _KEY_STATS, _LEGEND_TITLE
     base = _LEGEND_TITLE
@@ -1226,8 +1226,8 @@ def _set_key_stats(text, pairs, pages, pitch=0.0):
     # where it fits. A tab-indented file keeps the stats.
     # THE END OF THE FILE. The page renders each line ending the same way. A
     # file whose last line has no newline then looks like one that has it,
-    # and a model can add a newline. The key says so at the right end of row
-    # two, in the words that git uses for it.
+    # and a model can add a newline. The key says so at the right end of the last
+    # row, in the words that git uses for it.
     tail = "" if text.endswith("\n") or not text else "no newline at end of file"
     if first == 1 and last == total and not _TAB_KEY:
         _KEY_STATS = tail
@@ -1284,27 +1284,33 @@ def legend_rows(font, max_w, face_for=None, renderer="pillow"):
                   _part_width(font, p[0], face_for, renderer)
                   + (2 * SWATCH_PAD + SWATCH_GAP if p[2] is not None else 0) for p in group)
               for group in groups]
-    # The file name sits at the right end of the first row. The entries take
-    # any order that fits two rows. In the order of legend_parts(), the four
+    # The file name sits at the right end of the first row, or alone above it
+    # when too long. The entries take any order that fits two rows. In the order of legend_parts(), the four
     # boxes cannot share a row with anything else, and the key takes three
     # rows.
     title = [g for g in groups if g[0][0].startswith("file=")]
     if title:
-        tw = widths[groups.index(title[0])]
+        # The gap keeps the right-aligned name off the last entry of its row.
+        tw = widths[groups.index(title[0])] + _GAP_W_LAYOUT + SWATCH_GAP
         keep = [(g, w) for g, w in zip(groups, widths) if g is not title[0]]
         groups, widths = [g for g, _ in keep], [w for _, w in keep]
     else:
         tw = 0.0
-    # The lines and characters of the image sit at the right end of row two,
-    # under the file name.
+    # The lines and characters of the image sit at the right end of the last row.
     stats = [(_KEY_STATS, MUTED, None)] if _KEY_STATS else []
-    sw = _part_width(font, _KEY_STATS, face_for, renderer) if stats else 0.0
+    sw = _part_width(font, _KEY_STATS, face_for, renderer) + _GAP_W_LAYOUT + SWATCH_GAP if stats else 0.0
     if not stats and sum(widths) + tw <= max_w:
         return [[p for group in groups for p in group] + (title[0] if title else [])]
     best, best_w = None, None
     n = len(groups)
     # The "=same line" entry sits on row one.
     same = [i for i, g in enumerate(groups) if any(p[0].startswith("=same line") for p in g)]
+    # Names too long for row one would draw over its entries, so they get a row
+    # of their own, and the split below leaves them out. The name ties each page to
+    # its file and Bash pages to their text copy.
+    own = bool(title) and (sum(widths[i] for i in {0, *same}) if n else 0.0) + tw > max_w
+    if own:
+        tw = 0.0
     for mask in range(1 << n):
         if n and not mask & 1:
             # The first entry, the depth of nesting, starts the first row.
@@ -1315,12 +1321,14 @@ def legend_rows(font, max_w, face_for=None, renderer="pillow"):
         two = [i for i in range(n) if not mask >> i & 1]
         w1 = sum(widths[i] for i in one) + tw
         w2 = sum(widths[i] for i in two) + sw
-        # The key is two rows at most. A page with enough content to need
+        # The entries take two rows at most. A page with enough content to need
         # each entry is a wide page. A narrow page holds little and names few
         # entries. This loop keeps the split with the narrower wide row.
         if best_w is None or max(w1, w2) < best_w:
             best, best_w = (one, two), max(w1, w2)
-    rows = [[p for i in best[0] for p in groups[i]] + (title[0] if title else []),
+    fits = not title or not own and sum(widths[i] for i in best[0]) + tw <= max_w
+    rows = [[] if fits else title[0],
+            [p for i in best[0] for p in groups[i]] + (title[0] if title and fits else []),
             [p for i in best[1] for p in groups[i]] + stats]
     return [r for r in rows if r]
 
@@ -1339,7 +1347,7 @@ def legend_row(d, font, x, y, line_h, max_w=None, face_for=None, renderer="pillo
             # right end of its row.
             name = (parts[-1][0].rstrip(),) + tuple(parts[-1][1:])
             _legend_line(d, font, x, y, line_h, parts[:-1], face_for, renderer, img, row_up)
-            nx = x + max_w - _part_width(font, name[0], face_for, renderer)
+            nx = max(x, x + max_w - _part_width(font, name[0], face_for, renderer))
             _legend_line(d, font, nx, y, line_h, [name], face_for, renderer, img, row_up)
         else:
             _legend_line(d, font, x, y, line_h, parts, face_for, renderer, img, row_up)

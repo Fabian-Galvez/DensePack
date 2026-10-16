@@ -8,6 +8,70 @@ In each A/B bench, the same task runs twice on the same model, once with DensePa
 
 <br>
 
+## DensePack 2.0.3, 15 October 2026
+
+DensePack 2.0.3 draws a long file name in the key row on a row of its own, finds Cyrillic and Greek look-alike words in searches, sends the exact lines after a rejected Edit on Claude Code 2.1.300, and keeps the files you list as text. The savings below are against the price of the same task without DensePack.
+
+### DensePack's benches
+
+DensePack 2.0.3 ran each bench 5 times on Opus 5.5 on 15 October 2026, with Claude Code 2.1.300 on Windows, `claude -p`, and no Grep or Glob. The setup with a Sonnet 5.5 subagent ran 5 or 10 times per bench. The prices without DensePack are the averages from the 2.0.2 benches below, and each run's saving is against that average. The Sonnet 5.5 table below is from DensePack 2.0.
+
+### Opus 5.5
+
+| Bench | Without DensePack | DensePack 2.0.3 |
+| --- | --- | --- |
+| Five files read | $0.984 | $0.512, 47.9% |
+| Architecture doc | $0.740 | $0.349, 52.8% |
+| Read-in-full architecture | $1.810 | $0.865, 52.2% |
+| Code trace | $4.737 | $2.605, 45.0% |
+
+The price, saving and score of each run:
+
+| Run | Five files read | Architecture doc | Read-in-full architecture | Code trace | Round total |
+| --- | --- | --- | --- | --- | --- |
+| 1 | $0.511, 48.1%, 7/7 | $0.334, 54.9%, 18/18 | $0.867, 52.1%, 18/18 | $2.569, 45.8%, 26/26 | $4.281, 48.2% |
+| 2 | $0.513, 47.9%, 7/7 | $0.360, 51.4%, 18/18 | $0.848, 53.1%, 18/18 | $2.833, 40.2%, 26/26 | $4.554, 44.9% |
+| 3 | $0.502, 49.0%, 7/7 | $0.421, 43.1%, 18/18 | $0.883, 51.2%, 18/18 | $2.610, 44.9%, 26/26 | $4.416, 46.6% |
+| 4 | $0.520, 47.2%, 7/7 | $0.321, 56.6%, 18/18 | $0.862, 52.4%, 18/18 | $2.343, 50.5%, 26/26 | $4.046, 51.1% |
+| 5 | $0.516, 47.6%, 7/7 | $0.310, 58.1%, 18/18 | $0.866, 52.2%, 18/18 | $2.669, 43.7%, 26/26 | $4.361, 47.3% |
+
+- All 20 runs scored full marks. The 5 rounds cost $21.658 together, against $41.355 without DensePack, a 47.6% saving.
+
+### Opus 5.5 main agent with a Sonnet 5.5 subagent
+
+The Opus main agent gives the reading to one Sonnet 5.5 subagent. The savings are against Opus 5.5 without DensePack.
+
+| Bench | Without DensePack | DensePack 2.0.3 with a Sonnet subagent |
+| --- | --- | --- |
+| Five files read | $0.984 | $0.287, 70.8% |
+| Architecture doc | $0.740 | $0.304, 58.9% |
+| Read-in-full architecture | $1.810 | $0.532, 70.6% |
+| Code trace | $4.737 | $1.510, 68.1% |
+
+The price, saving and score of each run:
+
+| Run | Five files read | Architecture doc | Read-in-full architecture | Code trace |
+| --- | --- | --- | --- | --- |
+| 1 | $0.300, 69.5%, 7/7 | $0.332, 55.1%, 18/18 | $0.550, 69.6%, 18/18 | $1.399, 70.5%, 26/26 |
+| 2 | $0.288, 70.7%, 7/7 | $0.316, 57.3%, 18/18 | $0.468, 74.1%, 18/18 | $1.726, 63.6%, 26/26 |
+| 3 | $0.279, 71.6%, 7/7 | $0.287, 61.2%, 18/18 | $0.516, 71.5%, 18/18 | $1.498, 68.4%, 26/26 |
+| 4 | $0.281, 71.4%, 7/7 | $0.267, 63.9%, 18/18 | $0.645, 64.4%, 18/18 | $1.366, 71.2%, 26/26 |
+| 5 | $0.289, 70.6%, 7/7 | $0.308, 58.4%, 18/18 | $0.479, 73.5%, 18/18 | $2.043, 56.9%, 26/26 |
+| 6 |  | $0.316, 57.3%, 18/18 |  | $1.589, 66.5%, 26/26 |
+| 7 |  | $0.272, 63.2%, 18/18 |  | $1.341, 71.7%, 26/26 |
+| 8 |  | $0.289, 60.9%, 18/18 |  | $1.282, 72.9%, 25/26 |
+| 9 |  | $0.356, 51.9%, 18/18 |  | $1.517, 68.0%, 26/26 |
+| 10 |  | $0.296, 60.0%, 18/18 |  | $1.336, 71.8%, 26/26 |
+
+- 29 of 30 runs scored full marks. Code trace run 8 scored 25/26, see the [Sonnet 5.5](#sonnet-55) section.
+- In the architecture doc, the Sonnet subagent finds the hook scripts itself and writes ARCHITECTURE.md, with the prompt in `bench/prompts/architecture-doc-subagent.md`.
+
+<br>
+
+---
+
+<br>
+
 ## DensePack 2.0.2, 13 October 2026
 
 DensePack 2.0.2 has a start note of rules for less code and short replies. The note also names an image that maps the project's folders, files and the names in each file.
@@ -122,6 +186,8 @@ The price of each run:
 ### Sonnet 5.5
 
 These runs show what a Sonnet 5.5 main agent costs with DensePack, and that Sonnet reads the images correctly.
+
+Sonnet 5.5 reads DensePack images well enough for daily work, so it gets images by default. Once in a while it gets one fact wrong. In 10 code-trace runs with a Sonnet subagent on 15 October 2026, with DensePack 2.0.3 on Claude Code 2.1.300, 1 run reported that a 4-space file keeps its depth bands, while the code gives it one band color. Run `/max-off` to send Sonnet plain text, like Haiku. Run `/maxpack` to turn images back on for Sonnet.
 
 | Bench | Without DensePack | DensePack 2.0 |
 | --- | --- | --- |

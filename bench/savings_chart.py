@@ -1,7 +1,7 @@
 """Writes images/savings-benchmarks.svg and prints the savings of BENCHMARKS.md.
 
-For each bench, the chart compares the Opus 5.5 price without DensePack, with DensePack 2.0.2, and with
-DensePack 2.0.2 and a Sonnet 5.5 subagent. It also prints these prices as a Markdown table.
+For each bench, the chart compares the Opus 5.5 price without DensePack, with DensePack 2.0.3, and with
+DensePack 2.0.3 and a Sonnet 5.5 subagent. It also prints these prices as a Markdown table.
 Run it from the repository folder: python -I bench/savings_chart.py"""
 import html
 import re
@@ -79,18 +79,18 @@ RUNS = {b: {m: ([p - sandbox_cost(b, m, t) for p, t in zip(off, SANDBOX[b][m])],
 for _b, _per in EVAL_RUNS.items():
     for _m, (_off, _on) in _per.items():
         assert len(_off) == len(SANDBOX[_b][_m]), (_b, _m)
-# The chart shows Opus 5.5 on each bench: the average price without DensePack, DensePack 2.0.2, and DensePack
-# 2.0.2 with an Opus lead that gives the reading to one Sonnet 5.5 subagent. Each list holds the price of each run.
+# The chart shows Opus 5.5 on each bench: the average price without DensePack, DensePack 2.0.3, and DensePack
+# 2.0.3 with an Opus lead that gives the reading to one Sonnet 5.5 subagent. Each list holds the price of each run.
 OPUS = "Opus 5.5"
-DP2 = {"Five files read": [0.511703, 0.5096296, 0.5049544, 0.511618, 0.5054512],
-       "Architecture doc": [0.3314944, 0.3418024, 0.411823, 0.3227828, 0.337632],
-       "Read-in-full architecture": [0.8828876, 0.8728484, 0.8541342, 0.8681568, 0.8527344],
-       "Code trace": [2.0161814, 2.389909, 2.865316, 2.5106018, 2.0132606]}
-SUBAGENT = {"Five files read": [0.2859725, 0.2928646, 0.2682214, 0.2838948, 0.2859792],
-            "Read-in-full architecture": [0.5360264, 0.5141509, 0.5318894, 0.5861994, 0.6116137],
-            "Code trace": [1.4469261, 1.3086413, 1.6023099, 1.4546511, 1.5720561],
-            "Architecture doc": [0.5780668, 0.3581746, 0.3469788, 0.4451298, 0.3447937]}
-SERIES = [("Baseline", "#a8a69e"), ("DensePack 2.0.2", "#eb6834"), ("DensePack 2.0.2", "#f5a623")]
+DP2 = {'Five files read': [0.511, 0.513, 0.502, 0.52, 0.516],
+       'Architecture doc': [0.334, 0.36, 0.421, 0.321, 0.31],
+       'Read-in-full architecture': [0.867, 0.848, 0.883, 0.862, 0.866],
+       'Code trace': [2.569, 2.833, 2.61, 2.343, 2.669]}
+SUBAGENT = {'Five files read': [0.3, 0.288, 0.279, 0.281, 0.289],
+            'Read-in-full architecture': [0.55, 0.468, 0.516, 0.645, 0.479],
+            'Code trace': [1.399, 1.726, 1.498, 1.366, 2.043, 1.589, 1.341, 1.282, 1.517, 1.336],
+            'Architecture doc': [0.332, 0.316, 0.287, 0.267, 0.308, 0.316, 0.272, 0.289, 0.356, 0.296]}
+SERIES = [("Baseline", "#a8a69e"), ("DensePack 2.0.3", "#eb6834"), ("DensePack 2.0.3", "#f5a623")]
 # The models of each series, the second line of its legend entry. #f5a623 is DensePack's orange from its icon.
 MODELS = ["Opus 5.5", "Opus 5.5", "Opus 5.5 main + Sonnet 5.5 Subagent"]
 # The percentage inside a bar is white, or dark on a light bar.
@@ -148,7 +148,7 @@ def prices(bench):
 
 
 def table():
-    print("| Bench | Without DensePack | DensePack 2.0.2 | DensePack 2.0.2 with a Sonnet subagent |")
+    print("| Bench | Without DensePack | DensePack 2.0.3 | DensePack 2.0.3 with a Sonnet subagent |")
     print("| --- | --- | --- | --- |")
     for bench in RUNS:
         p = prices(bench)
@@ -214,7 +214,7 @@ def main():
     svg = ['<svg viewBox="-1 0 1074 %d" width="1074" height="%d" xmlns="http://www.w3.org/2000/svg" role="img" '
            'aria-labelledby="t d">' % (height, height),
            '<title id="t">Total conversation savings</title><desc id="d">The saving of one Claude Code session on Opus 5.5 '
-           'against the price without DensePack, with DensePack 2.0.2, and with DensePack 2.0.2 on an '
+           'against the price without DensePack, with DensePack 2.0.3, and with DensePack 2.0.3 on an '
            'Opus 5.5 main agent and a Sonnet 5.5 subagent. %s</desc>' % " ".join(desc),
            '<style>%s</style>' % css,
            '<rect x="-1" y="0" width="1074" height="%d" fill="#fcfcfb"/>' % height,

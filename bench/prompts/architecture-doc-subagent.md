@@ -5,4 +5,8 @@ tags: [bench]
 timeout_seconds: 3600
 ---
 
-The files in the current directory are the scripts of DensePack, a Claude Code plugin. I'm new to this codebase and there's no architecture doc yet, so please write ARCHITECTURE.md in this directory for onboarding. It should cover these hook scripts: bash_image.py, bootstrap.py, brief_pack.py, drop_read_gate.py, edit_gate.py, grep_gate.py, pointer.py, prompt_card.py, read_gate.py, read_image.py, session_end.py, source_gate.py, subagent_start.py and subagent_stop.py. The hooks.json that registers them is not in this folder, so the facts have to come from the scripts themselves. For each script, give the Claude Code hook event it runs on (and for a tool event, which tool or tools it handles), what it does in two or three sentences, and which other scripts of this folder it imports. Don't change any of the scripts. Use one Sonnet subagent to read the scripts and report these facts back to you, then write ARCHITECTURE.md yourself from its report.
+The files in the current directory are the .py files of DensePack, a Claude Code plugin. I'm new to this codebase and there's no architecture doc yet.
+
+Use one Sonnet subagent for this task. The subagent reads the hook scripts, the .py files that a Claude Code hook runs, writes ARCHITECTURE.md in this directory for onboarding, and then reports back to you that it is done.
+
+The doc covers every hook script in this directory. The hooks.json that registers them is not in this directory, so the facts have to come from the .py files themselves. For each hook script, the doc gives the Claude Code hook event it runs on (and for a tool event, which tool or tools it handles), what it does in two or three sentences, and which other .py files of this directory it imports. Don't change any of the files.

@@ -17,7 +17,10 @@ named file, and an Edit whose old_string is in the file more than once
 without replace_all. In Claude Code 2.1.280 to 2.1.295, Edit checked the
 old_string before the PreToolUse hooks ran and rejected the two kinds of
 call itself, so this gate never got such a call. In Claude Code 2.1.296 the
-hooks run first, and this gate blocks them with the exact lines. Those
+hooks run first, and this gate blocks them with the exact lines. Claude
+Code 2.1.300 checks first again and fires no PostToolUseFailure, so
+style_reminder.py sends the same lines on PostToolBatch through
+failed_edit_reasons(). Those
 Edits fail without DensePack too. HOW-IT-WORKS.md "The Edit check" has the
 details.
 
@@ -156,50 +159,71 @@ def main():
         if (event.get("tool_name") or "") != "Edit":
             return 0
 
-        tool_input = event.get("tool_input")
-        if not isinstance(tool_input, dict):
-            return 0
-
-        path = tool_input.get("file_path")
-        old = tool_input.get("old_string")
-        if not isinstance(path, str) or not isinstance(old, str) or not old:
-            return 0
-        if not os.path.isfile(path):
-            return 0
-
-        whole = text_of(path)
-        if whole is None:
-            return 0
-        # Claude Code's Edit matches a file with CRLF line ends as if they
-        # were LF, and the model sends old_string with LF. Without the same
-        # step, the gate denied every multi-line Edit on a CRLF file that Edit
-        # then made.
-        whole = whole.replace("\r\n", "\n")
-        old = old.replace("\r\n", "\n")
-
-        found = whole.count(old)
-        if found == 1:
-            return 0
-        if found > 1 and tool_input.get("replace_all"):
-            return 0
-
-        lines = lines_of(path)
-        if lines is None:
-            return 0
-
-        if found > 1:
-            at = copy_lines(whole, old)
-            shown = "\n".join(row(lines, number) for number in at[:CANDIDATES])
-            reason = MANY % (os.path.basename(path), found, shown)
-        else:
-            reason = report(path, lines, old)
-
-        emit({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                     "permissionDecision": "deny",
-                                     "permissionDecisionReason": reason}})
+        reason = edit_reason(event.get("tool_input"))
+        if reason:
+            emit({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                         "permissionDecision": "deny",
+                                         "permissionDecisionReason": reason}})
         return 0
     except Exception:  # noqa: BLE001
         return 0
+
+
+def failed_edit_reasons(event):
+    """Returns the exact-line reason for each Edit in a PostToolBatch event
+    that Claude Code rejected itself. Claude Code 2.1.300 rejects an Edit
+    whose old_string does not match before PreToolUse runs, and fires no
+    PostToolUseFailure, so style_reminder.py sends these on PostToolBatch."""
+    out = []
+    try:
+        for call in event.get("tool_calls") or []:
+            if call.get("tool_name") == "Edit" and "<tool_use_error>" in str(call.get("tool_response")):
+                reason = edit_reason(call.get("tool_input"))
+                if reason:
+                    out.append(reason)
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def edit_reason(tool_input):
+    """Returns why an Edit cannot work, with the exact lines of the file, or
+    None when it can or the gate cannot tell."""
+    if not isinstance(tool_input, dict):
+        return None
+
+    path = tool_input.get("file_path")
+    old = tool_input.get("old_string")
+    if not isinstance(path, str) or not isinstance(old, str) or not old:
+        return None
+    if not os.path.isfile(path):
+        return None
+
+    whole = text_of(path)
+    if whole is None:
+        return None
+    # Claude Code's Edit matches a file with CRLF line ends as if they
+    # were LF, and the model sends old_string with LF. Without the same
+    # step, the gate denied every multi-line Edit on a CRLF file that
+    # Edit then made.
+    whole = whole.replace("\r\n", "\n")
+    old = old.replace("\r\n", "\n")
+
+    found = whole.count(old)
+    if found == 1:
+        return None
+    if found > 1 and tool_input.get("replace_all"):
+        return None
+
+    lines = lines_of(path)
+    if lines is None:
+        return None
+
+    if found > 1:
+        at = copy_lines(whole, old)
+        shown = "\n".join(row(lines, number) for number in at[:CANDIDATES])
+        return MANY % (os.path.basename(path), found, shown)
+    return report(path, lines, old)
 
 
 if __name__ == "__main__":

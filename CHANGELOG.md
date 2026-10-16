@@ -6,6 +6,15 @@
 
 <br>
 
+## 2.0.3
+
+| Change | Before | Now |
+| --- | --- | --- |
+| Long file names in the key row | File names too long for the first row of the key were drawn over its last entries, such as "=same line". | Such names get a row of their own, because the name ties each page to its file and Bash pages to their text copy. The name and the line count keep a gap before them, the same as between entries. This comes from issue [#3](https://github.com/Fabian-Galvez/DensePack/issues/3) by [@wdadadsdsa](https://github.com/wdadadsdsa). |
+| Cyrillic and Greek look-alikes in searches | Models read Cyrillic and Greek letters in an image as the Latin letters they look like, so their search for ЕР-0042 looked for EP-0042 and found nothing. | DensePack saves these words when it draws Read and Bash text. Searches for the Latin spelling, with Grep or with grep, rg or Select-String in Bash, then match both spellings, such as `[EЕ][PР]-0042`. In tests, Sonnet 5.5 and Opus 5.5 found the entry with their first search in 4 of 4 runs. In auto and bypass modes the search changes before it runs, and other modes get one denial that gives the right pattern. This comes from issue [#4](https://github.com/Fabian-Galvez/DensePack/issues/4) by [@deny-atk](https://github.com/deny-atk). |
+| Files you keep as text | Only files with characters the font cannot draw, such as Chinese text, stayed text. | List files in `~/.claude/densepack-text-files.txt`, one pattern per line, such as `*.kt`. Reads of matching files stay text in every project. This comes from issue [#3](https://github.com/Fabian-Galvez/DensePack/issues/3) by [@wdadadsdsa](https://github.com/wdadadsdsa). |
+| Rejected Edits on Claude Code 2.1.300 | Claude Code 2.1.300 rejects an Edit whose old text is not in the file before any hook runs, so DensePack could not send the exact lines. | DensePack sends the exact lines right after the failed Edit. In a test with a Cyrillic line, Sonnet 5.5 needed 4 requests instead of 5. |
+
 ## 2.0.2
 
 | Change | Before | Now |
@@ -13,9 +22,9 @@
 | Rules in long sessions | Claude followed the rules of the session start note less as the session grew, because they sit far back. | One line of about 15 tokens before each model call points Claude back to those rules. It adds no API request. |
 | Writing rules | Replies often used "Label: text" lines, lists for most answers and a closing note. | Under the new rules, replies give the answer first and then stop. They use a colon only before a list, and lists only for steps or 3 to 5 items. The rule to fix a sentence by rewriting it has no step to read the paragraph again. With that step, Opus 5.5 used a median of 1,239 thinking tokens on Ponytail's `open-mandelbrot` task, against 269 with the rules before it. |
 | Instruction files | At each session start, DensePack converted `CLAUDE.md`, `AGENTS.md`, `.claude/rules/*.md`, your personal `~/.claude/CLAUDE.md` and the memory index into images on its own. | DensePack converts these files only when you run `/bakpack`. `/bakpack` with no folder converts this project and its memory index, and `/bakpack ~/.claude` converts your personal `CLAUDE.md`. Files that an older version converted stay images, and `/bak-off` turns them back into text. |
-| Why output stayed text | Reads and Bash outputs that stayed text because of an error or a missing library showed no reason. 2.0.1 sent Read errors to stderr only. | DensePack writes the reason to `.claude/densepack-vault/why-text.log` in the project. The log names the cause at the first Read, such as the Python 3.12 error of issue [#1](https://github.com/Fabian-Galvez/DensePack/issues/1). |
+| Why output stayed text | Reads and Bash outputs that stayed text because of an error or a missing library showed no reason. 2.0.1 sent Read errors to stderr only. | DensePack writes the reason to `.claude/densepack-vault/why-text.log` in the project. The log names the cause at the first Read, such as the Python 3.12 error of issue [#1](https://github.com/Fabian-Galvez/DensePack/issues/1) by [@wdadadsdsa](https://github.com/wdadadsdsa). |
 | `/densedoctor` | Checking an install took several manual steps. | `/densedoctor` checks Python, Git Bash on Windows, Pillow, FreeType, NumPy and the font, draws one test image and prints the last lines of the log. |
-| `/densetext` | Bash output from 400 characters, JSON output and short files became images. | `/densetext` keeps more as text, folds repeated output, and puts more IDs beside images as exact text. It is off by default, because it saves less, and `/densepack` turns it off. These ideas come from issue [#2](https://github.com/Fabian-Galvez/DensePack/issues/2). |
+| `/densetext` | Bash output from 400 characters, JSON output and short files became images. | `/densetext` keeps more as text, folds repeated output, and puts more IDs beside images as exact text. It is off by default, because it saves less, and `/densepack` turns it off. These ideas come from issue [#2](https://github.com/Fabian-Galvez/DensePack/issues/2) by [@wdadadsdsa](https://github.com/wdadadsdsa). |
 | Python install on Windows | The winget install ran inside the session start hook. On a slow connection, the 10-minute hook limit could cut it, and DensePack never tried again. | The install runs in a background process, and DensePack marks it as tried only when it ends. It leaves out Tcl/Tk and the Python test suite, which DensePack does not use. In Windows Sandbox, the Tcl/Tk step alone took over 10 minutes. |
 | Tests | None | `tests/test_densepack.py` checks it and the parts of `/densetext`. Run it with `python -m unittest discover tests`. |
 | Small project maps | The start note named an image of the project map, so the agent spent a Read on it, also for a map of 1 line. | When the map has under 400 characters, the same floor as Bash output, the start note contains it as text. On Ponytail's `scope-rename` task, the map has 226 characters. |
@@ -37,7 +46,7 @@
 | Failed Read packs | The Read stayed text and no error showed. | The Read still stays text, and the error goes to stderr. |
 | Saved Python path on Windows | When 2 sessions started at once, a temp file such as `python-path.1234` could stay in `~/.claude/densepack-state`. | DensePack deletes its temp file when the move fails. |
 
-The first 2 changes fix issue [#1](https://github.com/Fabian-Galvez/DensePack/issues/1).
+The first 2 changes fix issue [#1](https://github.com/Fabian-Galvez/DensePack/issues/1) by [@wdadadsdsa](https://github.com/wdadadsdsa).
 
 <br>
 

@@ -1590,6 +1590,26 @@ def project_dir():
     return fallback if fallback is not None else here
 
 
+def keeps_text(path):
+    """True when `path` matches a pattern in ~/.claude/densepack-text-files.txt,
+    one per line, such as *.kt or docs/*.md. Reads of such files stay text in
+    every project, the same way files the font cannot render do. Lines that
+    start with # are notes. Never raises."""
+    import fnmatch
+    try:
+        lines = (Path.home() / ".claude" / "densepack-text-files.txt").read_text(encoding="utf-8").splitlines()
+    except (OSError, RuntimeError, UnicodeDecodeError):
+        return False
+    full = str(path).replace("\\", "/")
+    name = full.rsplit("/", 1)[-1]
+    for line in lines:
+        pattern = line.strip()
+        if pattern and not pattern.startswith("#") and (
+                fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(full, "*/" + pattern.lstrip("/"))):
+            return True
+    return False
+
+
 def machine_state_dir():
     """Returns a folder outside the project for state that the plugin reads
     later as its own.
@@ -2338,6 +2358,40 @@ def why_text(where, reason, path=""):
             os.replace(str(log), str(log.with_name("why-text.old.log")))
         with open(str(log), "a", encoding="utf-8") as f:
             f.write("%s %s %s %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), where, reason, path))
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# Cyrillic and Greek letters that an image draws with the same shape as a
+# Latin letter. Models copy them from an image as the Latin letter.
+LOOK_ALIKE = dict(zip("АВЕКМНОРСТХаеорсухΑΒΕΖΗΙΚΜΝΟΡΤΥΧο",
+                      "ABEKMHOPCTXaeopcyxABEZHIKMNOPTYXo"))
+LOOK_ALIKE_MAX = 500
+
+
+def note_look_alikes(text):
+    """Saves each word of `text` made only of letters that look Latin in an
+    image, such as ЕР-0042, under its Latin twin EP-0042. grep_gate.py then
+    puts the real spelling into a Grep for the twin. Never raises."""
+    try:
+        if not any(c in LOOK_ALIKE for c in text):
+            return
+        words = set(re.findall(r"[\w-]+", text))
+        found = {}
+        for word in words:
+            twin = "".join(LOOK_ALIKE.get(c, c) for c in word)
+            # shortcut: words under 4 characters, such as OK, are skipped, because an
+            # English word often has the same shape. Replace if short words get misread.
+            if twin != word and twin.isascii() and len(twin) >= 4:
+                found.setdefault(twin, set()).add(word)
+        if not found:
+            return
+        path = tmp_dir() / "look-alikes.json"
+        saved = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        for twin, spellings in found.items():
+            saved[twin] = sorted(set(saved.pop(twin, [])) | spellings)
+        saved = dict(list(saved.items())[-LOOK_ALIKE_MAX:])
+        path.write_text(json.dumps(saved, ensure_ascii=False), encoding="utf-8")
     except Exception:  # noqa: BLE001
         pass
 
