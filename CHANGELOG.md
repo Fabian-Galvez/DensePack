@@ -6,6 +6,12 @@
 
 <br>
 
+## Unreleased
+
+| Change | Before | Now |
+| --- | --- | --- |
+| Look-alike characters | A model read Cyrillic and Greek letters, Unicode spaces, the minus sign and rare dashes in an image as their ASCII twins, so Cyrillic A became Latin A. | Bash output, Reads, subagent tasks and reports that hold them stay text, while en and em dashes still become images, and `why-text.log` names the reason. The `exacttext` setting is `on` by default. `off` turns the check off, and `strict` adds en and em dashes. |
+
 ## 2.0.3
 
 | Change | Before | Now |

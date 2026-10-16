@@ -82,7 +82,7 @@ import hashlib
 import sys
 
 from common import (actor_key, actor_reader, line_pull, disabled, emit,
-                    gets_images, keeps_text, may_rewrite, dense_text, no_metacharacters, note_look_alikes, read_event, sibling_image, tmp_dir,
+                    gets_images, keeps_text, may_rewrite, dense_text, exact_text_reason, no_metacharacters, note_look_alikes, read_event, sibling_image, tmp_dir,
                     turn_reads, vault_dir, why_text)
 
 # With the densetext setting, a file with fewer lines stays text, because Edit
@@ -995,7 +995,8 @@ def draws_on_read(path, event):
             return False
         if is_drop_folder(path) or is_scratch_or_temp(path, event):
             return False
-        if _drawable_text(path) is None:
+        drawable = _drawable_text(path)
+        if drawable is None or exact_text_reason(drawable[2]):
             return False
         from common import ensure_pillow
         return bool(ensure_pillow())
@@ -1099,6 +1100,9 @@ def route(event, prefetch=False, post=False):
             return stays_text("not text that DensePack draws, or over the size limit", path, logged)
         size, drawn_text, text = drawable
         note_look_alikes(text)
+        exact = exact_text_reason(text)
+        if exact:
+            return stays_text(exact, path, logged)
 
         # NO PRICE FLOOR HERE. See the module note above the imports. This
         # route pays no delivery fee, and no fixed character count marks

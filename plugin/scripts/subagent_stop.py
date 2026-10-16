@@ -71,8 +71,8 @@ from common import (CONTEXT_WHEN_UNKNOWN, OUT_OVER_WRITE, READ_CALL_OUTPUT_TOKEN
                     report_background_path, report_digest, report_pack_worth,
                     report_pointer, report_swap_path, stub_chars, stub_pointer,
                     write_report_swap,
-                    emit, ensure_pillow, project_dir, read_event, settings,
-                    tmp_dir)
+                    emit, ensure_pillow, exact_text_reason, project_dir,
+                    read_event, settings, tmp_dir, why_text)
 
 # Each pattern below matches one form of "nothing happened here". That is a
 # sentence about one agent's own scope that a lead can misread as a
@@ -356,6 +356,13 @@ def main():
     if not text.strip():
         manifest_write(dict(base, packed=False, reason="no prose report"))
         queue_text_row(base, "no prose report")
+        return 0
+
+    exact = exact_text_reason(text)
+    if exact:
+        why_text("report", exact)
+        manifest_write(dict(base, packed=False, reason=exact))
+        queue_text_row(base, exact, chars=len(text))
         return 0
 
     if not ensure_pillow():

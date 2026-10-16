@@ -2239,11 +2239,14 @@ SETTINGS_DEFAULTS = {"receipts": "quiet",
                      "maxpack": "on",
                      # densetext defaults to off. It sends more as text and lowers the savings.
                      "densetext": "off",
+                     # exacttext defaults to on. See exact_text_reason().
+                     "exacttext": "on",
                      "vault_mb": VAULT_CAP_MB}
 SETTINGS_ALLOWED = {"reader": ("auto", "fable", "opus", "sonnet"),
                     "stylecard": ("on", "off"),
                     "maxpack": ("on", "off"),
                     "densetext": ("on", "off"),
+                    "exacttext": ("on", "strict", "off"),
                     "receipts": ("default", "verbose", "light", "quiet"),
                     "totals": ("auto", "on", "off"),
                     "keep": ("off", "images", "reports", "both")}
@@ -2400,6 +2403,31 @@ def dense_text():
     """True when the densetext setting is on: more Bash output and short files
     stay text, and more IDs go beside the image as exact text."""
     return settings().get("densetext") == "on"
+
+
+# In an image a model reads these characters as their ASCII twins: Cyrillic
+# and Greek A, B, E, o, p, c, the spaces as a space, the dashes as "-".
+EXACT_TEXT_CHARS = (
+    ("Cyrillic letters", re.compile("[\u0400-\u052f]")),
+    ("Greek letters", re.compile("[\u0370-\u03ff]")),
+    ("Unicode spaces", re.compile("[\u00a0\u2000-\u200b\u202f\u2060\ufeff]")),
+    ("dash variants", re.compile("[\u2010-\u2012\u2212]")),
+)
+# En and em dashes count only with exacttext set to strict, because English
+# prose is full of them.
+STRICT_TEXT_CHARS = (("en and em dashes", re.compile("[\u2013\u2014]")),)
+
+
+def exact_text_reason(text):
+    """Returns why `text` must stay exact text, or None when an image is safe
+    or the exacttext setting is off."""
+    mode = settings().get("exacttext")
+    if mode == "off":
+        return None
+    for name, chars in EXACT_TEXT_CHARS + (STRICT_TEXT_CHARS if mode == "strict" else ()):
+        if chars.search(text):
+            return "holds %s that look like ASCII in an image" % name
+    return None
 
 
 def apply_dense_text():

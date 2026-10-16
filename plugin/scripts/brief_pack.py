@@ -62,12 +62,12 @@ from pathlib import Path
 
 from common import (READER_SIZES, agent_type_model, append_delegation,
                     append_queue, brief_chars, card_in_text, disabled, emit,
-                    ensure_pillow, event_reader, font_size, keep_copy,
+                    ensure_pillow, event_reader, exact_text_reason, font_size, keep_copy,
                     lead_model_name, may_rewrite, reader_gets_images,
                     reader_key_for_model, reader_override, read_event,
                     record_card,
                     resolved_reader, session_map_exists, settings,
-                    size_for_model, tmp_dir)
+                    size_for_model, tmp_dir, why_text)
 from subagent_stop import manifest_write
 
 # This file has no POINTER_TOKENS constant on purpose. The report side has
@@ -260,6 +260,10 @@ def main():
     # BRIEF_FLOOR, and a second pass then packs an image of a sentence about
     # an image.
     if brief.lstrip().startswith(POINTER_OPENING):
+        return passthrough()
+    exact = exact_text_reason(brief)
+    if exact:
+        why_text("brief", exact)
         return passthrough()
 
     # The swap below changes the call before it runs. It is for the modes

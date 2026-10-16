@@ -642,6 +642,8 @@ The hooks read the settings files again on each event. Changes apply at the next
 
 To keep chosen files as text in every project, list them in `~/.claude/densepack-text-files.txt`, one pattern per line, such as `*.kt` or `docs/*.md`. Reads of matching files stay text, the same way files with characters the font cannot draw do. Lines that start with `#` are notes.
 
+`exacttext` is a setting with the default `on`. Bash output, Reads, subagent tasks and reports that hold Cyrillic or Greek letters, Unicode spaces such as NBSP, or the minus sign and the dashes U+2010 to U+2012 stay text, because a model reads these characters in an image as their ASCII twins. Set `"exacttext": "off"` in `.claude/tmp/densepack-settings.json` to get images for them again. Set it to `"strict"` to keep text with en or em dashes as text too, such as unit numbers like `12345–A`.
+
 DensePack logs why a Read or a Bash output stayed text, such as an error, a missing library, the price check or a skipped folder. Each reason is one line in `.claude/densepack-vault/why-text.log` in the project.
 
 At 512 KB, the log moves to `why-text.old.log`. Output under 400 characters stays text by design and gets no line. `/densedoctor` prints the last 10 lines.
