@@ -1,4 +1,4 @@
-<!-- DensePack 2.0.3 -->
+<!-- DensePack 2.0.4 -->
 <p align="left">
   <img src="images/densepack-readme-banner.svg" alt="DensePack" />
 </p>

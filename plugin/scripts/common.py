@@ -2239,14 +2239,14 @@ SETTINGS_DEFAULTS = {"receipts": "quiet",
                      "maxpack": "on",
                      # densetext defaults to off. It sends more as text and lowers the savings.
                      "densetext": "off",
-                     # exacttext defaults to on. See exact_text_reason().
-                     "exacttext": "on",
+                     # exacttext defaults to lines. See exact_text_reason() and exact_lines_text().
+                     "exacttext": "lines",
                      "vault_mb": VAULT_CAP_MB}
 SETTINGS_ALLOWED = {"reader": ("auto", "fable", "opus", "sonnet"),
                     "stylecard": ("on", "off"),
                     "maxpack": ("on", "off"),
                     "densetext": ("on", "off"),
-                    "exacttext": ("on", "strict", "off"),
+                    "exacttext": ("on", "strict", "off", "lines"),
                     "receipts": ("default", "verbose", "light", "quiet"),
                     "totals": ("auto", "on", "off"),
                     "keep": ("off", "images", "reports", "both")}
@@ -2410,7 +2410,8 @@ def dense_text():
 EXACT_TEXT_CHARS = (
     ("Cyrillic letters", re.compile("[\u0400-\u052f]")),
     ("Greek letters", re.compile("[\u0370-\u03ff]")),
-    ("Unicode spaces", re.compile("[\u00a0\u2000-\u200b\u202f\u2060\ufeff]")),
+    # U+FEFF is left out, because many Windows files start with this BOM and it looks like nothing
+    ("Unicode spaces", re.compile("[\u00a0\u2000-\u200b\u202f\u2060]")),
     ("dash variants", re.compile("[\u2010-\u2012\u2212]")),
 )
 # En and em dashes count only with exacttext set to strict, because English
@@ -2428,6 +2429,22 @@ def exact_text_reason(text):
         if chars.search(text):
             return "holds %s that look like ASCII in an image" % name
     return None
+
+
+def exact_lines_text(text):
+    """The note with the exact text of each line of `text` that contains
+    EXACT_TEXT_CHARS, by line number, or "" when exacttext is not lines. The
+    Read price check keeps a file as text when this note costs more than the
+    image saves."""
+    if settings().get("exacttext") != "lines":
+        return ""
+    rows = [(n, line.rstrip("\r")) for n, line in enumerate(text.split("\n"), 1)
+            if any(chars.search(line) for _, chars in EXACT_TEXT_CHARS)]
+    if not rows:
+        return ""
+    return ("These lines hold Cyrillic, Greek, Unicode spaces or dashes that look like ASCII"
+            " in the image. Their exact text, by line number:\n"
+            + "\n".join("%d: %s" % row for row in rows))
 
 
 def apply_dense_text():

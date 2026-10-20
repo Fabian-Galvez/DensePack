@@ -6,18 +6,19 @@
 
 <br>
 
-## Unreleased
+## 2.0.4
 
 | Change | Before | Now |
 | --- | --- | --- |
-| Look-alike characters | A model read Cyrillic and Greek letters, Unicode spaces, the minus sign and rare dashes in an image as their ASCII twins, so Cyrillic A became Latin A. | Bash output, Reads, subagent tasks and reports that hold them stay text, while en and em dashes still become images, and `why-text.log` names the reason. The `exacttext` setting is `on` by default. `off` turns the check off, and `strict` adds en and em dashes. |
+| Look-alike characters | Sonnet sometimes read Cyrillic letters as their Latin twins in an image, so Cyrillic A became Latin A. | Whole-file Reads with Cyrillic letters still become images, and the lines with Cyrillic letters go next to the images as exact text. DensePack also checks for Greek letters, Unicode spaces, the minus sign and rare dashes. They have the same shapes as ASCII characters. Files that are mostly Cyrillic stay text. Bash output, Reads of some lines, subagent tasks and reports with these characters stay text. The reason goes in `why-text.log`. The `exacttext` setting is `lines` by default. `on` keeps all such Reads as text, `off` turns the check off, and `strict` also keeps en and em dashes as text. This comes from pull request [#5](https://github.com/Fabian-Galvez/DensePack/pull/5) by [@deny-atk](https://github.com/deny-atk). |
+| Long Markdown tables | Sonnet skipped some rows of 120-row Markdown tables in images. | Reads of files with a Markdown table of 10 or more rows stay text. |
 
 ## 2.0.3
 
 | Change | Before | Now |
 | --- | --- | --- |
 | Long file names in the key row | File names too long for the first row of the key were drawn over its last entries, such as "=same line". | Such names get a row of their own, because the name ties each page to its file and Bash pages to their text copy. The name and the line count keep a gap before them, the same as between entries. This comes from issue [#3](https://github.com/Fabian-Galvez/DensePack/issues/3) by [@wdadadsdsa](https://github.com/wdadadsdsa). |
-| Cyrillic and Greek look-alikes in searches | Models read Cyrillic and Greek letters in an image as the Latin letters they look like, so their search for ЕР-0042 looked for EP-0042 and found nothing. | DensePack saves these words when it draws Read and Bash text. Searches for the Latin spelling, with Grep or with grep, rg or Select-String in Bash, then match both spellings, such as `[EЕ][PР]-0042`. In tests, Sonnet 5.5 and Opus 5.5 found the entry with their first search in 4 of 4 runs. In auto and bypass modes the search changes before it runs, and other modes get one denial that gives the right pattern. This comes from issue [#4](https://github.com/Fabian-Galvez/DensePack/issues/4) by [@deny-atk](https://github.com/deny-atk). |
+| Cyrillic and Greek look-alikes in searches | Sonnet read Cyrillic letters as their Latin twins in an image. Its search for ЕР-0042 looked for EP-0042 and found nothing. | DensePack saves these words when it draws Read and Bash text. Searches for the Latin spelling, with Grep or with grep, rg or Select-String in Bash, then match both spellings, such as `[EЕ][PР]-0042`. In tests, Sonnet 5.5 and Opus 5.5 found the entry with their first search in 4 of 4 runs. In auto and bypass modes the search changes before it runs, and other modes get one denial that gives the right pattern. This comes from issue [#4](https://github.com/Fabian-Galvez/DensePack/issues/4) by [@deny-atk](https://github.com/deny-atk). |
 | Files you keep as text | Only files with characters the font cannot draw, such as Chinese text, stayed text. | List files in `~/.claude/densepack-text-files.txt`, one pattern per line, such as `*.kt`. Reads of matching files stay text in every project. This comes from issue [#3](https://github.com/Fabian-Galvez/DensePack/issues/3) by [@wdadadsdsa](https://github.com/wdadadsdsa). |
 | Rejected Edits on Claude Code 2.1.300 | Claude Code 2.1.300 rejects an Edit whose old text is not in the file before any hook runs, so DensePack could not send the exact lines. | DensePack sends the exact lines right after the failed Edit. In a test with a Cyrillic line, Sonnet 5.5 needed 4 requests instead of 5. |
 

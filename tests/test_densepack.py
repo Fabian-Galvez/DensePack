@@ -177,7 +177,8 @@ class ExactTextForLookAlikes(unittest.TestCase):
         with mock.patch.object(drop_read_gate, "gets_images", lambda event: True):
             self.assertIsNone(drop_read_gate.route(event, post=True))
             self.assertFalse(drop_read_gate.draws_on_read(path, event))
-        self.assertIn("read holds Cyrillic letters", self.log())
+        # With the default lines, the note of a file of Cyrillic lines costs more than its images save
+        self.assertIn("read price", self.log())
 
     def test_brief_and_report_with_cyrillic_stay_text(self):
         brief = {"tool_name": "Agent", "session_id": "s", "tool_input": {"prompt": self.CYRILLIC}}
@@ -203,6 +204,21 @@ class ExactTextForLookAlikes(unittest.TestCase):
     def test_setting_off_gives_images_again(self):
         common.write_settings({"exacttext": "off"})
         self.assertIsNone(common.exact_text_reason(self.CYRILLIC))
+
+    def test_long_markdown_table_stays_text(self):
+        rows = ["| n | code |", "|---|---|"] + ["| %d | EP-%04d |" % (n, n) for n in range(10)]
+        self.assertTrue(drop_read_gate.markdown_table(os.linesep.join(rows)))
+        self.assertFalse(drop_read_gate.markdown_table(os.linesep.join(rows[:-1])))
+
+    def test_utf8_bom_alone_keeps_images(self):
+        self.assertIsNone(common.exact_text_reason("\ufeffplain ASCII, as before\n"))
+
+    def test_lines_mode_notes_only_matching_lines(self):
+        common.write_settings({"exacttext": "lines"})
+        note = common.exact_lines_text("plain\n\u0412\u0430\u0448 EP-0042\nplain\n")
+        self.assertIn("2: \u0412\u0430\u0448 EP-0042", note)
+        self.assertNotIn("1: plain", note)
+        self.assertNotIn("\r", common.exact_lines_text("plain\r\n\u0412\u0430\u0448 EP-0042\r\n"))
 
     def test_strict_keeps_en_and_em_dashes_as_text(self):
         common.write_settings({"exacttext": "strict"})

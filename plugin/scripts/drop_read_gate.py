@@ -82,7 +82,7 @@ import hashlib
 import sys
 
 from common import (actor_key, actor_reader, line_pull, disabled, emit,
-                    gets_images, keeps_text, may_rewrite, dense_text, exact_text_reason, no_metacharacters, note_look_alikes, read_event, sibling_image, tmp_dir,
+                    gets_images, keeps_text, may_rewrite, dense_text, exact_text_reason, exact_lines_text, no_metacharacters, note_look_alikes, read_event, sibling_image, tmp_dir,
                     turn_reads, vault_dir, why_text)
 
 # With the densetext setting, a file with fewer lines stays text, because Edit
@@ -103,6 +103,21 @@ def short_file(path):
         return True
     except OSError:
         return False
+
+
+# Sonnet skipped rows of 120-row tables in images but never in text, so files
+# with a Markdown table this long stay text.
+# shortcut: 10 rows is a guess below the tested 120, measure smaller tables to tune it
+TABLE_TEXT_ROWS = 10
+
+
+def markdown_table(text):
+    """True when `text` contains a Markdown table with a header rule and at least
+    TABLE_TEXT_ROWS rows between pipes."""
+    lines = [line.strip() for line in text.splitlines()]
+    rows = sum(1 for line in lines if len(line) > 1 and line[0] == line[-1] == "|")
+    return rows >= TABLE_TEXT_ROWS + 2 and any(
+        "---" in line and set(line) <= set("|-: ") for line in lines)
 
 
 def stays_text(reason, path, logged):
@@ -996,7 +1011,7 @@ def draws_on_read(path, event):
         if is_drop_folder(path) or is_scratch_or_temp(path, event):
             return False
         drawable = _drawable_text(path)
-        if drawable is None or exact_text_reason(drawable[2]):
+        if drawable is None or exact_text_reason(drawable[2]) or markdown_table(drawable[2]):
             return False
         from common import ensure_pillow
         return bool(ensure_pillow())
@@ -1101,8 +1116,12 @@ def route(event, prefetch=False, post=False):
         size, drawn_text, text = drawable
         note_look_alikes(text)
         exact = exact_text_reason(text)
-        if exact:
+        lines_note = exact and exact_lines_text(text)
+        # shortcut: a Read of some lines stays text in lines mode, replace when _slice_image() carries the note
+        if exact and (not lines_note or tool_input.get("offset") or tool_input.get("limit")):
             return stays_text(exact, path, logged)
+        if markdown_table(text):
+            return stays_text("contains a Markdown table, and Sonnet skipped rows of 120-row tables in images", path, logged)
 
         # NO PRICE FLOOR HERE. See the module note above the imports. This
         # route pays no delivery fee, and no fixed character count marks
@@ -1133,6 +1152,8 @@ def route(event, prefetch=False, post=False):
                 return {"hookSpecificOutput": answer}
         image, patch_tokens, tags, drawn = draw_once(path, event)
         if image is not None:
+            if lines_note:
+                tags = (tags + "\n\n" if tags else "") + lines_note
             import densepack as dp
             text_tokens = round(size / dp.CHARS_PER_TOKEN)
             # The note ships in the same message as the picture, and it is
