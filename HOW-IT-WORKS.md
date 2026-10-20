@@ -642,7 +642,9 @@ The hooks read the settings files again on each event. Changes apply at the next
 
 To keep chosen files as text in every project, list them in `~/.claude/densepack-text-files.txt`, one pattern per line, such as `*.kt` or `docs/*.md`. Reads of matching files stay text, the same way files with characters the font cannot draw do. Lines that start with `#` are notes.
 
-`exacttext` is a setting with the default `on`. Bash output, Reads, subagent tasks and reports that hold Cyrillic or Greek letters, Unicode spaces such as NBSP, or the minus sign and the dashes U+2010 to U+2012 stay text, because a model reads these characters in an image as their ASCII twins. Set `"exacttext": "off"` in `.claude/tmp/densepack-settings.json` to get images for them again. Set it to `"strict"` to keep text with en or em dashes as text too, such as unit numbers like `12345–A`.
+Reads of files with a Markdown table of 10 or more rows stay text in all `exacttext` settings. Sonnet skipped some rows of 120-row tables in images.
+
+`exacttext` is a setting with the default `lines`. Sonnet sometimes reads Cyrillic letters as their Latin twins in an image. DensePack also checks for Greek letters, Unicode spaces such as NBSP, the minus sign and the dashes U+2010 to U+2012. They have the same shapes as ASCII characters. The `lines` setting still sends whole-file Reads with these characters as images. It adds the lines with these characters as exact text. If that text costs more than the images save, the file stays text. Bash output, Reads of some lines, subagent tasks and reports with these characters stay text. Set `"exacttext": "on"` to keep all such Reads as text too. Set `"exacttext": "off"` in `.claude/tmp/densepack-settings.json` to get images for them again. Set it to `"strict"` to keep text with en or em dashes as text too, such as unit numbers like `12345–A`.
 
 DensePack logs why a Read or a Bash output stayed text, such as an error, a missing library, the price check or a skipped folder. Each reason is one line in `.claude/densepack-vault/why-text.log` in the project.
 
@@ -650,13 +652,13 @@ At 512 KB, the log moves to `why-text.old.log`. Output under 400 characters stay
 
 To run a verb, open a terminal in the project folder, because each project has its own settings file. Then run the `dpctl.py` of the installed plugin with the verb and its value.
 
-- `2.0.3` in the path is the version of the plugin.
+- `2.0.4` in the path is the version of the plugin.
 - On Windows, run the line in PowerShell and type `python` in place of `python3`.
 
 This line shows a receipt table in the conversation.
 
 ```
-python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/2.0.3/scripts/dpctl.py receipts default
+python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/2.0.4/scripts/dpctl.py receipts default
 ```
 
 On Windows, write `py -3` in place of `python3`.
