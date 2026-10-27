@@ -6,6 +6,16 @@ Install steps, commands and benchmarks are in the full README at https://github.
 
 Claude Code needs `densepack:` before every command, such as `/densepack:helppack`. Cowork uses the short names, such as `/helppack`.
 
+## What DensePack changes in Claude Code
+
+DensePack changes how the agent works in each session where the plugin is on.
+
+- Its session start hook puts the writing rules in `rules/STYLE-RULES.md` and a map of your project in the agent's start note. Its hooks repeat a one-line reminder of the rules after each prompt and each batch of tool calls. The rules make the agent write shorter replies, docs and code. Subagents get the same rules. Edit `rules/STYLE-RULES.md` to change them, or delete it to stop the rules and the map.
+- It adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` to the `env` block of `~/.claude/settings.json`. This turns off an instruction from Claude Code to read files with `cat`, so the agent uses Read, which DensePack packs.
+- On Windows with Git for Windows, it also adds `"EMBEDDED_SEARCH_TOOLS": "1"` and `"CLAUDE_CODE_USE_POWERSHELL_TOOL": "0"`. They remove the Grep and Glob tools and run commands in Git Bash. The agent then searches with `grep` in Bash, so DensePack packs that output.
+
+The settings apply to all your projects from the next session. DensePack never changes a value that you set yourself. `/densepack:dense-remove` deletes the settings that DensePack added.
+
 ## What DensePack runs and downloads
 
 DensePack sends no file, text or image to an outside service. It uses the network only to download and install what it needs, once on each computer:
