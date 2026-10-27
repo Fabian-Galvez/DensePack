@@ -15,9 +15,10 @@
 #    one only after a test run succeeds. A real Store Python still works.
 #  - On macOS, /usr/bin/python3 is a stub when the Xcode Command Line Tools
 #    are absent. A run of it opens an install window.
-# The search covers the Homebrew folders after PATH, because the PATH of a
-# hook often lacks them. With no Python, this script exits 0 and prints
-# nothing. The SessionStart check in ensure_python.sh shows what to install.
+# The search covers the Homebrew folders and ~/.local/bin after PATH,
+# because the PATH of a hook often lacks them. With no Python, this script
+# exits 0 and prints nothing. The SessionStart check in ensure_python.sh
+# installs Python on macOS and shows what to install on Linux.
 
 set -f
 saved_ifs=$IFS
@@ -51,6 +52,19 @@ probe() {
 # DENSEPACK_FIND_PYTHON=1 is the mode that ensure_python.sh calls. In that
 # mode, the script prints the first Python 3.10 or newer and does not run a
 # script.
+#
+# On macOS, ensure_python.sh installs Python in the background while the first
+# session starts, and python-install-running marks that install. Hooks that
+# start during it wait for it, up to 45 seconds, and then read the saved path
+# below. The first session then packs, and no restart is needed. The limit
+# stays under the 60-second default timeout of a hook.
+if [ -z "${DENSEPACK_FIND_PYTHON:-}" ] && [ -n "${CLAUDE_PLUGIN_DATA:-}" ]; then
+    waited=0
+    while [ -f "$CLAUDE_PLUGIN_DATA/python-install-running" ] && [ "$waited" -lt 45 ]; do
+        sleep 1 2>/dev/null || /bin/sleep 1 || break
+        waited=$((waited + 1))
+    done
+fi
 if [ -z "${DENSEPACK_FIND_PYTHON:-}" ] && [ -n "${HOME:-}" ] \
         && [ -f "$HOME/.claude/densepack-state/python-path" ]; then
     IFS= read -r cached < "$HOME/.claude/densepack-state/python-path"
@@ -68,7 +82,12 @@ for pass in plain store; do
         IFS=:
         # One variable. The split on ":" then reaches the Homebrew folders
         # too. A literal after $PATH stays joined to the last entry of PATH.
-        search="$PATH:/opt/homebrew/bin:/usr/local/bin"
+        # ~/.local/bin contains the python3 of uv python install --default, and
+        # the Claude Code installer puts claude there. The Claude desktop app
+        # and a shell rc file that was never changed both start hooks with a
+        # PATH that lacks it. With no HOME, the entry is /.local/bin, which
+        # contains nothing.
+        search="$PATH:/opt/homebrew/bin:/usr/local/bin:${HOME:-}/.local/bin"
         for dir in $search; do
             IFS=$saved_ifs
             case "$dir" in

@@ -17,6 +17,7 @@ import common  # noqa: E402
 import drop_read_gate  # noqa: E402
 import edit_gate  # noqa: E402
 import grep_gate  # noqa: E402
+import pointer  # noqa: E402
 import source_gate  # noqa: E402
 import subagent_stop  # noqa: E402
 
@@ -223,6 +224,20 @@ class ExactTextForLookAlikes(unittest.TestCase):
     def test_strict_keeps_en_and_em_dashes_as_text(self):
         common.write_settings({"exacttext": "strict"})
         self.assertIn("en and em", common.exact_text_reason("unit 12345\u2013A"))
+
+    def test_relative_word_paths_are_found(self):
+        found = lambda resp: [m.group(1) for m in pointer.WORD_REL_IN_OUTPUT.finditer(str(resp))]
+        self.assertEqual(found({"filenames": ["docs/memo.docx"]}), ["docs/memo.docx"])
+        self.assertEqual(found({"stdout": "a.txt\n./old/Notes.DOC\n"}), ["./old/Notes.DOC"])
+        self.assertEqual(found({"stdout": "/home/u/docs/memo.docx"}), [])
+
+    def test_subagent_transcript_found_in_custom_config_dir(self):
+        with tempfile.TemporaryDirectory() as config:
+            sub = Path(config, "projects", "p", "s", "subagents")
+            sub.mkdir(parents=True)
+            (sub / "agent-abc.jsonl").write_text("")
+            with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": config}):
+                self.assertEqual(common.agent_transcript("abc"), sub / "agent-abc.jsonl")
 
 
 if __name__ == "__main__":

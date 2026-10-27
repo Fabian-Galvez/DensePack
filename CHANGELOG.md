@@ -6,6 +6,28 @@
 
 <br>
 
+## 2.0.5
+
+| Change | Before | Now |
+| --- | --- | --- |
+| Python on macOS | With no Python 3.10 or newer, DensePack showed the Homebrew and uv commands, and you ran them yourself. New Macs have no such Python, because `/usr/bin/python3` is 3.9 or a stub. | DensePack downloads uv in the background. uv downloads and installs Python 3.13 into the plugin's data folder, the same as winget on Windows. It needs no password and changes no PATH. It also downloads and installs Pillow, freetype-py and NumPy, and hooks wait for the install, so the first session packs. On an Intel Mac mini, the install took 8 to 39 seconds in tests, and the five-files-read bench saved 48.4% in its first session. |
+| `~/.local/bin` | The Claude desktop app and an unchanged `~/.zshrc` start hooks with a PATH that lacks `~/.local/bin`. DensePack then did not find the Python of `uv python install --default`. | DensePack looks in `~/.local/bin` after PATH and the Homebrew folders. |
+| macOS install steps | INSTALL.md named the Git step for Windows only. On a new Mac, `/plugin marketplace add` failed with "git is not installed on this Mac". | INSTALL.md and README.md name `xcode-select --install` before the plugin install. |
+| Cowork | INSTALL.md had no Cowork steps. | INSTALL.md and README.md show how to add the plugin in Cowork. Cowork uses the short command names, such as `/helppack`. Claude Code needs `densepack:` before every command, such as `/densepack:helppack`, and the docs now say so on each page that shows a command. |
+| Right-click tool on macOS | The Quick Action ran only `~/DensePack/tools/densepack.py` and the first `python3` on PATH. On a new Mac that was macOS's Python 3.9 or its install stub. | The Quick Action also finds the plugin's download, and it uses the plugin's Python and packages when they are there. It skips a Python older than 3.10. Tool-README.md and INSTALL.md name the Quick Actions menu and the steps to remove the tool. |
+| Word files in tool results | Word paths in a Bash, Glob or Grep result packed only when a subagent report was also waiting. The scan also missed relative paths such as `docs/memo.docx`. | The scan runs when a tool result names a .doc or .docx file, and relative paths without spaces pack too. |
+| Subagents with `CLAUDE_CONFIG_DIR` | DensePack looked for subagent transcripts only in `~/.claude/projects`. With `CLAUDE_CONFIG_DIR` set, it could not name the subagent's model, so subagents got text. In a test, the session cost $0.291 instead of $0.196. | DensePack looks in the folder that `CLAUDE_CONFIG_DIR` names, and subagents get images. The same test cost $0.201. |
+| Upgrade from 2.0.4 on macOS | On a Mac with no Python, 2.0.4 left a `python-install-tried` file after it showed the install commands. | That file no longer stops the uv install, so the Mac gets Python after the upgrade. |
+| Commands in Cowork | Cowork runs the commands with `CLAUDE_PLUGIN_ROOT` empty, so the commands could not find their scripts. | The commands find the plugin folder when `CLAUDE_PLUGIN_ROOT` is empty. |
+| Plugin folder | The `plugin` folder had no README or LICENSE. The Claude Directory needs both there. | The `plugin` folder has a README and a LICENSE. The README names what DensePack downloads and installs. The docs now say "downloads and installs" for Python, uv, Git for Windows and the packages. |
+| Benches on macOS | `bench/direct_pair.py` copied `~/.claude/.credentials.json`, which macOS does not have, because Claude Code keeps the login in the Keychain. | The bench uses `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` when that file is missing. BENCHMARKS.md has the steps. |
+
+Tests of 2.0.5 on 26 October 2026:
+
+- The Mac was an Intel Mac mini with macOS 14.8.9 and no Python 3.10 or newer. Its first Claude Code session downloaded and installed Python 3.13 with uv in 39 seconds and returned images. `/densepack:densedoctor` and the 23 unit tests passed there. Word files found with Glob and subagent Reads returned images.
+- In Cowork on Anthropic's cloud Linux, Reads, Bash output and subagents with and without a named model returned images. Word files found with Glob, `find` and `ls` packed. The Edit check and `/densedoctor` worked, and Grep results stayed text.
+- In Claude Code on Linux, a new install from a local marketplace returned images for Reads, Word files and subagents, also with `CLAUDE_CONFIG_DIR` set.
+
 ## 2.0.4
 
 | Change | Before | Now |

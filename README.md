@@ -1,4 +1,4 @@
-<!-- DensePack 2.0.4 -->
+<!-- DensePack 2.0.5 -->
 <p align="left">
   <img src="images/densepack-readme-banner.svg" alt="DensePack" />
 </p>
@@ -10,7 +10,7 @@ DensePack packs text into images that the agent reads accurately, including Bash
 </p>
 
 <p align="center">
-<sub>The DensePack plugin and the right-click tool render their images with FreeType and run on Windows, Linux and macOS. The tests ran on Windows and Linux.</sub>
+<sub>The DensePack plugin works in Claude Code and in Cowork. The plugin and the right-click tool render their images with FreeType and run on Windows, Linux and macOS. The benches ran on Windows and Linux, and the five-files-read bench also ran on macOS. The tests in `tests/` also pass on macOS 14 on an Intel Mac.</sub>
 </p>
 
 ---
@@ -94,7 +94,9 @@ Longer sessions save more, because Claude Code sends the whole conversation agai
 
 ## Install the plugin
 
-[INSTALL.md](INSTALL.md) has the steps for Windows, macOS and Linux.
+DensePack works in Claude Code and in Cowork. [INSTALL.md](INSTALL.md) has the steps for both, on Windows, macOS and Linux.
+
+In Claude Code, type these two commands:
 
 ```
 /plugin marketplace add Fabian-Galvez/DensePack
@@ -102,13 +104,15 @@ Longer sessions save more, because Claude Code sends the whole conversation agai
 ```
 <br>
 
-DensePack needs Python 3.10 or newer, and Bash.
+In Cowork, add the marketplace `Fabian-Galvez/DensePack` on claude.ai, in Customize, then Plugins, and then check that DensePack is on in Cowork. [Install in Cowork](INSTALL.md#install-in-cowork) has the steps.
+
+DensePack needs Python 3.10 or newer, and Bash. On macOS and Windows, DensePack downloads and installs Python when it is missing. On macOS, Claude Code needs the Xcode Command Line Tools to download the plugin with Git, so run `xcode-select --install` first.
 
 DensePack saves by packing what the agent reads and the output of its commands into images. Bash output packs whole, so DensePack runs Claude Code with Bash. On macOS, Linux and WSL, Claude Code already runs commands and searches in Bash.
 
 On Windows, Bash comes with Git for Windows:
 
-- Install Git for Windows before the plugin, because Claude Code downloads the plugin with Git. On the first run, DensePack installs Python when it is missing. [INSTALL.md](INSTALL.md) has the steps.
+- Install Git for Windows before the plugin, because Claude Code downloads the plugin with Git. On the first run, DensePack downloads and installs Python when it is missing. [INSTALL.md](INSTALL.md) has the steps.
 - With Git for Windows, DensePack adds these settings to `~/.claude/settings.json`. They take effect in your next session.
 
 ```json
@@ -124,7 +128,7 @@ On Windows, Bash comes with Git for Windows:
 - `CLAUDE_CODE_USE_POWERSHELL_TOOL` set to `0` turns off the PowerShell tool. Commands then run in Git Bash, where long output arrives as all its images in one result.
 - When DensePack cannot write `settings.json`, its start message shows the lines to add yourself. DensePack never changes a value that you set yourself.
 
-Use these steps to update DensePack.
+In Cowork, open DensePack in Customize, then Plugins, and select Check for updates. Use these steps to update DensePack in Claude Code.
 
 1. Run `claude plugin marketplace update densepack-marketplace` in a terminal.
 2. Run `claude plugin update densepack@densepack-marketplace`.
@@ -139,6 +143,8 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 DensePack packs instruction files, such as `CLAUDE.md`, into images only when you run `/bakpack`, not on its own. The originals stay next to their files as `<name>.bakpack`.
 
 Files that an older version converted on its own stay images, and `/bak-off` turns them back into text. See [How the conversion works](HOW-IT-WORKS.md#how-the-conversion-works).
+
+Claude Code needs `densepack:` before every command, such as `/densepack:helppack`. Cowork uses the names in this table.
 
 | Command             | What it does                                                                                                                                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -224,7 +230,7 @@ Files and Bash output over 1,000,000 bytes stay text, and so do empty files. Fil
 <details>
 <summary><strong>Is it safe?</strong></summary>
 
-Yes, DensePack sends no data to an outside service. It uses the internet only to install Python, Pillow, freetype-py and NumPy, and Git for Windows on Windows.
+Yes, DensePack sends no data to an outside service. It uses the internet only to download and install Python, Pillow, freetype-py and NumPy, Git for Windows on Windows and uv on macOS.
 
 - Claude Code sends the images to Anthropic, the same as text.
 - Converted instruction files keep their originals as `<name>.bakpack`. Run `/dense-remove` to restore the original files.
@@ -247,9 +253,10 @@ No, DensePack sends normal images through the Read and Bash tools of Claude Code
 <details>
 <summary><strong>What changes are made to my computer?</strong></summary>
 
-- On Windows with no Python 3.10 or newer, DensePack installs Python 3.13 with winget.
-- On Windows with no Git Bash, DensePack installs Git for Windows with winget, once on each computer.
-- DensePack installs Pillow, freetype-py and NumPy into its own folder. Your own Python does not change.
+- On Windows with no Python 3.10 or newer, DensePack downloads and installs Python 3.13 with winget.
+- On macOS with no Python 3.10 or newer, DensePack downloads uv and uses it to download and install Python 3.13 into its own data folder. It needs no password, and it changes no PATH and no shell file. The plugin uninstall deletes it.
+- On Windows with no Git Bash, DensePack downloads and installs Git for Windows with winget, once on each computer.
+- DensePack downloads and installs Pillow, freetype-py and NumPy into its own folder. Your own Python does not change.
 - On Windows with Git for Windows, DensePack adds `"EMBEDDED_SEARCH_TOOLS": "1"` and `"CLAUDE_CODE_USE_POWERSHELL_TOOL": "0"` to `~/.claude/settings.json`, so the agent uses Bash. See [Install the plugin](#install-the-plugin).
 - DensePack adds `"CLAUDE_CODE_THRIFTY_SONIC": "0"` to `~/.claude/settings.json` on every system. This setting turns off an instruction to read files with `cat`. The Claude Code harness adds that instruction for some accounts and models in auto and bypassPermissions mode, and a Read costs a little less than `cat`.
   - The setting is not in the Claude Code docs, so any Claude Code update can rename or remove it.
@@ -281,7 +288,7 @@ Yes, the bench scripts are in `bench/`, and the tasks are in `plugin/evals/`. [R
 
 | Part                 | What it does                                                                                                                                                           | Who it is for                                | Where to start                                                                                         |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Plugin**           | The plugin packs the files that the agent reads, Bash output, Word files and instruction files such as `CLAUDE.md`. It also packs the briefs and reports of subagents. | People who use Claude Code                   | [Install the plugin](#install-the-plugin)                                                              |
+| **Plugin**           | The plugin packs the files that the agent reads, Bash output, Word files and instruction files such as `CLAUDE.md`. It also packs the briefs and reports of subagents. | People who use Claude Code or Cowork                   | [Install the plugin](#install-the-plugin)                                                              |
 | **Right-click tool** | The right-click tool packs a file from your file manager or your shell on Windows, Linux and macOS.                                                                    | People who use an AI chat                    | [INSTALL.md](INSTALL.md#install-the-right-click-tool) and [tools/Tool-README.md](tools/Tool-README.md) |
 | **HTML app**         | The HTML app runs in your browser. Type or paste text and download or copy the image.                                                                                  | People who want one image without an install | [The HTML app](HOW-IT-WORKS.md#the-html-app) and [index.html](index.html)                              |
 
@@ -352,10 +359,12 @@ DensePack renders each character with [FreeType](https://freetype.org) and the [
 | [README.md](README.md)                             | What DensePack is, what it saves and how to install the plugin                                                        |
 | [CHANGELOG.md](CHANGELOG.md)                       | The changes in 2.0 and 1.3.4                                                                                        |
 | [HOW-IT-WORKS.md](HOW-IT-WORKS.md)                 | The swap, the packing, the image, the Edit check, Word files, the commands, the hooks and the scripts                 |
-| [INSTALL.md](INSTALL.md)                           | The install steps for Windows, macOS and Linux, the right-click tool, the HTML app and the removal steps              |
+| [INSTALL.md](INSTALL.md)                           | The install and removal steps for Claude Code and Cowork on Windows, macOS and Linux, the right-click tool and the HTML app              |
 | [BENCHMARKS.md](BENCHMARKS.md)                     | The benches, the prices and how Anthropic bills                                                                       |
 | [PLUGIN-FOLDERS-FILES.md](PLUGIN-FOLDERS-FILES.md) | The folders and working files that the plugin writes and the purpose of each one                                      |
 | [tools/Tool-README.md](tools/Tool-README.md)       | The right-click tool, its install, its use and the files it puts on your computer                                     |
-| [PRIVACY-POLICY.md](PRIVACY-POLICY.md)             | The privacy policy. DensePack sends no data to an external service and uses the network only to install what it needs |
+| [PRIVACY-POLICY.md](PRIVACY-POLICY.md)             | The privacy policy. DensePack sends no data to an external service and uses the network only to download and install what it needs |
 | [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)   | The font and the libraries that this project uses, with their licenses                                                |
 | [LICENSE](LICENSE)                                 | The MIT license                                                                                                       |
+| [plugin/README.md](plugin/README.md) | The short README in the plugin folder. It names what DensePack downloads and installs |
+| [plugin/LICENSE](plugin/LICENSE) | The MIT license, copied into the plugin folder |

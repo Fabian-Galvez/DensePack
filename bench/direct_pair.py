@@ -87,7 +87,14 @@ def run_side(side, args, case_dir, prompt, out):
     cwd, config = root / "home" / "cwd", root / "home" / ".claude"
     cwd.mkdir(parents=True)
     config.mkdir()
-    shutil.copy(Path.home() / ".claude" / ".credentials.json", config / ".credentials.json")
+    # On macOS the login is in the Keychain, not in this file. A token from
+    # claude setup-token in CLAUDE_CODE_OAUTH_TOKEN reaches the run instead.
+    creds = Path.home() / ".claude" / ".credentials.json"
+    if creds.is_file():
+        shutil.copy(creds, config / ".credentials.json")
+    elif not (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY")):
+        sys.exit("No Claude Code login to copy. On macOS, run claude setup-token "
+                 "and set CLAUDE_CODE_OAUTH_TOKEN to the token that it prints.")
     scaffold(case_dir, cwd)
     # The environment `claude plugin eval` gives its agent (Claude Code 2.1.296, function mp): its own home, temp
     # and config folders, no CLAUDE.md files, no nonessential traffic, no claude.ai MCP servers, no auto-update.

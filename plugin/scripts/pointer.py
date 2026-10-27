@@ -164,7 +164,7 @@ if __name__ == "__main__":
     # batch with a queue already pays that cost. The check must not skip a
     # real TaskStop call. That is the one failure that matters here.
     _TASK_STOP = '"TaskStop"' in _RAW_STDIN
-    if _DROP_HIT is None and _nothing_queued() and not _TASK_STOP:
+    if _DROP_HIT is None and _nothing_queued() and not _TASK_STOP and ".doc" not in _RAW_STDIN.lower():
         raise SystemExit(0)
 else:
     _DROP_HIT = None
@@ -265,6 +265,12 @@ def _drop_only_payload(drop_line):
 WORD_IN_OUTPUT = re.compile(
     r"""((?:[A-Za-z]:[\\/]|[\\/])[^"'<>|\r\n*?]*?\.docx?)\b""",
     re.IGNORECASE)
+# A path relative to the session folder, such as docs/memo.docx from Glob or
+# find. The text is a repr, so a line break shows as a backslash and n.
+# shortcut: no spaces and no backslashes in relative names, widen it if users hit that
+WORD_REL_IN_OUTPUT = re.compile(
+    r"""(?:^|(?<=[\s"'`(\[,=])|(?<=\\[nrt]))((?:\.\.?/)?[\w.-]+(?:/[\w.-]+)*\.docx?)\b""",
+    re.IGNORECASE)
 # Tools with output that can name a file on disk. Read is not in the list. A
 # Read of a Word file does not reach this hook. A Read of any other file names
 # no new path to scan.
@@ -316,11 +322,14 @@ def _word_rows(text, event, Path, prompt_card, dp, gate, pack_images):
     """The pack walk for word_pages_from_tool(). It is a separate function
     because one try in the caller then covers all of it."""
     rows, seen = [], set()
-    for match in WORD_IN_OUTPUT.finditer(text):
+    cwd = Path(event.get("cwd") or ".")
+    names = [m.group(1) for m in WORD_IN_OUTPUT.finditer(text)]
+    names += [m.group(1) for m in WORD_REL_IN_OUTPUT.finditer(text)]
+    for name in names:
         if len(rows) >= WORD_SCAN_MAX:
             break
         try:
-            path = Path((match.group(1) or "").strip())
+            path = cwd / (name or "").strip()
             if not path.is_file():
                 continue
             key = str(path.resolve()).lower()

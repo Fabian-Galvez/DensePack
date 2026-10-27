@@ -805,6 +805,11 @@ def gets_images(event):
     return lead_gets_images((event or {}).get("session_id"))
 
 
+def claude_dir():
+    """Claude Code's config folder, where it saves transcripts."""
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+
+
 def agent_meta_model(agent_id):
     """Returns the real model that Claude Code recorded for this agent id at
     spawn time. The function reads it from the agent's own
@@ -815,7 +820,7 @@ def agent_meta_model(agent_id):
     alone does not name the project that spawned the agent."""
     if not agent_id:
         return None
-    root = Path.home() / ".claude" / "projects"
+    root = claude_dir() / "projects"
     if not root.is_dir():
         return None
     try:
@@ -845,7 +850,7 @@ def agent_meta_fields(agent_id):
     """
     if not agent_id:
         return (None, None)
-    root = Path.home() / ".claude" / "projects"
+    root = claude_dir() / "projects"
     if not root.is_dir():
         return (None, None)
     try:
@@ -1011,7 +1016,7 @@ def agent_transcript_mtime(agent_id):
     """
     if not agent_id:
         return None
-    root = Path.home() / ".claude" / "projects"
+    root = claude_dir() / "projects"
     if not root.is_dir():
         return None
     try:
@@ -1051,7 +1056,7 @@ def last_touched_file(agent_id):
     """
     if not agent_id:
         return None, None
-    root = Path.home() / ".claude" / "projects"
+    root = claude_dir() / "projects"
     if not root.is_dir():
         return None, None
     path = None
@@ -1124,7 +1129,7 @@ def agent_transcript(agent_id):
     not name the project that spawned the agent."""
     if not agent_id:
         return None
-    root = Path.home() / ".claude" / "projects"
+    root = claude_dir() / "projects"
     if not root.is_dir():
         return None
     try:
@@ -1293,7 +1298,7 @@ def transcript_path(session_id):
     again. The case of the drive letter differs between the two, and a
     rebuilt name does not match.
     """
-    base = Path.home() / ".claude" / "projects"
+    base = claude_dir() / "projects"
     if not base.is_dir():
         return None
     wanted = str(session_id or "").strip()
@@ -1756,7 +1761,7 @@ def stopped_by_user(agent_id):
     it. A missing or unreadable file gives False, and the hook still
     reports a real silence.
     """
-    root = Path.home() / ".claude" / "projects"
+    root = claude_dir() / "projects"
     if not root.is_dir():
         return False
     try:
