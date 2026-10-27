@@ -444,7 +444,7 @@ _RENDERER_SIG = None
 # image cache key. Setting one never packs the instruction images again.
 NOT_PIXEL_SETTINGS = {"DENSEPACK_STYLE", "DENSEPACK_CODE_PX", "DENSEPACK_HELPER_MEMORY_MB",
                       "DENSEPACK_SERIAL_DRAW", "DENSEPACK_DASHBOARD_NETWORK", "DENSEPACK_ARENA",
-                      "DENSEPACK_ARENA_ROOT", "DENSEPACK_CONTEXT_TOKENS"}
+                      "DENSEPACK_ARENA_ROOT", "DENSEPACK_CONTEXT_SIZE"}
 
 
 def renderer_signature():
