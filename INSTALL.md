@@ -9,6 +9,8 @@
 
 ## Quick install
 
+DensePack works in Claude Code and in Cowork. This section is for Claude Code, and [Install in Cowork](#install-in-cowork) is for Cowork.
+
 If Claude Code already runs on your computer, type these two commands in Claude Code:
 
 ```
@@ -17,6 +19,12 @@ If Claude Code already runs on your computer, type these two commands in Claude 
 ```
 
 Then type `/exit` and start Claude Code again.
+
+On macOS without the Xcode Command Line Tools, the first command fails with "git is not installed on this Mac". Claude Code downloads the plugin with Git. New Macs do not have them. Run this command in Terminal and choose Install in the window that opens. The download takes several minutes. Then type the two commands again.
+
+```
+xcode-select --install
+```
 
 On Windows without Git, the first command fails, because Claude Code downloads the plugin with Git. Run these 2 commands in PowerShell instead. The first one installs Git.
 
@@ -31,7 +39,27 @@ claude plugin install densepack --marketplace Fabian-Galvez/DensePack
 ```
 
 <br>
-<sub>Type `/helppack`. When it prints the table of DensePack commands, the plugin is installed.</sub>
+<sub>Type `/densepack:helppack`. When it prints the table of DensePack commands, the plugin is installed. Claude Code needs `densepack:` before every DensePack command.</sub>
+
+<br>
+
+---
+
+<br>
+
+## Install in Cowork
+
+Cowork gets plugins from your claude.ai account, not from the `/plugin` command of Claude Code. You add DensePack to your account online, and then check it in Cowork.
+
+1. In your browser, open claude.ai, then Customize, then Plugins. In the Code tab of the Claude desktop app, the same page adds the plugin to Claude Code on that computer only, not to Cowork.
+2. Select Add, then Add marketplace, and enter `Fabian-Galvez/DensePack`.
+3. Add the densepack plugin from that marketplace, and turn it on.
+4. In the Claude desktop app, open Cowork, then Customize, then Plugins, and check that DensePack is on.
+5. Start a new Cowork task and type `/helppack`. When it prints the table of DensePack commands, the plugin is installed. If the commands do not show, start a new task, because Cowork loads plugins when a task starts.
+
+Cowork uses the short command names, such as `/densepack` and `/dense-off`. The hooks run in Cowork too, so reads and command output arrive as images, the same as in Claude Code.
+
+To get a new version, open the plugin in Customize, then Plugins, and select Check for updates. The plugin on your account also syncs to Claude Code when you sign in with the same account. When Claude Code also has DensePack from `/plugin install`, Claude Code uses that copy.
 
 <br>
 
@@ -41,9 +69,11 @@ claude plugin install densepack --marketplace Fabian-Galvez/DensePack
 
 ## What you need
 
-- Claude Pro, Max, Team, Enterprise or a Console account. The free claude.ai plan does not include Claude Code.
-- Linux and macOS: Python 3.10 or newer.
-- Windows: DensePack installs Python 3.13 when it is missing.
+- For Claude Code, Claude Pro, Max, Team, Enterprise or a Console account. The free claude.ai plan does not include Claude Code.
+- For Cowork, the Claude desktop app, signed in to the claude.ai account that has DensePack.
+- On Linux, you need Python 3.10 or newer.
+- On macOS and Windows, DensePack downloads and installs Python 3.13 when it is missing.
+- On macOS, you need the Xcode Command Line Tools, which bring Git. Claude Code downloads the plugin with Git. Run `xcode-select --install` in Terminal to install them. The Python of these tools is 3.9, which is too old for DensePack.
 - Windows: Git for Windows, which brings Bash. Claude Code downloads the plugin with Git, and DensePack runs Claude Code with Bash because that is how it saves. It sets the two settings that [Install the plugin](README.md#install-the-plugin) shows.
 
 - [Install walkthrough](#install-walkthrough)
@@ -58,11 +88,17 @@ claude plugin install densepack --marketplace Fabian-Galvez/DensePack
 
 ## Install walkthrough
 
+This walkthrough is for Claude Code. For Cowork, see [Install in Cowork](#install-in-cowork).
+
 <sub><strong>Windows: Git for Windows</strong>
 <br>
 Claude Code downloads the plugin with Git, so install Git before the plugin. In PowerShell, run `winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements`, or download Git from https://git-scm.com/downloads/win and install it with the default options.
 
 If your Git Bash setup needs a password when it first opens, such as an SSH key password, enter it before you start Claude Code. Otherwise each Bash command in Claude Code fails.</sub>
+
+<sub><strong>macOS: Xcode Command Line Tools</strong>
+<br>
+Claude Code downloads the plugin with Git, and a new Mac has no Git. In Terminal, run `xcode-select --install`, choose Install in the window that opens and wait for it to finish. `git --version` then prints a version. Homebrew installs these tools too.</sub>
 
 
 
@@ -113,7 +149,7 @@ mkdir ~/myproject && cd ~/myproject
 
 DensePack needs Python 3.10 or newer. It finds Python only by the names `python3`, `python` and `py`.
 
-<strong>Windows:</strong> When DensePack does not find Python 3.10 or newer, it installs Python 3.13 with winget in `%LOCALAPPDATA%\Programs\Python\Python313`. The install runs in the background, so a slow connection does not cut it off.
+<strong>Windows:</strong> When DensePack does not find Python 3.10 or newer, it downloads and installs Python 3.13 with winget in `%LOCALAPPDATA%\Programs\Python\Python313`. The install runs in the background, so a slow connection does not cut it off.
 
 The install leaves out Tcl/Tk (`tkinter`) and the Python test suite, which DensePack does not use. To add them later, open Settings, Apps, Python 3.13 and choose Modify.
 
@@ -131,10 +167,17 @@ claude
 Remove-Item $HOME\.claude\plugins\data\densepack-densepack-marketplace\python-install-tried
 ```
 
-<strong>macOS:</strong> When Python is missing, DensePack shows two ways to install it. Use one of them.
+<strong>macOS:</strong> When DensePack does not find Python 3.10 or newer, it downloads [uv](https://docs.astral.sh/uv) and uses it to download and install Python 3.13 in the background. It needs no password. It also downloads and installs Pillow, freetype-py and NumPy. On a Mac mini with an Intel processor and a home connection, the whole install took 8 to 39 seconds in tests.
 
-- Homebrew: install Homebrew from https://brew.sh and then run `brew install python`.
-- uv: install uv from https://docs.astral.sh/uv and then run `uv python install --default`. The `--default` option adds the name `python3`. Without `--default`, uv adds only a name with the version, such as `python3.13`.
+- uv and Python go into the data folder of the plugin, `~/.claude/plugins/data/densepack-densepack-marketplace`. DensePack does not change your PATH, your shell files, `~/.local/bin` or a Python that you installed.
+- The uv download is checked against its SHA-256 before it runs. DensePack deletes uv after the install.
+- DensePack starts packing in the same session when the install is done, with no restart. Hooks that start during the install wait for it, up to 45 seconds.
+- `/plugin uninstall densepack` deletes the data folder, and this Python with it.
+
+If the install fails, the start message names its log, `python-install.log` in the data folder. Then use one of these routes, or delete `python-install-tried` in the data folder to let DensePack try again.
+
+- To use Homebrew, install it from https://brew.sh and then run `brew install python`. The Homebrew installer asks for your password.
+- To use uv, install it from https://docs.astral.sh/uv and then run `uv python install --default`. The `--default` option adds the name `python3` in `~/.local/bin`. DensePack looks in that folder too, also when the Claude desktop app starts it with a PATH that lacks it.
 
 <strong>Linux:</strong> When Python is missing, DensePack shows the command that installs it.
 
@@ -152,13 +195,13 @@ sudo pacman -S python python-pip
 ```
 <strong>Other systems:</strong> Install Python 3.10 or newer with your package manager.
 
-On macOS and Linux, type `/exit` after the Python install and start `claude` again in your project folder. DensePack shows the install commands only in the first session. To see them again, delete `~/.claude/plugins/data/densepack-densepack-marketplace/python-install-tried`.
+On Linux, type `/exit` after the Python install and start `claude` again in your project folder. DensePack shows the install commands only in the first session. To see them again, delete `~/.claude/plugins/data/densepack-densepack-marketplace/python-install-tried`.
 
 <strong>Then, on each system:</strong>
 
-- DensePack installs Pillow, freetype-py and NumPy into its own folder.
+- DensePack downloads and installs Pillow, freetype-py and NumPy into its own folder.
 - If that install fails, DensePack shows a `pip` command at each session start. That command installs them into the Python that DensePack runs.
-- Type `/helppack`. When it prints the table of DensePack commands, the plugin is installed.
+- Type `/densepack:helppack`. When it prints the table of DensePack commands, the plugin is installed.
 
 <br>
 
@@ -168,19 +211,21 @@ On macOS and Linux, type `/exit` after the Python install and start `claude` aga
 
 ## Remove DensePack
 
+To remove DensePack from Cowork, open it on claude.ai in Customize, then Plugins, open its menu and select Remove. The steps below remove it from Claude Code.
+
 1. Start Claude Code in your project folder, not in the marketplace folder.
 ```
 claude
 ```
 2. Delete the DensePack files that the uninstall does not delete.
 ```
-/dense-remove
+/densepack:dense-remove
 ```
 3. Remove the plugin. The uninstall deletes the data folder of the plugin.
 ```
 /plugin uninstall densepack
 ```
-4. If you installed the right-click tool from this folder, uninstall it first, and copy out the `ctrl-shift-vault` and `ctrl-right_click-vault` folders that you want to keep. The next command deletes this folder. On Windows, double-click `tools\uninstall-densepack.bat`. On Linux, run `sh tools/uninstall-densepack.sh`.
+4. If you installed the right-click tool from this folder, uninstall it first, and copy out the `ctrl-shift-vault` and `ctrl-right_click-vault` folders that you want to keep. The next command deletes this folder. On Windows, double-click `tools\uninstall-densepack.bat`. On Linux, run `sh tools/uninstall-densepack.sh`. On macOS, delete `~/Library/Services/DensePack it.workflow`.
 5. Remove the downloaded copy of this repository.
 ```
 /plugin marketplace remove densepack-marketplace
@@ -229,7 +274,7 @@ Open the `tools` folder and start the installer.
 | Your computer | Start the installer                                                                                                                                               |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Windows       | Double-click `install-densepack.bat`                                                                                                                              |
-| macOS         | Double-click `DensePack it.workflow` and choose Install. The workflow runs `~/DensePack/tools/densepack.py`. If your copy is in another folder, open `~/Library/Services/DensePack it.workflow` in Automator, change the PACKER line to the full path of `tools/densepack.py`, and save. The workflow needs Python 3.10 or newer with Pillow, freetype-py and NumPy: run `brew install python`, then `python3 -m pip install --user --break-system-packages pillow freetype-py numpy` |
+| macOS         | Double-click `DensePack it.workflow` and choose Install. In Finder, right-click a file, then choose Quick Actions, then DensePack it. The workflow runs `tools/densepack.py` from `~/DensePack`, or else from the plugin's download in `~/.claude/plugins/marketplaces/densepack-marketplace`. When the plugin is installed and has run once, the workflow uses its Python and packages and needs no other install. Without the plugin, run `brew install python`, then `python3 -m pip install --user --break-system-packages pillow freetype-py numpy` |
 | Linux         | Open a terminal in that folder and run `sh install-densepack.sh`                                                                                                  |
 
 [tools/Tool-README.md](tools/Tool-README.md) has what each installer changes, the hotkeys and the steps to uninstall.

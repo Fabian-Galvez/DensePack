@@ -65,13 +65,20 @@
 # script densepack-file.sh. Finder passes each selected file as an argument.
 # The paths are in "$@".
 #
-# Edit the PACKER line to the full path of tools/densepack.py in your copy of
-# the DensePack repo. That one line is the only thing to change.
+# The script uses tools/densepack.py in ~/DensePack, or else in the copy of
+# the repo that the plugin install downloads. To use another copy, put the
+# full path of its tools/densepack.py in the PACKER line.
 #
 # The packer writes each image beside its source file, with the name
 # &lt;file&gt;.densepack-1.png. Windows and Linux write the same name.
 
-PACKER="$HOME/DensePack/tools/densepack.py"
+PACKER=""
+for p in "$HOME/DensePack/tools/densepack.py" \
+         "$HOME/.claude/plugins/marketplaces/densepack-marketplace/tools/densepack.py"; do
+  if [ -z "$PACKER" ] &amp;&amp; [ -f "$p" ]; then
+    PACKER="$p"
+  fi
+done
 
 # A Quick Action runs outside a login shell. Its PATH holds neither Homebrew
 # prefix. The next line adds the Apple silicon prefix first, then the Intel one.
@@ -86,13 +93,42 @@ alert() {
   /usr/bin/osascript -e "display notification \"$msg\" with title \"DensePack\""
 }
 
-PY=$(command -v python3 || command -v python || true)
+# The plugin saves the path of its Python and keeps Pillow, freetype-py and
+# NumPy in its own folder. When both are there, the script uses them, and
+# the Quick Action needs no install of its own.
+PY=""
+SAVED="$HOME/.claude/densepack-state/python-path"
+PYLIBS="$HOME/.claude/plugins/data/densepack-densepack-marketplace/pylibs"
+if [ -f "$SAVED" ] &amp;&amp; [ -d "$PYLIBS" ]; then
+  IFS= read -r PY &lt; "$SAVED"
+  if [ -x "$PY" ]; then
+    PYTHONPATH="$PYLIBS${PYTHONPATH:+:$PYTHONPATH}"
+    export PYTHONPATH
+  else
+    PY=""
+  fi
+fi
+# Otherwise the first python3 on PATH that is 3.10 or newer. Without the
+# Xcode Command Line Tools, /usr/bin/python3 is a stub that opens an install
+# window, so the search skips it then. With them, it is 3.9, which fails the
+# version test.
 if [ -z "$PY" ]; then
-  alert "Python 3 is not installed. Install it, then try again."
+  for c in $(which -a python3 2&gt;/dev/null); do
+    if [ "$c" = /usr/bin/python3 ] &amp;&amp; ! xcode-select -p &gt;/dev/null 2&gt;&amp;1; then
+      continue
+    fi
+    if "$c" -c 'import sys; sys.exit(sys.version_info &lt; (3, 10))' 2&gt;/dev/null; then
+      PY="$c"
+      break
+    fi
+  done
+fi
+if [ -z "$PY" ]; then
+  alert "DensePack found no Python 3.10 or newer. Install the DensePack plugin in Claude Code, or run brew install python, then try again."
   exit 1
 fi
-if [ ! -f "$PACKER" ]; then
-  alert "Cannot find densepack.py at $PACKER. Edit the PACKER line in this Quick Action."
+if [ -z "$PACKER" ]; then
+  alert "Cannot find tools/densepack.py in ~/DensePack or in the plugin download. Put its full path in the PACKER line of this Quick Action."
   exit 1
 fi
 

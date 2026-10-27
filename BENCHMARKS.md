@@ -187,7 +187,7 @@ The price of each run:
 
 These runs show what a Sonnet 5.5 main agent costs with DensePack, and that Sonnet reads the images correctly.
 
-Sonnet 5.5 reads DensePack images well enough for daily work, so it gets images by default. Once in a while it gets one fact wrong. In 10 code-trace runs with a Sonnet subagent on 15 October 2026, with DensePack 2.0.3 on Claude Code 2.1.300, 1 run reported that a 4-space file keeps its depth bands, while the code gives it one band color. Run `/max-off` to send Sonnet plain text, like Haiku. Run `/maxpack` to turn images back on for Sonnet.
+Sonnet 5.5 reads DensePack images well enough for daily work, so it gets images by default. Once in a while it gets one fact wrong. The test was 10 code-trace runs with a Sonnet subagent on 15 October 2026, with DensePack 2.0.3 on Claude Code 2.1.300. In 1 run, it reported that a 4-space file keeps its depth bands, while the code gives it one band color. Run `/max-off` to send Sonnet plain text, like Haiku. Run `/maxpack` to turn images back on for Sonnet. Claude Code needs `densepack:` before every command, such as `/densepack:max-off`.
 
 | Bench | Without DensePack | DensePack 2.0 |
 | --- | --- | --- |
@@ -261,7 +261,9 @@ Run this command in the repository folder for one run with DensePack:
 python bench/direct_pair.py five-files-read --model claude-opus-5-5 --warm --sides with --out bench-five-1
 ```
 
-- The script copies your Claude Code login from `~/.claude/.credentials.json`. On macOS, Claude Code keeps the login in the Keychain, so run the benches on Windows or Linux.
+- The script copies your Claude Code login from `~/.claude/.credentials.json`. On macOS, Claude Code keeps the login in the Keychain, and the script finds no file to copy. Run `claude setup-token` in Terminal, then `export CLAUDE_CODE_OAUTH_TOKEN=` followed by the token that it prints, and run the bench in that Terminal window.
+- On macOS, type `python3` in place of `python`, because macOS has no `python` command.
+- On 26 October 2026, the five-files-read eval ran on macOS 14 on an Intel Mac mini with no Python 3.10 or newer. The command was `claude plugin eval ./plugin --case five-files-read --runs 1 --model claude-opus-5-5 --scaffold --allow-tools Bash,Write,Edit`. With DensePack 2.0.5 the run cost $0.527, and without it $1.022, a saving of 48.4%. Both runs passed every check.
 
 - On Windows, add `--with-env EMBEDDED_SEARCH_TOOLS=1 --with-env CLAUDE_CODE_USE_POWERSHELL_TOOL=0`. The runs start in a new home folder, so the settings that DensePack writes to `~/.claude/settings.json` for later sessions never reach them. These two flags give the runs those settings.
 - The cases are `five-files-read`, `architecture-doc` and `code-trace` in `plugin/evals`. For read-in-full, add `--prompt-file bench/prompts/architecture-read-all.md` to `architecture-doc`. For the benches with a subagent, add `--prompt-file bench/prompts/<name>`: `five-files-read-subagent.md` with `five-files-read`, `architecture-doc-subagent.md` and `architecture-read-all-subagent.md` with `architecture-doc`, and `code-trace-subagent.md` with `code-trace`.
