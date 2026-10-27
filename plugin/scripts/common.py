@@ -3340,12 +3340,12 @@ CONTEXT_WHEN_UNKNOWN = 21684
 def context_tokens(session_id, tail_bytes=400000, path=None):
     """Returns the tokens that this session reads again on its next turn.
     That is the sum of input, cache read and cache write in the last
-    assistant usage. Returns 0 when unknown. DENSEPACK_CONTEXT_TOKENS in
+    assistant usage. Returns 0 when unknown. DENSEPACK_CONTEXT_SIZE in
     the environment sets the value directly. The test suites run the
     scripts with no transcript on disk, and a benchmark can fix the context
     that it measures at. path names another transcript to read, a
     subagent's own, in place of the session's."""
-    stated = os.environ.get("DENSEPACK_CONTEXT_TOKENS", "").strip()
+    stated = os.environ.get("DENSEPACK_CONTEXT_SIZE", "").strip()
     if stated.isdigit():
         return int(stated)
     path = path or transcript_path(session_id)
@@ -3411,7 +3411,7 @@ def read_turn_fee(session_id, actor=None):
     # the fee. actor is its agent id.
     path = agent_transcript(actor) if actor else None
     context = context_tokens(session_id, path=path)
-    if not context and not os.environ.get("DENSEPACK_CONTEXT_TOKENS", "").strip().isdigit():
+    if not context and not os.environ.get("DENSEPACK_CONTEXT_SIZE", "").strip().isdigit():
         context = CONTEXT_WHEN_UNKNOWN
     try:
         reader = actor_reader(actor) if actor else resolved_reader(session_id)
@@ -3489,7 +3489,7 @@ def report_pack_worth(text_tokens, lead_model, lead_session, agent_model=None,
     if saved_tokens <= 0:
         return False
     lead_ctx = context_tokens(lead_session)
-    if not lead_ctx and not os.environ.get("DENSEPACK_CONTEXT_TOKENS", "").strip().isdigit():
+    if not lead_ctx and not os.environ.get("DENSEPACK_CONTEXT_SIZE", "").strip().isdigit():
         lead_ctx = CONTEXT_WHEN_UNKNOWN
     turns = turns_so_far(lead_session)
     lead_read = read_rate(lead_model) * lead_in
@@ -3498,7 +3498,7 @@ def report_pack_worth(text_tokens, lead_model, lead_session, agent_model=None,
     if agent_turn:
         agent_in, agent_out = rates_for(agent_model or lead_model)
         agent_ctx = 0
-        if agent_transcript and not os.environ.get("DENSEPACK_CONTEXT_TOKENS", "").strip().isdigit():
+        if agent_transcript and not os.environ.get("DENSEPACK_CONTEXT_SIZE", "").strip().isdigit():
             agent_ctx = context_tokens(lead_session, path=Path(agent_transcript))
         agent_read = read_rate(agent_model or lead_model) * agent_in
         cost += (agent_ctx * agent_read + AGENT_REPLY_TOKENS * agent_out) / 1e6
