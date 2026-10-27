@@ -20,6 +20,7 @@
 | Upgrade from 2.0.4 on macOS | On a Mac with no Python, 2.0.4 left a `python-install-tried` file after it showed the install commands. | That file no longer stops the uv install, so the Mac gets Python after the upgrade. |
 | Commands in Cowork | Cowork runs the commands with `CLAUDE_PLUGIN_ROOT` empty, so the commands could not find their scripts. | The commands find the plugin folder when `CLAUDE_PLUGIN_ROOT` is empty. |
 | Plugin folder | The `plugin` folder had no README or LICENSE. The Claude Directory needs both there. | The `plugin` folder has a README and a LICENSE. The README names what DensePack downloads and installs. The docs now say "downloads and installs" for Python, uv, Git for Windows and the packages. |
+| Line endings | `.gitattributes` made Git change `.ps1`, `.bat` and `.cmd` files to CRLF on checkout. The Claude Directory scanner refuses every line-ending rule except `eol=lf`. | `.ps1` files use LF, which PowerShell reads. The repository stores the `.bat` files with CRLF, and Git leaves them as they are. |
 | Benches on macOS | `bench/direct_pair.py` copied `~/.claude/.credentials.json`, which macOS does not have, because Claude Code keeps the login in the Keychain. | The bench uses `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` when that file is missing. BENCHMARKS.md has the steps. |
 
 Tests of 2.0.5 on 26 October 2026:

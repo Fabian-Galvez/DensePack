@@ -7,14 +7,13 @@
 # The same script runs when you call a shell on it by hand. For that reason,
 # the fault appears only on a computer that clones the repository.
 #
-# Only the files that Windows runs keep CRLF. Git uses its own default for
-# all other files, and no committed file changes its line endings.
+# The Claude Directory scanner refuses any line-ending rule except eol=lf.
+# PowerShell reads LF scripts, so .ps1 files use LF too. The .bat files need
+# CRLF for cmd.exe, so the repository stores them with CRLF and the -text
+# rule at the end tells Git not to change them.
 
 *.sh text eol=lf
-
-*.ps1 text eol=crlf
-*.bat text eol=crlf
-*.cmd text eol=crlf
+*.ps1 text eol=lf
 
 # The eval suite keeps LF on each system. A Windows clone with CRLF would give
 # the agent different bytes than the published runs used.
@@ -22,3 +21,6 @@ plugin/evals/** text eol=lf
 
 *.ttf binary
 *.ttc binary
+
+*.bat -text
+*.cmd -text
