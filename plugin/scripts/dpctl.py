@@ -9,7 +9,7 @@ event, and a change applies from the next agent.
   python dpctl.py status
   python dpctl.py on                        /densepack: packing on, defaults back
   python dpctl.py off                       /dense-off: each hook stops
-  python dpctl.py remove                    /dense-remove: restore the converted
+  python dpctl.py remove                    /dense-remove: restore the packed
                                             instruction files and delete the
                                             DensePack files
   python dpctl.py bakpack [folder]          /bakpack: pack the instruction files of
@@ -20,6 +20,8 @@ event, and a change applies from the next agent.
                                             draw one test image
   python dpctl.py maxpack|maxoff            /maxpack and /max-off: Sonnet gets
                                             images or plain text
+  python dpctl.py stylepack|styleoff        /stylepack and /style-off: the writing
+                                            rules on or off
   python dpctl.py receipts quiet            the default, no receipt table (the
                                             table of what each image saved)
                                             in the reply
@@ -140,17 +142,19 @@ Only /dense-off stops them all.
 | The manifest | Each agent that finishes gets a row, packed or not |
 | The vault | DensePack copies each packed image and its text to .claude/densepack-vault, one folder per conversation. The copies stay when DensePack prunes .claude/tmp. When the vault is over 200 MB, DensePack deletes the oldest folders |
 | The spawn log | Each agent from the Agent tool also gets a row at its start, with the model that it runs on. The log changes nothing |
-| Instruction files as images | When you run /bakpack, DensePack converts the instruction files of the folder into short pointers to images, with the original text in <name>.bakpack. It is not automatic. Session start only keeps converted files up to date. /bak-off turns them back into text, also files that DensePack 2.0.1 or older converted on its own |
+| Instruction files as images | When you run /bakpack, DensePack renames each instruction file of the folder to <name>.bakpack and puts a short pointer to images in its place. It is not automatic. Session start only keeps packed files up to date. /bak-off puts the text back. It also works on files that DensePack 2.0.1 or older packed on its own |
 
 | Command | What it sets | Is this the default |
 | --- | --- | --- |
 | /densepack | It turns packing on and sets each setting below back to its default | Yes. This command is the reset |
 | /dense-off | It stops all DensePack hooks in this session | No |
-| /dense-remove | Restores each converted instruction file from its .bakpack and removes the settings that DensePack added. It also deletes the DensePack files that /plugin uninstall leaves. Run it before the uninstall | Sets nothing |
+| /dense-remove | Puts the text of each packed instruction file back from its .bakpack and removes the settings that DensePack added. It also deletes the DensePack files that /plugin uninstall leaves. Run it before the uninstall | Sets nothing |
 | /bakpack [folder] | Experimental: the benches did not run it, so it has not been thoroughly tested. With no folder, it packs the instruction files of this project and its memory index MEMORY.md. With a folder, it packs CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of that folder, and /bakpack ~/.claude packs your personal CLAUDE.md. Running it costs the agent no Read, because dpctl.py packs the files itself. The next session gets the images | Sets nothing |
 | /bak-off [folder] | Restores the original text from the .bakpack copies and deletes the images: with no folder, of this project and its memory index, and with ~/.claude, of your personal CLAUDE.md and every memory index | Sets nothing |
 | /maxpack | Sonnet gets images | Yes |
 | /max-off | Sonnet gets plain text | No |
+| /stylepack | The writing rules are on. It also prints them, so the agent reads them again mid-session | Yes |
+| /style-off | The reminder line stops now, and new subagents get no writing rules. From the next session, the start note keeps the map and the rules for finding and reading files, without the writing rules | No |
 | /densetext | Bash output under 15 lines and 2,000 characters, JSON output and files under 100 lines stay text. Repeated blocks of output fold to one copy, and more IDs and hashes go beside the image as exact text. More text costs more tokens, so the savings drop | No |
 | /densedoctor | It checks Python, Pillow, FreeType and NumPy, draws one test image and prints the last lines of .claude/densepack-vault/why-text.log, which names why each Read or output stayed text | Sets nothing |
 | /helppack | It prints this table | Sets nothing |
@@ -229,12 +233,12 @@ def status_line():
     tier = ""
     return ("DensePack: packing %s, reader %s (%d px, %s)%s, "
             "receipts %s, totals %s (%s)%s, keep %s, stylecard %s, "
-            "Sonnet images %s, densetext %s"
+            "Sonnet images %s, densetext %s, writing rules %s"
             % (packing, reader, CODE_PX, how, tier,
                current["receipts"], current["totals"],
                TOTALS_SAID[current["totals"]], quiet, keep,
                current.get("stylecard", "off"), current.get("maxpack", "on"),
-               current.get("densetext", "off")))
+               current.get("densetext", "off"), current.get("style", "on")))
 
 
 # The model that each reader profile names. A model id that contains the
@@ -311,8 +315,27 @@ def remove_everything():
     import json
     import shutil
     import tempfile
+    from common import bash_first_off, claude_dir, settings_label, through_link
     home = Path.home()
     removed = []
+    # The config folder of this session, and ~/.claude when CLAUDE_CONFIG_DIR
+    # moves it. DensePack 2.0.5 wrote its settings to ~/.claude/settings.json
+    # even then. A ~/.claude setup that still has DensePack installed is a
+    # second Claude Code setup, and the removal leaves it alone.
+    setups = [(claude_dir(), settings_label())]
+    if os.environ.get("CLAUDE_CONFIG_DIR") and os.path.abspath(str(claude_dir())) != os.path.abspath(str(home / ".claude")):
+        listed = home / ".claude" / "plugins" / "installed_plugins.json"
+        try:
+            installed = listed.is_file() and any(
+                str(k).startswith("densepack@") for k in json.loads(listed.read_text(encoding="utf-8")).get("plugins") or {})
+        except (OSError, ValueError, AttributeError):
+            installed = True
+        if not installed:
+            setups.append((home / ".claude", "~/.claude/settings.json"))
+    # Claude Code keeps .claude.json in CLAUDE_CONFIG_DIR when it is set, and in the home folder otherwise.
+    configs = [claude_dir() / ".claude.json" if os.environ.get("CLAUDE_CONFIG_DIR") else home / ".claude.json"]
+    if len(setups) > 1:
+        configs.append(home / ".claude.json")
 
     def drop(path):
         path = Path(path)
@@ -335,7 +358,7 @@ def remove_everything():
         for name in pack_instructions.restore_all():
             removed.append("the pointer in %s, original restored from its .bakpack" % name)
     except Exception as exc:  # noqa: BLE001
-        print("Could not restore the converted instruction files: %s" % exc)
+        print("Could not restore the packed instruction files: %s" % exc)
 
     for path in (home / ".claude" / "densepack-state", home / ".claude" / "densepack-cards",
                  home / ".claude" / "densepack-tracker.json", home / ".densepack"):
@@ -353,7 +376,8 @@ def remove_everything():
     # Each folder that has a conversation in Claude Code. Each transcript line
     # names its working folder in "cwd".
     projects = set()
-    for transcript in glob.glob(str(home / ".claude" / "projects" / "*" / "*.jsonl")):
+    transcripts = [t for folder, _ in setups for t in glob.glob(str(folder / "projects" / "*" / "*.jsonl"))]
+    for transcript in transcripts:
         try:
             with open(transcript, encoding="utf-8", errors="replace") as fh:
                 for line in fh:
@@ -366,30 +390,32 @@ def remove_everything():
             continue
     for project in sorted(projects):
         folder = Path(project) / ".claude"
-        drop(folder / "densepack-vault")
-        for pattern in ("densepack-*", ".densepack-*"):
-            for path in glob.glob(str(folder / "tmp" / pattern)):
+        # A cloned project can commit .claude or .claude/tmp as a link, and a delete through it reaches the link target.
+        paths = [folder / "densepack-vault"] + [Path(p) for pattern in ("densepack-*", ".densepack-*")
+                                                for p in glob.glob(str(folder / "tmp" / pattern))]
+        for path in paths:
+            if not through_link(project, path.parent):
                 drop(path)
 
-    config = home / ".claude.json"
-    try:
-        data = json.loads(config.read_text(encoding="utf-8"))
-        trusted = [key for key in (data.get("projects") or {})
-                   if key.replace("\\", "/").rstrip("/").endswith(
-                       "plugins/marketplaces/densepack-marketplace")]
-        if trusted:
-            for key in trusted:
-                del data["projects"][key]
-            part = config.with_name(config.name + ".densepack-part")
-            part.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            os.replace(str(part), str(config))
-            removed += ["the trust entry for " + key for key in trusted]
-    except (OSError, ValueError):
-        pass
+    for config in configs:
+        try:
+            data = json.loads(config.read_text(encoding="utf-8"))
+            trusted = [key for key in (data.get("projects") or {})
+                       if key.replace("\\", "/").rstrip("/").endswith(
+                           "plugins/marketplaces/densepack-marketplace")]
+            if trusted:
+                for key in trusted:
+                    del data["projects"][key]
+                part = config.with_name(config.name + ".densepack-part")
+                part.write_text(json.dumps(data, indent=2), encoding="utf-8")
+                os.replace(str(part), str(config))
+                removed += ["the trust entry for " + key for key in trusted]
+        except (OSError, ValueError):
+            pass
 
-    from common import bash_first_off
-    for key in bash_first_off(enable=False):
-        removed.append(key + " from ~/.claude/settings.json")
+    for folder, label in setups:
+        for key in bash_first_off(enable=False, folder=folder):
+            removed.append(key + " from " + label)
 
     print("DensePack removed %d items:" % len(removed))
     for item in removed:
@@ -471,6 +497,14 @@ def main(argv):
 
     elif verb in ("maxpack", "maxoff"):
         write_settings({"maxpack": "on" if verb == "maxpack" else "off"})
+
+    elif verb in ("stylepack", "styleoff"):
+        write_settings({"style": "on" if verb == "stylepack" else "off"})
+        if verb == "stylepack":
+            # The command output lands in the conversation, so the agent reads the rules again now.
+            from bootstrap import rules_text
+            print(rules_text() or "DensePack has no rules file, rules/STYLE-RULES.md is missing.")
+            print()
 
     elif verb == "off":
         session = caller_session()
@@ -598,7 +632,7 @@ def main(argv):
 
     else:
         print("unknown verb %r. Verbs: status, on, off, remove, bakpack, bakoff, maxpack, "
-              "maxoff, densetext, densedoctor, receipts, totals, keep, reader, stylecard, "
+              "maxoff, stylepack, styleoff, densetext, densedoctor, receipts, totals, keep, reader, stylecard, "
               "agents, vault, help" % verb)
         return 1
 

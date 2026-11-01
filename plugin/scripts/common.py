@@ -810,6 +810,12 @@ def claude_dir():
     return Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 
 
+def settings_label():
+    """The user settings file as messages name it: ~/.claude/settings.json,
+    or the full path when CLAUDE_CONFIG_DIR moves it."""
+    return str(claude_dir() / "settings.json") if os.environ.get("CLAUDE_CONFIG_DIR") else "~/.claude/settings.json"
+
+
 def agent_meta_model(agent_id):
     """Returns the real model that Claude Code recorded for this agent id at
     spawn time. The function reads it from the agent's own
@@ -2246,8 +2252,11 @@ SETTINGS_DEFAULTS = {"receipts": "quiet",
                      "densetext": "off",
                      # exacttext defaults to lines. See exact_text_reason() and exact_lines_text().
                      "exacttext": "lines",
+                     # style off drops the writing rules from the start note. See bootstrap.rules_text().
+                     "style": "on",
                      "vault_mb": VAULT_CAP_MB}
 SETTINGS_ALLOWED = {"reader": ("auto", "fable", "opus", "sonnet"),
+                    "style": ("on", "off"),
                     "stylecard": ("on", "off"),
                     "maxpack": ("on", "off"),
                     "densetext": ("on", "off"),
@@ -2554,7 +2563,7 @@ def windows_bash_keys_missing():
     import json
     env = {}
     try:
-        path = Path.home() / ".claude" / "settings.json"
+        path = claude_dir() / "settings.json"
         raw = path.read_bytes() if path.is_file() else b"{}"
         data = json.loads(raw.decode("utf-8-sig") or "{}")
         if isinstance(data, dict) and isinstance(data.get("env", {}), dict):
@@ -2564,17 +2573,18 @@ def windows_bash_keys_missing():
     return [k for k in WINDOWS_BASH_KEYS if k not in env and k not in os.environ]
 
 
-def bash_first_off(enable=True):
-    """Sets CLAUDE_CODE_THRIFTY_SONIC=0 in the env block of ~/.claude/settings.json. On Windows with Git Bash, it
+def bash_first_off(enable=True, folder=None):
+    """Sets CLAUDE_CODE_THRIFTY_SONIC=0 in the env block of settings.json in claude_dir(). On Windows with Git Bash, it
     also sets the keys of WINDOWS_BASH_KEYS. With enable=False, it removes each of these keys that still has
     DensePack's value. Returns the list of keys that it set or removed, empty when the file did not change.
+    `folder` names another Claude Code config folder than claude_dir().
 
     Auto mode and bypassPermissions mode inject a message that tells Claude to read files with cat, head or sed in
     Bash, and a Bash read costs a little more than a Read. CLAUDE_CODE_THRIFTY_SONIC=0 stops that message. Bash itself stays available.
     The function never changes a key that you set to another value. It leaves a file with a BOM alone, because
     Claude Code then ignores the whole file. It writes nothing when the file does not parse."""
     import json
-    path = Path.home() / ".claude" / "settings.json"
+    path = Path(folder or claude_dir()) / "settings.json"
     try:
         raw = path.read_bytes() if path.is_file() else b"{}"
         if raw.startswith(b"\xef\xbb\xbf"):
@@ -3053,7 +3063,7 @@ def ask_rule_names(tool, kind="ask"):
     the rule against a path. Any ask rule for the tool counts. A settings
     file that exists but does not parse also counts, because its rules are
     unknown. With kind="deny", the function checks the "deny" rules."""
-    files = [Path.home() / ".claude" / "settings.json"]
+    files = [claude_dir() / "settings.json"]
     try:
         root = project_dir()
         files += [root / ".claude" / "settings.json",
@@ -3337,6 +3347,12 @@ READ_CALL_OUTPUT_TOKENS = 150
 CONTEXT_WHEN_UNKNOWN = 21684
 
 
+def stated_context():
+    """DENSEPACK_CONTEXT_SIZE as a number, or None when it is unset."""
+    stated = os.environ.get("DENSEPACK_CONTEXT_SIZE", "").strip()
+    return int(stated) if stated.isdecimal() else None
+
+
 def context_tokens(session_id, tail_bytes=400000, path=None):
     """Returns the tokens that this session reads again on its next turn.
     That is the sum of input, cache read and cache write in the last
@@ -3345,9 +3361,9 @@ def context_tokens(session_id, tail_bytes=400000, path=None):
     scripts with no transcript on disk, and a benchmark can fix the context
     that it measures at. path names another transcript to read, a
     subagent's own, in place of the session's."""
-    stated = os.environ.get("DENSEPACK_CONTEXT_SIZE", "").strip()
-    if stated.isdigit():
-        return int(stated)
+    stated = stated_context()
+    if stated is not None:
+        return stated
     path = path or transcript_path(session_id)
     if path is None:
         return 0
@@ -3375,7 +3391,7 @@ def turns_so_far(session_id, tail_bytes=2000000, path=None):
     """Returns the count of assistant messages in this session's transcript
     so far, or 0 when unknown."""
     stated = os.environ.get("DENSEPACK_TURNS_SO_FAR", "").strip()
-    if stated.isdigit():
+    if stated.isdecimal():
         return int(stated)
     path = path or transcript_path(session_id)
     if path is None:
@@ -3411,7 +3427,7 @@ def read_turn_fee(session_id, actor=None):
     # the fee. actor is its agent id.
     path = agent_transcript(actor) if actor else None
     context = context_tokens(session_id, path=path)
-    if not context and not os.environ.get("DENSEPACK_CONTEXT_SIZE", "").strip().isdigit():
+    if not context and stated_context() is None:
         context = CONTEXT_WHEN_UNKNOWN
     try:
         reader = actor_reader(actor) if actor else resolved_reader(session_id)
@@ -3489,7 +3505,7 @@ def report_pack_worth(text_tokens, lead_model, lead_session, agent_model=None,
     if saved_tokens <= 0:
         return False
     lead_ctx = context_tokens(lead_session)
-    if not lead_ctx and not os.environ.get("DENSEPACK_CONTEXT_SIZE", "").strip().isdigit():
+    if not lead_ctx and stated_context() is None:
         lead_ctx = CONTEXT_WHEN_UNKNOWN
     turns = turns_so_far(lead_session)
     lead_read = read_rate(lead_model) * lead_in
@@ -3498,7 +3514,7 @@ def report_pack_worth(text_tokens, lead_model, lead_session, agent_model=None,
     if agent_turn:
         agent_in, agent_out = rates_for(agent_model or lead_model)
         agent_ctx = 0
-        if agent_transcript and not os.environ.get("DENSEPACK_CONTEXT_SIZE", "").strip().isdigit():
+        if agent_transcript and stated_context() is None:
             agent_ctx = context_tokens(lead_session, path=Path(agent_transcript))
         agent_read = read_rate(agent_model or lead_model) * agent_in
         cost += (agent_ctx * agent_read + AGENT_REPLY_TOKENS * agent_out) / 1e6

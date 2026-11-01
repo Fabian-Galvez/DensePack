@@ -6,6 +6,26 @@
 
 <br>
 
+## 2.0.6
+
+| Change | Before | Now |
+| --- | --- | --- |
+| Plugin description | The plugin manifest and the plugin README described only the image packing. | The manifest, the marketplace entry and the plugin README also describe the writing rules, the project map and the Claude Code settings that DensePack adds. The plugin README also has the steps to turn them off. |
+| `DENSEPACK_CONTEXT_SIZE` | Tests and benches set the context size with `DENSEPACK_CONTEXT_TOKENS`. | The setting is `DENSEPACK_CONTEXT_SIZE`, and its value is a number of tokens. |
+| Permission rules with `CLAUDE_CONFIG_DIR` | DensePack read "ask" and "deny" rules only from `~/.claude/settings.json`. With `CLAUDE_CONFIG_DIR` set, it missed the rules in that folder. In auto and bypassPermissions modes, a Word file that an "ask" rule names could then arrive as images without the prompt. | DensePack reads the rules from the folder that `CLAUDE_CONFIG_DIR` names, the same as Claude Code. In a test on Claude Code 2.1.314, DensePack now leaves that Word file Read unchanged. |
+| Settings with `CLAUDE_CONFIG_DIR` | DensePack wrote its Claude Code settings to `~/.claude/settings.json`, and `/densepack:dense-remove` removed them there. With `CLAUDE_CONFIG_DIR` set, Claude Code reads another file, so the settings did nothing. | DensePack writes and removes the settings in the `settings.json` of the folder that `CLAUDE_CONFIG_DIR` names. |
+| `/stylepack` and `/style-off` | The only way to stop the writing rules was to delete `rules/STYLE-RULES.md`, which also stopped the project map. | `/style-off` turns off the writing rules and the reminder line, and keeps packing, the map and the rules for finding and reading files. `/stylepack` turns the writing rules on again and prints them, so the agent reads them again mid-session. |
+| Messages about images | The note after a packed Read, the pointer in each packed instruction file, the `/bakpack` output and the `/helppack` table used the word "converted" for a packed file. | These messages now use "drew" or "packed", because DensePack draws the text as images and leaves the file as it is. |
+| `/densepack:dense-remove` with `CLAUDE_CONFIG_DIR` | Dense-remove looked for project vaults and the marketplace trust entry only under the home folder, so it left them when `CLAUDE_CONFIG_DIR` was set. | Dense-remove also finds the projects and the trust entry in the folder that `CLAUDE_CONFIG_DIR` names. It deletes the images and text copies in each project's `.claude/densepack-vault`. Dense-remove also deletes the settings that 2.0.5 wrote to `~/.claude/settings.json`, unless DensePack is also installed in that setup. |
+| `/bakpack` keeps the original file | `/bakpack` copied each file to `<name>.bakpack` and wrote the pointer over the original. | `/bakpack` renames each file to `<name>.bakpack`, so the `.bakpack` is your original file, and writes the pointer to a new file. |
+| `/densepack:dense-remove` and linked folders | Dense-remove deleted the `densepack-*` files in each project's `.claude/tmp`, also when `.claude` or `.claude/tmp` was a link to another folder. | Dense-remove skips a `.claude` or `.claude/tmp` folder that is a link, so it deletes only files inside the project. |
+
+<br>
+
+---
+
+<br>
+
 ## 2.0.5
 
 | Change | Before | Now |

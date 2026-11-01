@@ -34,7 +34,8 @@ def main():
         return 0
     if disabled(event.get("session_id")):
         return 0
-    parts = [LINE] if os.path.isfile(RULES_FILE) else []
+    from common import settings
+    parts = [LINE] if os.path.isfile(RULES_FILE) and settings().get("style") != "off" else []
     if name == "PostToolBatch" and any(c.get("tool_name") == "Edit" for c in event.get("tool_calls") or []):
         from edit_gate import failed_edit_reasons
         parts += failed_edit_reasons(event)

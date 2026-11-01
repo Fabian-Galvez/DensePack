@@ -185,7 +185,7 @@ _CARD_OPENING = (
     "To change a file that arrived as a picture, use Edit with the exact "
     "text you read off the picture, or Write with the whole new file. Both "
     "work. A .doc or .docx is the exception. Claude Code will not Read one, "
-    "and Edit and Write both refuse it. DensePack converts one to images for "
+    "and Edit and Write both refuse it. DensePack draws its text as images for "
     "you automatically. Read those images.")
 
 # The code scheme card holds only what the key row on image one does not

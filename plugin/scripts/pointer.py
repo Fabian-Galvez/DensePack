@@ -526,7 +526,7 @@ def later_images_note(src_name, folder, names, at=1, firsts=None, last=None):
     # next image. For the last image, it is the last line of the file.
     ends = [f - 1 for f in firsts[1:]] + [last if isinstance(last, int) else "end"]
     span = ", lines %d to %s" % (firsts[at - 1], ends[at - 1]) if firsts else ""
-    rows = ["DensePack plugin converted %s into %d png images in %s. This is "
+    rows = ["DensePack plugin drew the text of %s as %d png images in %s. This is "
             "image %d of %d, %s%s." % (src_name, total, folder, at, total,
                                        names[at - 1], span)]
     # The names that deliver_names() writes differ only in the image number.
@@ -992,7 +992,7 @@ def draw_drop_file(model, src_path, actor=None, name_stem=None, name=None, sourc
     # delete in a folder that it did not name as an attempt to redirect it.
     # The code cleans the image name. The source name is whatever the
     # project committed, and it never reaches the model as words.
-    line = "DensePack converted a file from the to-pack folder into %s." % image
+    line = "DensePack drew a file from the to-pack folder as %s." % image
     # Each page, not page one alone. A Read returns one file. Without this
     # row, the model sees only the first page of a long file, and the price
     # compares one page with the whole text. The Pages row names the other
@@ -1129,7 +1129,7 @@ def _set_aside(src_path, name):
     except OSError:
         return None
     # The file name is not in the line, because the project chose that name.
-    return ("DensePack could not convert a file from the to-pack folder. It is in "
+    return ("DensePack could not pack a file from the to-pack folder. It is in "
             ".claude/densepack-vault/not-converted/.")
 
 
@@ -1195,10 +1195,13 @@ def _packed_line(line, target):
     rows = [row for row in line.split("\n")
             if not row.startswith(("Tags: ", "Lines: "))]
     image = rows[0]
-    head = "DensePack converted a file from the to-pack folder into "
-    if image.startswith(head) and image.endswith("."):
-        image = image[len(head):-1]
-    first = ("DensePack converted a file from the to-pack folder into %s. "
+    # The second wording comes from sidecars that 2.0.5 and older wrote.
+    for head in ("DensePack drew a file from the to-pack folder as ",
+                 "DensePack converted a file from the to-pack folder into "):
+        if image.startswith(head) and image.endswith("."):
+            image = image[len(head):-1]
+            break
+    first = ("DensePack drew a file from the to-pack folder as %s. "
              "DensePack moved the file to %s, beside its images."
              % (image, target))
     if target.suffix.lower() in (".doc", ".docx"):

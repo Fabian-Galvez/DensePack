@@ -1,4 +1,4 @@
-<!-- DensePack 2.0.5 -->
+<!-- DensePack 2.0.6 -->
 <p align="left">
   <img src="images/densepack-readme-banner.svg" alt="DensePack" />
 </p>
@@ -108,7 +108,7 @@ In Cowork, add the marketplace `Fabian-Galvez/DensePack` on claude.ai, in Custom
 
 DensePack needs Python 3.10 or newer, and Bash. On macOS and Windows, DensePack downloads and installs Python when it is missing. On macOS, Claude Code needs the Xcode Command Line Tools to download the plugin with Git, so run `xcode-select --install` first.
 
-DensePack saves by packing what the agent reads and the output of its commands into images. Bash output packs whole, so DensePack runs Claude Code with Bash. On macOS, Linux and WSL, Claude Code already runs commands and searches in Bash.
+DensePack saves by packing what the agent reads and the output of its commands into images. The files that the agent opens stay as they are, and DensePack keeps their images and a copy of the exact text in `.claude/densepack-vault`. Bash output packs whole, so DensePack runs Claude Code with Bash. On macOS, Linux and WSL, Claude Code already runs commands and searches in Bash.
 
 On Windows, Bash comes with Git for Windows:
 
@@ -142,7 +142,7 @@ To remove DensePack, follow [Remove DensePack](INSTALL.md#remove-densepack) in I
 
 DensePack packs instruction files, such as `CLAUDE.md`, into images only when you run `/bakpack`, not on its own. The originals stay next to their files as `<name>.bakpack`.
 
-Files that an older version converted on its own stay images, and `/bak-off` turns them back into text. See [How the conversion works](HOW-IT-WORKS.md#how-the-conversion-works).
+Files that DensePack 2.0.1 or older packed on its own stay images until you run `/bak-off`, which puts their original text back. See [How /bakpack works](HOW-IT-WORKS.md#how-bakpack-works).
 
 Claude Code needs `densepack:` before every command, such as `/densepack:helppack`. Cowork uses the names in this table.
 
@@ -152,10 +152,12 @@ Claude Code needs `densepack:` before every command, such as `/densepack:helppac
 | `/dense-off`        | Stops all DensePack hooks in this session only. New sessions start with DensePack on                                                                                                                      |
 | `/maxpack`          | Sends images to Sonnet and is the default                                                                                                                                                                 |
 | `/max-off`          | Sends text to Sonnet                                                                                                                                                                                      |
+| `/stylepack`        | Turns the writing rules on, which is the default, and prints them so the agent reads them again mid-session |
+| `/style-off`        | Turns the writing rules off. The reminder line stops now, and new subagents get only the rules for finding and reading files. From the next session, the start note drops the writing rules. Packing, the project map and the rules for finding and reading files stay on |
 | `/densetext`         | Keeps more as text: Bash output under 15 lines and 2,000 characters, JSON output and files under 100 lines. Repeated output blocks fold to one copy, and more IDs go beside images as exact text. It sends more text, so it saves less. `/densepack` turns it off |
 | `/densedoctor`     | Checks Python, Pillow, FreeType and NumPy, draws one test image and prints the last lines of `.claude/densepack-vault/why-text.log`, which names why each Read or output stayed text |
 | `/helppack`         | Prints all commands                                                                                                                                                                                       |
-| `/dense-remove`     | Restores each converted instruction file and deletes the DensePack files. Run it before the uninstall. [Remove DensePack](INSTALL.md#remove-densepack) has the details                                    |
+| `/dense-remove`     | Puts the original text back in each packed instruction file and deletes the DensePack files. Run it before the uninstall. [Remove DensePack](INSTALL.md#remove-densepack) has the details                                    |
 | `/bakpack [folder]` | Experimental: the benches did not run it, so it has not been thoroughly tested. With no folder, it packs the instruction files of this project and its memory index `MEMORY.md`. With a folder, it packs the files of that folder, and `/bakpack ~/.claude` packs your personal `CLAUDE.md`. Each original stays as `<name>.bakpack`, and the next session gets the images. See [The slash commands](HOW-IT-WORKS.md#the-slash-commands) |
 | `/bak-off [folder]`  | Restores the original text and deletes the images. With no folder, it restores this project and its memory index. With `~/.claude`, it restores your personal `CLAUDE.md` and every memory index |
 <br>
@@ -233,7 +235,7 @@ Files and Bash output over 1,000,000 bytes stay text, and so do empty files. Fil
 Yes, DensePack sends no data to an outside service. It uses the internet only to download and install Python, Pillow, freetype-py and NumPy, Git for Windows on Windows and uv on macOS.
 
 - Claude Code sends the images to Anthropic, the same as text.
-- Converted instruction files keep their originals as `<name>.bakpack`. Run `/dense-remove` to restore the original files.
+- `/bakpack` keeps each instruction file, byte for byte, as `<name>.bakpack`. Run `/dense-remove` to put the original text back.
 
 </details>
 
@@ -320,7 +322,7 @@ DensePack saves the most in long sessions that read many whole files, such as an
 
 - Reads and Bash commands such as `cat` and `grep` return each page of their output as an image, all in one result.
 - Grep and Glob results stay text. On Windows, the settings in [Install the plugin](#install-the-plugin) make the agent search with Bash instead, as on macOS and Linux. The [savings above](#savings) are from runs with these settings.
-- DensePack converts instruction files such as `CLAUDE.md` only when you run `/bakpack`. Run it once in a project, and the next sessions there get the images. To keep any converted file as text again, run `/bak-off`.
+- DensePack packs instruction files such as `CLAUDE.md` only when you run `/bakpack`. Run it once in a project, and the next sessions there get the images. To get the text of a packed file back, run `/bak-off`.
 <br>
 
 ---

@@ -12,6 +12,6 @@ PowerShell: powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN
 
 Then print the command's output exactly as it returns it. Do not read the files in that folder.
 
-DensePack converts no file on its own. With no folder, this command packs CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of this project and its memory index MEMORY.md. With a folder, it packs those files of that folder. /bakpack ~/.claude packs your personal CLAUDE.md, which applies to every project.
+DensePack packs no file on its own. With no folder, this command packs CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of this project and its memory index MEMORY.md. With a folder, it packs those files of that folder. /bakpack ~/.claude packs your personal CLAUDE.md, which applies to every project.
 
-The next session gets the images. /bak-off turns the files back into text.
+The next session gets the images. /bak-off puts the original text back.

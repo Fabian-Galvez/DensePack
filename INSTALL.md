@@ -239,7 +239,7 @@ claude
 
 Plugins cannot run code during an uninstall. Claude Code deletes only the data folder of the plugin, `~/.claude/plugins/data/densepack-densepack-marketplace`. `/dense-remove` first undoes the changes that DensePack made.
 
-- It restores the original text of each converted `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/rules/*.md` and `MEMORY.md` from its `.bakpack`. Text that you added below the pointer stays at the end of the file. Then it deletes the `.bakpack` and the images of that file.
+- It puts back the original text of each packed `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/rules/*.md` and `MEMORY.md` from its `.bakpack`. Text that you added below the pointer stays at the end of the file. Then it deletes the `.bakpack` and the images of that file.
 - It removes `CLAUDE_CODE_THRIFTY_SONIC`, `EMBEDDED_SEARCH_TOOLS` and `CLAUDE_CODE_USE_POWERSHELL_TOOL` from the `env` block of `~/.claude/settings.json` when each still has the value that DensePack wrote.
 - It deletes `~/.claude/densepack-state`, `~/.claude/densepack-cards` and `~/.claude/densepack-tracker.json`.
 - It deletes the Python install markers in `~/.densepack`. In `%LOCALAPPDATA%\densepack`, it deletes only the files `python-install-tried`, `python-install-running` and `git-install-tried`, because the right-click tool keeps its own files in that folder.

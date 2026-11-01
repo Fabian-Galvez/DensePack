@@ -42,6 +42,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import sys
 from pathlib import Path
 
@@ -243,9 +244,9 @@ def split_pointer(text):
 
 def pointer_text(what, bak, images):
     rows = [OPEN,
-            "DensePack is on. It converted %s into %d image%s to save tokens."
+            "DensePack is on. It packed %s into %d image%s to save tokens."
             % (what, len(images), "" if len(images) == 1 else "s"),
-            "The images hold the exact text of %s, which DensePack keeps unchanged." % bak.name,
+            "The images contain the exact text of %s, which DensePack keeps unchanged." % bak.name,
             "Before any other work, read every image below with the Read tool, in order,"
             " and follow them as %s:" % what]
     rows += [str(p) for p in images]
@@ -320,11 +321,13 @@ def restore(path, state):
     is_pointer, added = split_pointer(current)
     if not is_pointer or not bak.is_file():
         return False
-    original = read(bak)
     if added:
-        original = joined(original, added)
-    write_text_atomic(path, original)
-    bak.unlink()
+        # The .bak goes only after the text with the added lines is safe in the file.
+        if not write_text_atomic(path, joined(read(bak), added)):
+            return False
+        bak.unlink()
+    else:
+        os.replace(str(bak), str(path))
     for image in (entry or {}).get("images", []):
         try:
             Path(image).unlink()
@@ -344,7 +347,7 @@ def convert_one(path, label, what, folder, reader, state, only_pointers=False):
     current = read(path)
     is_pointer, added = split_pointer(current)
     if not is_pointer and only_pointers:
-        return "kept as text, /bakpack converts it"
+        return "kept as text, /bakpack packs it"
     if is_pointer:
         if not bak.is_file():
             # The original is gone. Keep what you added and drop the pointer.
@@ -381,31 +384,40 @@ def convert_one(path, label, what, folder, reader, state, only_pointers=False):
         state.pop(str(path), None)
         return "kept as text, images cost more"
 
-    # The code copies the original to the .bak before the pointer replaces it.
+    # The original file moves to the .bak whole, and moves back when the pointer cannot be written.
     if not is_pointer:
         if bak.exists():
             keep_old_bak(bak)
-        import shutil
-        shutil.copyfile(str(path), str(bak))
-    elif added:
-        write_text_atomic(bak, original)
-    if current != pointer:
-        write_text_atomic(path, pointer)
+        os.replace(str(path), str(bak))
+        if not write_text_atomic(path, pointer):
+            os.replace(str(bak), str(path))
+            return "failed: could not write the pointer, the file stays text"
+        # A read-only original keeps its flag through the rename, and Windows then refuses later writes to the .bak.
+        if os.name == "nt" and not bak.is_symlink():
+            try:
+                os.chmod(str(bak), stat.S_IREAD | stat.S_IWRITE)
+            except OSError:
+                pass
+    else:
+        # Lines added below the pointer stay in the file until they reach the .bak.
+        if added and not write_text_atomic(bak, original):
+            return "failed: could not write %s" % bak.name
+        if current != pointer:
+            write_text_atomic(path, pointer)
     state[str(path)] = {"digest": digest, "reader": reader, "images": [str(p) for p in images],
                         "cost": cost, "text_tokens": round(text_tokens(plain(original))), "label": label}
     return "%s, %d images, %d image tokens for %d text tokens" % (
-        "pointer" if is_pointer else "converted", len(images), cost, round(text_tokens(plain(original))))
+        "pointer" if is_pointer else "packed", len(images), cost, round(text_tokens(plain(original))))
 
 
 def converted_note(log):
     """Return one line for the screen when a pack converted a file."""
-    names = [name for name, result in log if result.startswith("converted")]
+    names = [name for name, result in log if result.startswith("packed")]
     if not names:
         return None
-    return ("DensePack converted %s into images behind a short pointer, to save tokens on each call. "
-            "Each original is unchanged beside it as <name>.bakpack. A session that starts "
-            "after the conversion loads the pointer and the images. /dense-remove restores the "
-            "originals." % ", ".join(names))
+    return ("DensePack packed %s into images behind a short pointer, to save tokens on each call. "
+            "The originals stay unchanged beside them as <name>.bakpack. The next session "
+            "loads the pointer and the images. /dense-remove puts the original text back." % ", ".join(names))
 
 
 # The files of the pack that session start runs in its own process. They are

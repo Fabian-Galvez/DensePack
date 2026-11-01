@@ -374,7 +374,7 @@ _RENDERER_SIG = None
 # image cache key. Setting one never packs the instruction images again.
 NOT_PIXEL_SETTINGS = {"DENSEPACK_STYLE", "DENSEPACK_CODE_PX", "DENSEPACK_HELPER_MEMORY_MB",
                       "DENSEPACK_SERIAL_DRAW", "DENSEPACK_DASHBOARD_NETWORK", "DENSEPACK_ARENA",
-                      "DENSEPACK_ARENA_ROOT", "DENSEPACK_CONTEXT_SIZE"}
+                      "DENSEPACK_ARENA_ROOT", "DENSEPACK_CONTEXT_SIZE", "DENSEPACK_TURNS_SO_FAR"}
 
 
 def renderer_signature():
@@ -639,8 +639,20 @@ def rules_text():
     if not os.path.isfile(RULES_TEXT):
         return None
     with open(RULES_TEXT, encoding="utf-8") as f:
-        return ("DENSEPACK RULES ACTIVE. Follow these rules for all code, tests and replies until the "
-                "session ends.\n\n" + f.read().strip())
+        text = f.read().strip()
+    from common import settings
+    if settings().get("style") == "off":
+        # /style-off drops the writing rules and keeps the section on finding and reading
+        # files, which works with the map and sets how many requests a task takes.
+        import re
+        part = re.search(r"^## Work in few turns\n.*?(?=^## |\Z)", text, re.S | re.M)
+        if not part:
+            # An edited rules file without this section still gets the project map from rules_line().
+            return ""
+        return ("DENSEPACK RULES ACTIVE. Follow these rules for finding and reading files until the "
+                "session ends.\n\n" + part.group(0).strip())
+    return ("DENSEPACK RULES ACTIVE. Follow these rules for all code, tests and replies until the "
+            "session ends.\n\n" + text)
 
 
 def rules_line(cwd=None):
@@ -650,8 +662,9 @@ def rules_line(cwd=None):
     if text is None:
         return None
     # Only the lead gets this line: subagent_start.py gives each subagent the same rules.
-    text += ("\n\nEach subagent gets these same rules from DensePack when it starts, so a subagent's task "
-             "does not need to repeat them.")
+    if text:
+        text += ("\n\nSubagents get these same rules from DensePack when they start, so a subagent's task "
+                 "does not need to repeat them.")
     import projectmap
     folder_map = projectmap.build(cwd or os.getcwd())
     if not folder_map:
@@ -660,10 +673,10 @@ def rules_line(cwd=None):
     # Under the Bash floor, the text costs less than the image and the Read that gets it.
     image = map_image(folder_map) if len(folder_map) >= MIN_CHARS else None
     if image is None:
-        return text + "\n\n" + folder_map
-    return text + ("\n\nPROJECT MAP: the image %s lists each folder of this project, its source and config files, "
-                   "and the names each file defines. Read it with the Read tool in your first turn, before any "
-                   "other command." % image)
+        return (text + "\n\n" + folder_map).strip()
+    return (text + ("\n\nPROJECT MAP: the image %s lists each folder of this project, its source and config files, "
+                    "and the names each file defines. Read it with the Read tool in your first turn, before any "
+                    "other command." % image)).strip()
 
 
 def map_image(folder_map):
@@ -703,7 +716,7 @@ def lead_reads_images(model):
 BASH_FIRST_NOTE = (
     "DensePack set CLAUDE_CODE_THRIFTY_SONIC to 0 in ~/.claude/settings.json. "
     "Auto mode then stops telling Claude to read files with Bash. The setting "
-    "applies from your next session. DensePack converts Bash and PowerShell "
+    "applies from your next session. DensePack packs Bash and PowerShell "
     "output of 400 characters or more, but a shell read still costs a little "
     "more than a Read.")
 WINDOWS_BASH_NOTE = (
@@ -715,14 +728,15 @@ WINDOWS_BASH_NOTE = (
 def deliver_context(pillow_ok, model, bash_first_set=False, packed_note=None, cwd=None):
     parts = []
     shown = []
+    from common import settings_label
     if bash_first_set and "CLAUDE_CODE_THRIFTY_SONIC" in bash_first_set:
-        shown.append(BASH_FIRST_NOTE)
+        shown.append(BASH_FIRST_NOTE.replace("~/.claude/settings.json", settings_label()))
     if bash_first_set and "EMBEDDED_SEARCH_TOOLS" in bash_first_set:
-        shown.append(WINDOWS_BASH_NOTE)
+        shown.append(WINDOWS_BASH_NOTE.replace("~/.claude/settings.json", settings_label()))
     from common import windows_bash_keys_missing, WINDOWS_BASH_KEYS
     missing = windows_bash_keys_missing()
     if missing:
-        shown.append("DensePack could not write ~/.claude/settings.json. Add these lines to its \"env\" block, "
+        shown.append("DensePack could not write " + settings_label() + ". Add these lines to its \"env\" block, "
                      "then restart Claude Code: " + ", ".join('"%s": "%s"' % (k, WINDOWS_BASH_KEYS[k]) for k in missing)
                      + ". With them, Claude Code runs commands and searches in Git Bash, and DensePack packs "
                      "all of that output.")
