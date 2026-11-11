@@ -104,7 +104,7 @@ In Claude Code, type these two commands:
 ```
 <br>
 
-In Cowork, add the marketplace `Fabian-Galvez/DensePack` on claude.ai, in Customize, then Plugins, and then check that DensePack is on in Cowork. [Install in Cowork](INSTALL.md#install-in-cowork) has the steps.
+In Cowork, add the marketplace `Fabian-Galvez/DensePack` on claude.ai in your browser, in Customize, then Plugins. Then add the DensePack plugin from Discover, and quit and reopen the Claude desktop app. [Install in Cowork](INSTALL.md#install-in-cowork) has the steps.
 
 DensePack needs Python 3.10 or newer, and Bash. On macOS and Windows, DensePack downloads and installs Python when it is missing. On macOS, Claude Code needs the Xcode Command Line Tools to download the plugin with Git, so run `xcode-select --install` first.
 

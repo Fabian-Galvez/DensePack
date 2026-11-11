@@ -49,17 +49,66 @@ claude plugin install densepack --marketplace Fabian-Galvez/DensePack
 
 ## Install in Cowork
 
-Cowork gets plugins from your claude.ai account, not from the `/plugin` command of Claude Code. You add DensePack to your account online, and then check it in Cowork.
+Cowork gets plugins from your claude.ai account, not from the `/plugin` command of Claude Code. You add DensePack in your browser, then restart the Claude desktop app. You need no terminal, and on Windows you need no Git or Python first.
 
-1. In your browser, open claude.ai, then Customize, then Plugins. In the Code tab of the Claude desktop app, the same page adds the plugin to Claude Code on that computer only, not to Cowork.
-2. Select Add, then Add marketplace, and enter `Fabian-Galvez/DensePack`.
-3. Add the densepack plugin from that marketplace, and turn it on.
-4. In the Claude desktop app, open Cowork, then Customize, then Plugins, and check that DensePack is on.
-5. Start a new Cowork task and type `/helppack`. When it prints the table of DensePack commands, the plugin is installed. If the commands do not show, start a new task, because Cowork loads plugins when a task starts.
+Do parts 1 and 2 in your browser, because the Plugins page of the desktop app has no Add marketplace option. Its Add menu shows only Upload plugin and Create with Claude. The Customize page in the Code tab of the desktop app adds plugins to Claude Code on that computer only, not to Cowork.
+
+### 1. Add the DensePack marketplace
+
+1. In your browser, open https://claude.ai and sign in.
+2. Select Customize in the left bar, then the Plugins tab.
+3. Select Add at the top right, then Add marketplace.
+4. Enter `Fabian-Galvez/DensePack` and confirm.
+5. When the Manage marketplaces window lists DensePack as Synced, close the window.
+
+Adding the marketplace does not install the plugin, so the window has no install button. Part 2 installs it.
+
+### 2. Add the DensePack plugin
+
+1. On the Plugins tab, select Discover.
+2. Type `densepack` in the search box at the top right.
+3. Select Add on the Densepack card.
+4. When a window says that the plugin "includes components that run code", select Continue. DensePack runs code on your computer to pack text into images.
+5. When the Add button changes to a blue switch, the plugin is on.
+
+Before you add it, Densepack can show under Yours with the label Disabled. That label means that the plugin is not added yet, so open it and select Add.
+
+### 3. Restart the Claude desktop app
+
+Cowork loads new plugins only when the Claude desktop app starts, so a new task is not enough.
+
+1. Quit the Claude desktop app completely, then open it again.
+2. Open Cowork, then Customize, then Plugins, and check that DensePack is on.
+3. Start a new Cowork task and type `/helppack`.
+4. When it prints the table of DensePack commands, the plugin is installed.
+
+The first line of the output can say "DensePack: CLAUDE_PLUGIN_ROOT was empty, so this command uses" and a folder. That line is not an error.
+
+### The first session
+
+DensePack needs Python 3.10 or newer. When it finds no Python, it installs Python 3.13 by itself in the background. On Windows, Python goes to `%LOCALAPPDATA%\Programs\Python\Python313`, and Windows can show a prompt for the install.
+
+1. Wait a few minutes after the first session starts.
+2. Quit the Claude desktop app and open it again.
+3. In a new Cowork task, type `/densedoctor` to check Python and the packages that DensePack uses.
+
+### If something does not work
+
+- If the Add menu has no Add marketplace, you are in the desktop app. Open https://claude.ai in your browser.
+- If the marketplace is added but you find no switch, do part 2, because the marketplace alone does not add the plugin.
+- If Densepack shows Disabled under Yours, open it and select Add, then Continue.
+- If `/helppack` does nothing, quit the Claude desktop app completely and open it again. Then start a new task.
+- If the plugin page shows an old version number, remove DensePack in Manage marketplaces. Then add `Fabian-Galvez/DensePack` again and sync it, because claude.ai does not always sync new versions by itself.
+
+### Commands, updates and removal
 
 Cowork uses the short command names, such as `/densepack` and `/dense-off`. The hooks run in Cowork too, so reads and command output arrive as images, the same as in Claude Code.
 
-To get a new version, open the plugin in Customize, then Plugins, and select Check for updates. The plugin on your account also syncs to Claude Code when you sign in with the same account. When Claude Code also has DensePack from `/plugin install`, Claude Code uses that copy.
+To get a new version, open the plugin on claude.ai in Customize, then Plugins, and select Check for updates. If the version number does not change, remove the marketplace and add it again.
+
+To remove DensePack from Cowork, open it on claude.ai in Customize, then Plugins, and turn its switch off or remove it.
+
+The plugin on your account also syncs to Claude Code when you sign in with the same account. When Claude Code also has DensePack from `/plugin install`, Claude Code uses that copy.
 
 <br>
 
