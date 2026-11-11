@@ -92,7 +92,9 @@ def run_side(side, args, case_dir, prompt, out):
     creds = Path.home() / ".claude" / ".credentials.json"
     if creds.is_file():
         shutil.copy(creds, config / ".credentials.json")
-    elif not (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY")):
+    # A Claude cloud session signs in through this file, which the env passes on.
+    elif not (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY")
+              or os.environ.get("CLAUDE_SESSION_INGRESS_TOKEN_FILE")):
         sys.exit("No Claude Code login to copy. On macOS, run claude setup-token "
                  "and set CLAUDE_CODE_OAUTH_TOKEN to the token that it prints.")
     scaffold(case_dir, cwd)

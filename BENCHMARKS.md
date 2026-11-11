@@ -255,14 +255,29 @@ The savings are against Opus 5.5 without DensePack.
 
 ## Run these benches yourself
 
-Run this command in the repository folder for one run with DensePack:
+The bench runs the same task twice, once with DensePack and once without it. It prints the price, the API requests and the score of each side. One five-files-read bench costs about $1.50 for both sides.
+
+### In Claude or Cowork
+
+Send Claude this message in a chat that can run commands:
 
 ```
-python bench/direct_pair.py five-files-read --model claude-opus-5-5 --warm --sides with --out bench-five-1
+Clone https://github.com/Fabian-Galvez/DensePack, then run
+python3 bench/direct_pair.py five-files-read --model claude-opus-5-5 --warm --out bench-five-1
+in the repository folder and show me the price, API requests and score of each side.
 ```
 
-- The script copies your Claude Code login from `~/.claude/.credentials.json`. On macOS, Claude Code keeps the login in the Keychain, and the script finds no file to copy. Run `claude setup-token` in Terminal, then `export CLAUDE_CODE_OAUTH_TOKEN=` followed by the token that it prints, and run the bench in that Terminal window.
-- On macOS, type `python3` in place of `python`, because macOS has no `python` command.
+You need no token, because the cloud session already signs Claude Code in. On 10 November 2026, this bench in a cloud session cost $0.532 with DensePack and $0.986 without it, a saving of 46.0%. Both sides scored 7 of 7.
+
+### On your computer with Claude Code
+
+1. `git clone https://github.com/Fabian-Galvez/DensePack.git && cd DensePack`
+2. On macOS only, run `claude setup-token`, then `export CLAUDE_CODE_OAUTH_TOKEN=` followed by the token that it prints. The script copies the login into a clean config folder, and it cannot copy the macOS Keychain login. On Linux and Windows, it copies `~/.claude/.credentials.json` itself.
+3. `python bench/direct_pair.py five-files-read --model claude-opus-5-5 --warm --out bench-five-1`, with `python3` in place of `python` on macOS.
+
+### Options and other cases
+
+- Add `--sides with` to run only the side with DensePack.
 - On 26 October 2026, the five-files-read eval ran on macOS 14 on an Intel Mac mini with no Python 3.10 or newer. The command was `claude plugin eval ./plugin --case five-files-read --runs 1 --model claude-opus-5-5 --scaffold --allow-tools Bash,Write,Edit`. With DensePack 2.0.5 the run cost $0.527, and without it $1.022, a saving of 48.4%. Both runs passed every check.
 
 - On Windows, add `--with-env EMBEDDED_SEARCH_TOOLS=1 --with-env CLAUDE_CODE_USE_POWERSHELL_TOOL=0`. The runs start in a new home folder, so the settings that DensePack writes to `~/.claude/settings.json` for later sessions never reach them. These two flags give the runs those settings.
