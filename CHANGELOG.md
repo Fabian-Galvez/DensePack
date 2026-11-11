@@ -6,6 +6,23 @@
 
 <br>
 
+## 2.0.7
+
+| Change | Before | Now |
+| --- | --- | --- |
+| Plugin icon | `plugin.json` had an `icon` key. claude.ai rejects the key and showed a warning next to Synced. | The key is gone, so claude.ai shows no warning. |
+| Cowork install steps | INSTALL.md had 5 short steps. They left out that Add marketplace is only on claude.ai in the browser, the Discover step and the restart. | INSTALL.md has the steps from a real Cowork install and a list of fixes for common problems. |
+| Command output | In Cowork, slash commands printed "CLAUDE_PLUGIN_ROOT was empty" first, which read like an error. | The commands print no extra line. |
+| Data folder | The docs named only `densepack-densepack-marketplace`. | The docs also name `densepack-inline`, the data folder of DensePack from your claude.ai account. |
+| Removal in Cowork | `/dense-remove` named only `/plugin uninstall`, which exists only in Claude Code. | It also says how to remove DensePack on claude.ai. |
+| Benches | The bench script stopped in Claude and Cowork cloud sessions, because it found no login file. | It uses the sign-in of the cloud session, and BENCHMARKS.md has the steps for Claude and Cowork. |
+
+<br>
+
+---
+
+<br>
+
 ## 2.0.6
 
 | Change | Before | Now |

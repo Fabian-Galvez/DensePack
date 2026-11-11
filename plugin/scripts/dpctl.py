@@ -148,7 +148,7 @@ Only /dense-off stops them all.
 | --- | --- | --- |
 | /densepack | It turns packing on and sets each setting below back to its default | Yes. This command is the reset |
 | /dense-off | It stops all DensePack hooks in this session | No |
-| /dense-remove | Puts the text of each packed instruction file back from its .bakpack and removes the settings that DensePack added. It also deletes the DensePack files that /plugin uninstall leaves. Run it before the uninstall | Sets nothing |
+| /dense-remove | Puts the text of each packed instruction file back from its .bakpack and removes the settings that DensePack added. It also deletes the DensePack files that /plugin uninstall leaves. Run it before the uninstall, or in Cowork before you remove DensePack on claude.ai | Sets nothing |
 | /bakpack [folder] | Experimental: the benches did not run it, so it has not been thoroughly tested. With no folder, it packs the instruction files of this project and its memory index MEMORY.md. With a folder, it packs CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, AGENTS.md and .claude/rules/*.md of that folder, and /bakpack ~/.claude packs your personal CLAUDE.md. Running it costs the agent no Read, because dpctl.py packs the files itself. The next session gets the images | Sets nothing |
 | /bak-off [folder] | Restores the original text from the .bakpack copies and deletes the images: with no folder, of this project and its memory index, and with ~/.claude, of your personal CLAUDE.md and every memory index | Sets nothing |
 | /maxpack | Sonnet gets images | Yes |
@@ -422,7 +422,8 @@ def remove_everything():
         print("  " + item)
     print("To finish, run /plugin uninstall densepack, then "
           "/plugin marketplace remove densepack-marketplace. The uninstall "
-          "deletes the plugin's data folder.")
+          "deletes the plugin's data folder. In Cowork, remove DensePack "
+          "on claude.ai in Customize, then Plugins.")
     return 0
 
 

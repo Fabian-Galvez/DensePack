@@ -8,7 +8,7 @@
     {
       "name": "densepack",
       "source": "./plugin",
-      "version": "2.0.6",
+      "version": "2.0.7",
       "description": "DensePack packs file Reads, shell output, long subagent briefs and subagent reports into dense images that an AI model reads for fewer input tokens. It sends the text when the image costs more. It also adds writing rules and a project map to each session, and it sets up to 3 Claude Code settings in ~/.claude/settings.json. All work runs on your computer."
     }
   ]

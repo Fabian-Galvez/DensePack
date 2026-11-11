@@ -82,8 +82,6 @@ Cowork loads new plugins only when the Claude desktop app starts, so a new task 
 3. Start a new Cowork task and type `/helppack`.
 4. When it prints the table of DensePack commands, the plugin is installed.
 
-The first line of the output can say "DensePack: CLAUDE_PLUGIN_ROOT was empty, so this command uses" and a folder. That line is not an error.
-
 ### The first session
 
 DensePack needs Python 3.10 or newer. When it finds no Python, it installs Python 3.13 by itself in the background. On Windows, Python goes to `%LOCALAPPDATA%\Programs\Python\Python313`, and Windows can show a prompt for the install.
@@ -215,6 +213,8 @@ claude
 ```PowerShell
 Remove-Item $HOME\.claude\plugins\data\densepack-densepack-marketplace\python-install-tried
 ```
+
+When DensePack comes from your claude.ai account, as in Cowork, its data folder is `densepack-inline` in place of `densepack-densepack-marketplace`. Use that name in the paths on this page.
 
 <strong>macOS:</strong> When DensePack does not find Python 3.10 or newer, it downloads [uv](https://docs.astral.sh/uv) and uses it to download and install Python 3.13 in the background. It needs no password. It also downloads and installs Pillow, freetype-py and NumPy. On a Mac mini with an Intel processor and a home connection, the whole install took 8 to 39 seconds in tests.
 

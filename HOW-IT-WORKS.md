@@ -657,13 +657,13 @@ At 512 KB, the log moves to `why-text.old.log`. Output under 400 characters stay
 
 To run a verb, open a terminal in the project folder, because each project has its own settings file. Then run the `dpctl.py` of the installed plugin with the verb and its value.
 
-- `2.0.6` in the path is the version of the plugin.
+- `2.0.7` in the path is the version of the plugin.
 - On Windows, run the line in PowerShell and type `python` in place of `python3`.
 
 This line shows a receipt table in the conversation.
 
 ```
-python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/2.0.6/scripts/dpctl.py receipts default
+python3 $HOME/.claude/plugins/cache/densepack-marketplace/densepack/2.0.7/scripts/dpctl.py receipts default
 ```
 
 On Windows, write `py -3` in place of `python3`.
